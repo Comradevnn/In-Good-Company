@@ -1,1 +1,1 @@
-# InGood Company
+# In Good Company
