@@ -1,1 +1,1 @@
-# Community-AI
+# InGood Company
