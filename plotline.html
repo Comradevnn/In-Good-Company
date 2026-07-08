@@ -1,0 +1,2501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InGood Company — Prototype Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDE7DA;
+    --bg-deep:#E4DCC9;
+    --surface:#FBF9F3;
+    --ink:#20291F;
+    --ink-soft:#5B6459;
+    --moss:#4F6F52;
+    --moss-dark:#354E37;
+    --moss-tint:#DEE7DB;
+    --ochre:#D98E3F;
+    --ochre-tint:#F6E3C7;
+    --teal:#2F5D62;
+    --teal-tint:#DCE9E9;
+    --line:#D7CEBB;
+    --danger:#B4543A;
+    --radius:18px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Inter', sans-serif;
+    background:
+      radial-gradient(circle at 15% 8%, #F3EEDF 0%, transparent 45%),
+      var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+  }
+  .stage{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .stage-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .phone{
+    width:390px;
+    max-width:92vw;
+    height:800px;
+    max-height:88vh;
+    background:var(--surface);
+    border-radius:38px;
+    border:9px solid var(--ink);
+    box-shadow: 0 30px 60px -20px rgba(32,41,31,.45), 0 0 0 2px rgba(32,41,31,.06);
+    overflow:hidden;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  .notch{
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:120px; height:20px; background:var(--ink); border-radius:0 0 14px 14px; z-index:20;
+  }
+  .screens{ flex:1; position:relative; overflow:hidden; }
+  .screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    opacity:0; transform: translateX(24px);
+    transition: opacity .35s ease, transform .35s ease;
+    pointer-events:none;
+  }
+  .screen.active{ opacity:1; transform:translateX(0); pointer-events:auto; }
+  .screen-scroll{ flex:1; overflow-y:auto; padding:26px 22px 18px; }
+  .screen-scroll::-webkit-scrollbar{width:0;}
+
+  .topbar{
+    padding:14px 20px 0; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .back-btn{
+    width:32px; height:32px; border-radius:50%; border:1px solid var(--line);
+    background:var(--surface); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--ink); font-size:16px; flex-shrink:0;
+  }
+  .progress{ display:flex; gap:6px; flex:1; justify-content:center; }
+  .progress span{ width:22px; height:4px; border-radius:2px; background:var(--line); }
+  .progress span.done{ background:var(--moss); }
+  .spacer32{width:32px; flex-shrink:0;}
+
+  h1.wordmark{
+    font-family:'Fraunces', serif; font-style:italic; font-weight:600;
+    font-size:28px; letter-spacing:-.01em; color:var(--ink); line-height:1.15;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--moss-dark); margin-bottom:8px; display:block;
+  }
+  h2{ font-family:'Fraunces', serif; font-weight:600; font-size:24px; line-height:1.22; color:var(--ink); margin-bottom:6px;}
+  h3{ font-family:'Fraunces', serif; font-weight:600; font-size:18px; color:var(--ink); }
+  p.sub{ color:var(--ink-soft); font-size:14.5px; line-height:1.5; }
+  p.rationale{ color:var(--ink-soft); font-size:12.5px; line-height:1.45; margin-top:4px; }
+
+  .btn{
+    border:none; border-radius:999px; padding:15px 20px; font-family:'Inter';
+    font-weight:600; font-size:15px; cursor:pointer; width:100%; text-align:center;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:active{ transform: scale(.98); }
+  .btn-primary{ background:var(--moss); color:#F6F4EA; box-shadow:0 8px 18px -8px rgba(79,111,82,.6);}
+  .btn-primary:disabled{ background:#C8CCC1; color:#8B9285; box-shadow:none; cursor:not-allowed;}
+  .btn-ghost{ background:transparent; color:var(--moss-dark); border:1.5px solid var(--moss); }
+  .btn-quiet{ background:transparent; color:var(--ink-soft); font-weight:500; font-size:13.5px; }
+
+  .footer-cta{ padding:14px 22px 22px; border-top:1px solid var(--line); background:var(--surface); }
+  .footer-cta.stack > *{ margin-bottom:10px; }
+  .footer-cta.stack > *:last-child{ margin-bottom:0; }
+
+  /* chips */
+  .chip-grid{ display:flex; flex-wrap:wrap; gap:9px; margin-top:16px; }
+  .chip{
+    border:1.5px solid var(--line); background:var(--surface); color:var(--ink);
+    padding:10px 15px; border-radius:999px; font-size:13.5px; font-weight:500; cursor:pointer;
+    transition:.15s ease;
+  }
+  .chip.selected{ background:var(--moss); border-color:var(--moss); color:#F6F4EA; }
+  .chip.disabled{ opacity:.4; cursor:not-allowed; }
+
+  /* form */
+  .field{ margin-top:18px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  .label-row{ display:flex; align-items:center; justify-content:space-between; }
+  .label-row label{ margin-bottom:0; }
+  .value-pill{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; font-weight:600; color:var(--moss-dark);
+    background:var(--moss-tint); padding:3px 10px; border-radius:999px;
+  }
+  .field input, .field textarea, .field select{
+    width:100%; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px;
+    font-family:'Inter'; font-size:14.5px; color:var(--ink); background:var(--surface);
+  }
+  .field textarea{ resize:none; min-height:70px; }
+  .field input:focus, .field textarea:focus{ outline:2px solid var(--moss); outline-offset:1px; }
+
+  .toggle-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    border:1.5px solid var(--line); border-radius:14px; padding:13px 15px; margin-top:12px;
+  }
+  .toggle-row span.label{ font-size:14px; font-weight:500; }
+  .switch{ width:42px; height:24px; border-radius:999px; background:var(--line); position:relative; cursor:pointer; flex-shrink:0; }
+  .switch.on{ background:var(--moss); }
+  .switch::after{
+    content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
+    background:#fff; transition:.18s ease; box-shadow:0 1px 3px rgba(0,0,0,.25);
+  }
+  .switch.on::after{ left:21px; }
+
+  /* location card */
+  .locate-card{
+    margin-top:18px; border:1.5px dashed var(--line); border-radius:16px; padding:20px;
+    text-align:center; background:var(--moss-tint);
+  }
+  .pin{ font-size:26px; }
+
+  /* org-or-cause option cards */
+  .option-card{
+    display:flex; align-items:center; gap:13px; border:1.5px solid var(--line); border-radius:16px;
+    padding:16px; margin-top:14px; cursor:pointer; background:var(--surface); transition:.15s ease;
+  }
+  .option-card:hover{ border-color:var(--moss); background:var(--moss-tint); }
+  .option-icon{
+    width:42px; height:42px; border-radius:50%; background:var(--moss-tint); display:flex; align-items:center;
+    justify-content:center; font-size:19px; flex-shrink:0;
+  }
+  .option-text h4{ font-family:'Fraunces', serif; font-size:15.5px; font-weight:600; }
+  .option-text p{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .option-arrow{ margin-left:auto; color:var(--ink-soft); font-size:16px; }
+
+  /* org search */
+  .search-bar{
+    display:flex; align-items:center; gap:8px; border:1.5px solid var(--line); border-radius:999px;
+    padding:11px 16px; margin-top:16px; background:var(--surface);
+  }
+  .search-bar input{ border:none; outline:none; flex:1; font-size:14px; font-family:'Inter'; background:transparent; color:var(--ink); }
+  .search-icon{ font-size:13px; color:var(--ink-soft); }
+
+  /* ID upload */
+  .upload-card{
+    display:block; margin-top:18px; border:1.5px dashed var(--line); border-radius:16px; padding:20px;
+    text-align:center; background:var(--teal-tint); cursor:pointer;
+  }
+  .upload-card:hover{ border-color:var(--teal); }
+  .id-preview{ width:100%; max-height:140px; object-fit:cover; border-radius:10px; display:block; margin-bottom:10px; }
+  .upload-check{ font-weight:600; color:var(--teal); font-size:14px; }
+  .change-link{ font-size:11.5px; color:var(--ink-soft); display:block; margin-top:3px; }
+
+  /* waiting screen signature */
+  .wait-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 26px; text-align:center; }
+  .converge-svg{ width:260px; height:150px; }
+  .path-a, .path-b{
+    stroke-dasharray: 6 7; stroke-linecap:round; fill:none;
+    animation: dash 1.4s linear infinite;
+  }
+  .path-a{ stroke: var(--moss); }
+  .path-b{ stroke: var(--ochre); }
+  @keyframes dash{ to{ stroke-dashoffset:-26; } }
+  .pin-pulse{ transform-origin:center; animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ transform:scale(1); opacity:1;} 50%{ transform:scale(1.18); opacity:.75;} }
+  .wait-status{ font-family:'Fraunces', serif; font-weight:600; font-size:19px; margin-top:22px; line-height:1.35; }
+  .wait-sub{ color:var(--ink-soft); font-size:13.5px; margin-top:8px; max-width:280px; }
+  .wait-alt{
+    margin-top:26px; width:100%; border:1.5px solid var(--line); border-radius:14px; padding:14px 16px;
+    text-align:left; background:var(--surface);
+  }
+  .wait-alt .eyebrow{ margin-bottom:4px; }
+  .wait-alt p{ font-size:13px; color:var(--ink-soft); line-height:1.5; }
+  .demo-skip{
+    margin-top:18px; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft);
+    border:1px dashed var(--line); border-radius:999px; padding:7px 14px; background:transparent; cursor:pointer;
+  }
+
+  /* match / partner card */
+  .partner-card{
+    border:1.5px solid var(--line); border-radius:18px; padding:18px; margin-top:16px; background:var(--surface);
+  }
+  .partner-top{ display:flex; gap:13px; align-items:center; }
+  .avatar{
+    width:56px; height:56px; border-radius:50%; background:var(--ochre-tint);
+    display:flex; align-items:center; justify-content:center; font-family:'Fraunces'; font-weight:600;
+    font-size:20px; color:var(--ochre); flex-shrink:0; border:2px solid var(--ochre);
+  }
+  .badge-verified{
+    display:inline-flex; align-items:center; gap:4px; background:var(--teal-tint); color:var(--teal);
+    font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; margin-top:4px;
+  }
+  .partner-meta{ font-size:13px; color:var(--ink-soft); margin-top:2px; }
+  .blurb{ margin-top:12px; font-size:14px; line-height:1.55; color:var(--ink); font-style:italic; border-left:2.5px solid var(--moss); padding-left:11px; }
+  .history-row{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .tag-pill{ font-size:11.5px; background:var(--moss-tint); color:var(--moss-dark); padding:4px 10px; border-radius:999px; font-weight:600; }
+
+  .shift-card{
+    margin-top:16px; border-radius:18px; padding:18px; background:var(--ink); color:#F2EFE4;
+  }
+  .shift-card .eyebrow{ color:var(--ochre); }
+  .shift-card h3{ color:#F2EFE4; margin-bottom:8px; }
+  .shift-row{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-top:1px solid rgba(255,255,255,.12); color:#D9D6C8;}
+  .shift-row:first-of-type{ border-top:none; }
+
+  .deposit-box{
+    margin-top:16px; border:1.5px solid var(--line); border-radius:14px; padding:14px 16px; background:var(--surface);
+  }
+  .deposit-line{ display:flex; justify-content:space-between; font-size:13.5px; padding:4px 0; color:var(--ink-soft); }
+  .deposit-line.total{ color:var(--ink); font-weight:700; font-size:15px; border-top:1px dashed var(--line); margin-top:6px; padding-top:8px; }
+  .finetext{ font-size:11.5px; color:var(--ink-soft); margin-top:8px; line-height:1.5; }
+
+  /* chat */
+  .chat-header{ display:flex; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+  .chat-thread{ display:flex; flex-direction:column; gap:12px; padding-top:16px; }
+  .msg{ max-width:78%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.45; }
+  .msg.system{
+    align-self:center; max-width:92%; background:var(--moss-tint); color:var(--moss-dark);
+    font-size:12.5px; text-align:center; border-radius:14px;
+  }
+  .msg.them{ align-self:flex-start; background:var(--bg-deep); color:var(--ink); border-bottom-left-radius:4px; }
+  .msg.me{ align-self:flex-end; background:var(--moss); color:#F6F4EA; border-bottom-right-radius:4px; }
+  .starter-chip{
+    align-self:center; margin-top:4px; font-size:12px; font-weight:600; color:var(--ochre);
+    background:var(--ochre-tint); padding:8px 13px; border-radius:999px; display:flex; align-items:center; gap:6px;
+  }
+  .chat-input-row{ display:flex; gap:8px; padding:14px 20px 20px; border-top:1px solid var(--line); }
+  .chat-input-row input{ flex:1; border:1.5px solid var(--line); border-radius:999px; padding:11px 16px; font-size:13.5px; font-family:'Inter'; }
+  .send-btn{ width:42px; height:42px; border-radius:50%; background:var(--moss); border:none; color:#fff; font-size:16px; cursor:pointer; flex-shrink:0; }
+
+  /* event ticket */
+  .ticket-card{
+    margin-top:18px; border-radius:18px; padding:22px; background:var(--ink); color:#F2EFE4; text-align:center;
+  }
+  .ticket-qr{ width:88px; height:88px; margin:0 auto 12px; border-radius:8px; overflow:hidden; }
+  .ticket-card h3{ color:#F2EFE4; font-family:'Fraunces', serif; font-size:17px; font-weight:600; }
+  .ticket-meta{ font-size:12.5px; color:#C9C6B8; margin-top:10px; }
+  .ticket-hint{ font-size:12px; color:#9C9A8E; margin-top:8px; line-height:1.5; }
+  .ticket-card.scanned{ background:var(--moss); }
+  .ticket-card.scanned .ticket-meta{ color:#DCE7DC; }
+  .ticket-card.scanned .ticket-hint{ color:#EAF2E7; font-weight:600; }
+  .qr{
+    width:120px; height:120px; margin:16px auto 4px; background:#fff; border-radius:10px;
+    display:flex; align-items:center; justify-content:center; font-size:11px; color:#999; font-family:'IBM Plex Mono';
+  }
+  .safety-card{
+    margin-top:14px; border:1.5px solid var(--line); border-radius:14px; padding:14px 16px; background:var(--surface);
+  }
+  .safety-card .row-top{ display:flex; justify-content:space-between; align-items:center; }
+
+  /* rating */
+  .rate-group{ margin-top:20px; }
+  .rate-group h3{ margin-bottom:3px; }
+  .stars{ display:flex; gap:6px; margin-top:10px; }
+  .star{ font-size:26px; color:var(--line); cursor:pointer; }
+  .star.on{ color:var(--ochre); }
+  .thumb-row{ display:flex; gap:14px; margin-top:10px; }
+  .thumb-btn{
+    width:56px; height:56px; border-radius:50%; border:1.5px solid var(--line); background:var(--surface);
+    font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s ease;
+  }
+  .thumb-btn.selected.up{ background:var(--moss-tint); border-color:var(--moss); }
+  .thumb-btn.selected.down{ background:var(--ochre-tint); border-color:var(--danger); }
+
+  /* 5-point icon rating (bad / leaning bad / neutral / leaning good / good) */
+  .icon-rate-row{ display:flex; gap:9px; margin-top:10px; }
+  .icon-rate-btn{
+    width:44px; height:44px; border-radius:50%; border:none; cursor:pointer; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:17px; color:#fff;
+    opacity:.5; transition:.15s ease;
+  }
+  .icon-rate-btn.selected{ opacity:1; transform:scale(1.1); box-shadow:0 4px 10px rgba(0,0,0,.18); }
+  .icon-rate-btn[data-rate="bad"]{ background:#DD4A3F; }
+  .icon-rate-btn[data-rate="leaning-bad"]{ background:#E8917E; }
+  .icon-rate-btn[data-rate="neutral"]{ background:#C6B597; }
+  .icon-rate-btn[data-rate="leaning-good"]{ background:#7ECB9B; }
+  .icon-rate-btn[data-rate="good"]{ background:#34AD64; }
+  .icon-rate-labels{ display:flex; justify-content:space-between; font-size:10px; color:var(--ink-soft); margin-top:4px; }
+  .rating-history-row{ display:flex; align-items:center; gap:10px; margin-top:8px; }
+  .rating-history-row .icon-rate-btn{ width:32px; height:32px; font-size:13px; cursor:default; opacity:1; flex-shrink:0; pointer-events:none; }
+  .rating-history-row .bar-track{ flex:1; height:8px; border-radius:4px; background:var(--bg-deep); overflow:hidden; }
+  .rating-history-row .bar-fill{ height:100%; border-radius:4px; }
+  .rating-history-row .bar-count{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); width:20px; text-align:right; }
+  .fit-slider-row{ margin-top:14px; }
+  .fit-slider-row input[type=range]{ width:100%; accent-color:var(--moss); }
+  .fit-labels{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-soft); margin-top:2px; }
+  .private-note{ font-size:11.5px; color:var(--ink-soft); margin-top:6px; display:flex; gap:5px; align-items:flex-start; }
+
+  .yesno-row{ display:flex; gap:10px; margin-top:12px; }
+  .yesno-row .btn{ width:auto; flex:1; padding:12px; font-size:14px; }
+
+  .divider{ height:1px; background:var(--line); margin:22px 0; }
+
+  .done-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px; }
+  .done-badge{ width:64px; height:64px; border-radius:50%; background:var(--moss-tint); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--moss); margin-bottom:18px; }
+
+  /* dashboard / home */
+  .greet-row{ display:flex; align-items:center; justify-content:space-between; }
+  .greet-row h2{ margin-bottom:2px; }
+  .bell{
+    width:36px; height:36px; border-radius:50%; background:var(--surface); border:1.5px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; position:relative;
+  }
+  .bell::after{ content:''; position:absolute; top:7px; right:7px; width:7px; height:7px; border-radius:50%; background:var(--ochre); border:1.5px solid var(--surface); }
+
+  .status-card{
+    margin-top:18px; border-radius:18px; padding:16px 17px; background:var(--moss); color:#F3F1E5; cursor:pointer;
+  }
+  .status-card .eyebrow{ color:#CFE0D0; }
+  .status-card .row{ display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
+  .status-card h3{ color:#F3F1E5; font-size:17px; }
+  .status-card p{ font-size:12.5px; color:#D9E7D9; margin-top:3px; }
+  .status-arrow{ font-size:18px; }
+
+  .status-card.waiting{ background:var(--ink); }
+  .status-card.waiting .eyebrow{ color:var(--ochre); }
+  .status-card.waiting p{ color:#C9C6B8; }
+
+  .section-title{ display:flex; justify-content:space-between; align-items:baseline; margin-top:26px; margin-bottom:2px; }
+  .section-title h3{ font-size:15px; }
+  .section-title a{ font-size:12px; color:var(--moss-dark); font-weight:600; cursor:pointer; }
+
+  .cta-inline{
+    margin-top:22px; border:1.5px dashed var(--moss); border-radius:16px; padding:16px; text-align:center; background:var(--moss-tint);
+  }
+  .cta-inline p{ font-size:12.5px; color:var(--moss-dark); margin-bottom:10px; }
+  .cta-inline .btn{ width:auto; padding:11px 22px; }
+
+  .buddy-mini{
+    display:flex; align-items:center; gap:11px; border:1.5px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:10px; background:var(--surface);
+  }
+  .buddy-mini .avatar{ width:42px; height:42px; font-size:15px; }
+  .buddy-mini .info{ flex:1; }
+  .buddy-mini .info h4{ font-size:14px; font-weight:600; }
+  .buddy-mini .info span{ font-size:11.5px; color:var(--ink-soft); }
+  .buddy-mini .mini-btn{
+    font-size:11.5px; font-weight:600; color:var(--moss-dark); background:var(--moss-tint); padding:7px 11px; border-radius:999px; border:none; cursor:pointer;
+  }
+
+  .stat-row{ display:flex; gap:10px; margin-top:12px; }
+  .stat-box{ flex:1; border:1.5px solid var(--line); border-radius:14px; padding:13px; text-align:center; background:var(--surface); }
+  .stat-box .num{ font-family:'Fraunces', serif; font-weight:600; font-size:22px; color:var(--ink); }
+  .stat-box .lbl{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+
+  .discover-card{
+    border:1.5px solid var(--line); border-radius:16px; padding:15px; margin-top:12px; background:var(--surface); cursor:default;
+  }
+  .discover-card[data-org-detail]{ cursor:pointer; }
+  .discover-card[data-org-detail]:hover{ border-color:var(--moss); }
+  .discover-card.selected{ border-color:var(--moss); background:var(--moss-tint); }
+  .discover-actions button.selected{ background:var(--moss-dark); }
+  .discover-card.locked{ opacity:.55; cursor:not-allowed; }
+  .discover-card.locked .discover-actions button{ background:var(--ink-soft); cursor:not-allowed; }
+  .discover-card .row-top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .discover-card h4{ font-family:'Fraunces', serif; font-size:15.5px; font-weight:600; }
+  .discover-card .org{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .discover-card .meta{ font-size:12px; color:var(--ink-soft); margin-top:8px; }
+  .discover-actions{ display:flex; gap:8px; margin-top:12px; }
+  .discover-actions button{ flex:1; padding:9px; font-size:12.5px; border-radius:999px; border:none; cursor:pointer; font-weight:600; }
+  .discover-actions .primary{ background:var(--moss); color:#fff; }
+  .discover-actions .ghost{ background:transparent; border:1.5px solid var(--line); color:var(--ink); }
+  .density-tag{ font-size:10.5px; font-weight:700; color:var(--ochre); background:var(--ochre-tint); padding:3px 8px; border-radius:999px; }
+
+  .profile-head{ display:flex; align-items:center; gap:14px; margin-top:8px; }
+  .profile-head .avatar{ width:60px; height:60px; font-size:22px; }
+  .tier-pill{ display:inline-block; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--teal-tint); color:var(--teal); margin-top:6px; }
+  .tier-pill.pending{ background:var(--ochre-tint); color:#8A5A18; }
+  .settings-row{
+    display:flex; align-items:center; justify-content:space-between; padding:14px 2px; border-bottom:1px solid var(--line); font-size:14px;
+  }
+  .settings-row span.arrow{ color:var(--ink-soft); }
+  .upgrade-card{
+    margin-top:18px; border-radius:16px; padding:16px; background:var(--ink); color:#F2EFE4;
+  }
+  .upgrade-card h4{ font-family:'Fraunces', serif; font-size:16px; margin-bottom:4px; }
+  .upgrade-card p{ font-size:12px; color:#CFCBBB; line-height:1.5; margin-bottom:12px; }
+  .upgrade-card .btn{ background:var(--ochre); color:#2B1A05; }
+
+  .bottom-nav{
+    display:flex; border-top:1px solid var(--line); background:var(--surface); padding:10px 6px 16px;
+  }
+  .nav-item{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;
+    color:var(--ink-soft); font-size:10.5px; font-weight:600;
+  }
+  .nav-item .icon{ font-size:19px; line-height:1; }
+  .nav-item.active{ color:var(--moss-dark); }
+
+  /* modal */
+  .modal-overlay{
+    position:absolute; inset:0; background:rgba(32,41,31,.55); display:flex; align-items:center; justify-content:center;
+    padding:28px; z-index:50; opacity:0; visibility:hidden; pointer-events:none;
+    transition: opacity .25s ease, visibility .25s ease;
+  }
+  .modal-overlay.active{ opacity:1; visibility:visible; pointer-events:auto; }
+  .modal-card{
+    background:var(--surface); border-radius:20px; padding:26px 22px; text-align:center; width:100%;
+    box-shadow:0 20px 40px -12px rgba(0,0,0,.35);
+    transform: scale(.96); transition: transform .25s ease;
+  }
+  .modal-overlay.active .modal-card{ transform: scale(1); }
+  .modal-icon{
+    width:52px; height:52px; border-radius:50%; background:var(--moss-tint); color:var(--moss);
+    display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 14px;
+  }
+  .modal-card h3{ font-family:'Fraunces', serif; font-size:18px; font-weight:600; margin-bottom:8px; }
+  .modal-card p{ font-size:13.5px; color:var(--ink-soft); line-height:1.5; margin-bottom:18px; }
+
+  /* apple pay sheet */
+  .apay-logo{ font-family:'Inter'; font-weight:700; font-size:17px; margin-bottom:16px; }
+  .apay-card-visual{
+    background:linear-gradient(135deg, #2B2B2E, #111112); border-radius:14px; padding:16px 18px; text-align:left; color:#F2F0EA;
+    margin-bottom:20px;
+  }
+  .apay-chip{ width:28px; height:20px; border-radius:4px; background:linear-gradient(135deg,#D9C68C,#B89A4E); margin-bottom:14px; }
+  .apay-number{ font-family:'IBM Plex Mono', monospace; font-size:13px; letter-spacing:.05em; margin-bottom:10px; }
+  .apay-row{ display:flex; justify-content:space-between; font-size:12px; color:#C9C6BC; }
+  .phone-outline{
+    width:56px; height:100px; border:2.5px solid var(--ink); border-radius:14px; margin:0 auto 14px; position:relative;
+  }
+  .side-button{
+    position:absolute; right:-5px; top:22px; width:6px; height:26px; border-radius:3px; background:var(--moss);
+    cursor:pointer; animation:pulse 1.6s ease-in-out infinite;
+  }
+  .apay-hint{ font-family:'Fraunces', serif; font-weight:600; font-size:15px; color:var(--ink); margin-bottom:4px; }
+
+  /* google pay sheet */
+  .gpay-logo{ font-family:'Inter'; font-weight:700; font-size:18px; margin-bottom:6px; }
+  .gpay-method{
+    display:flex; align-items:center; gap:11px; border:1.5px solid var(--line); border-radius:14px; padding:12px 14px;
+    margin-top:10px; text-align:left; cursor:pointer;
+  }
+  .gpay-method.selected{ border-color:var(--moss); background:var(--moss-tint); }
+  .gpay-icon{ font-size:18px; }
+  .gpay-info{ flex:1; display:flex; flex-direction:column; }
+  .gpay-info strong{ font-size:13.5px; }
+  .gpay-info span{ font-size:11px; color:var(--ink-soft); }
+  .gpay-check{ color:var(--moss); font-weight:700; opacity:0; }
+  .gpay-method.selected .gpay-check{ opacity:1; }
+
+  /* social sign in */
+  .auth-btn{
+    display:flex; align-items:center; justify-content:center; gap:10px; width:100%;
+    border:1.5px solid var(--line); border-radius:999px; padding:13px; background:var(--surface);
+    font-family:'Inter'; font-weight:600; font-size:14.5px; color:var(--ink); cursor:pointer; margin-top:10px;
+  }
+  .auth-btn .auth-icon{ font-size:16px; width:20px; text-align:center; }
+  .auth-divider{
+    display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--ink-soft); font-size:12px;
+  }
+  .auth-divider::before, .auth-divider::after{ content:''; flex:1; height:1px; background:var(--line); }
+
+  @media (max-width:420px){
+    .phone{ width:100%; height:92vh; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <span class="stage-label">InGood Company — click through the flow</span>
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screens" id="screens"></div>
+    <div class="modal-overlay" id="modal-orgNotify">
+      <div class="modal-card">
+        <div class="modal-icon">✓</div>
+        <h3>Thanks — we're on it</h3>
+        <p id="modalOrgText">We've sent your organization to our team. We'll do everything we can to get them onboard.</p>
+        <button class="btn btn-primary" data-modal-close data-goto="home">Got it</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-applePay">
+      <div class="modal-card apay-card">
+        <div class="apay-logo">🍎 Pay</div>
+        <div class="apay-card-visual">
+          <div class="apay-chip"></div>
+          <div class="apay-number">•••• •••• •••• 4242</div>
+          <div class="apay-row"><span>Alex Rivera</span><span>$6.00</span></div>
+        </div>
+        <div id="apayPrompt">
+          <div class="phone-outline"><div class="side-button" id="sideButtonSim"></div></div>
+          <p class="apay-hint">Double-click the side button to pay</p>
+          <p class="rationale">Tap the button on the phone outline twice</p>
+        </div>
+        <div id="apaySuccess" style="display:none;">
+          <div class="modal-icon">✓</div>
+          <h3>Your payment has been approved</h3>
+          <p>$6.00 sent for Saturday's shift with Jordan.</p>
+          <button class="btn btn-primary" id="applePaySuccessBtn" data-modal-close>Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-googlePay">
+      <div class="modal-card">
+        <div class="gpay-logo"><span style="color:#4285F4;">G</span><span style="color:#EA4335;">o</span><span style="color:#FBBC05;">o</span><span style="color:#4285F4;">g</span><span style="color:#34A853;">l</span><span style="color:#EA4335;">e</span> Pay</div>
+        <p class="rationale" style="margin-bottom:14px;">Choose a payment method</p>
+        <div class="gpay-method selected" data-gpay-method>
+          <span class="gpay-icon">💳</span>
+          <div class="gpay-info"><strong>Visa •••• 4242</strong><span>Default</span></div>
+          <span class="gpay-check">✓</span>
+        </div>
+        <div class="gpay-method" data-gpay-method>
+          <span class="gpay-icon">💳</span>
+          <div class="gpay-info"><strong>Mastercard •••• 8891</strong></div>
+          <span class="gpay-check">✓</span>
+        </div>
+        <div class="gpay-method" data-gpay-method>
+          <span class="gpay-icon">➕</span>
+          <div class="gpay-info"><strong>Add payment method</strong></div>
+          <span class="gpay-check">✓</span>
+        </div>
+        <button class="btn btn-primary" id="googlePayConfirmBtn" style="margin-top:16px;" data-modal-close>Pay $6.00</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATE_CITIES = {
+  "Alabama": ["Birmingham","Montgomery","Huntsville","Mobile","Tuscaloosa","Hoover","Dothan","Auburn","Decatur","Madison"],
+  "Alaska": ["Anchorage","Fairbanks","Juneau","Wasilla","Sitka","Ketchikan","Kenai","Kodiak","Bethel","Palmer"],
+  "Arizona": ["Phoenix","Tucson","Mesa","Chandler","Scottsdale","Glendale","Gilbert","Tempe","Peoria","Surprise"],
+  "Arkansas": ["Little Rock","Fort Smith","Fayetteville","Springdale","Jonesboro","Rogers","Conway","North Little Rock","Bentonville","Pine Bluff"],
+  "California": ["Los Angeles","San Diego","San Jose","San Francisco","Fresno","Sacramento","Long Beach","Oakland","Bakersfield","Anaheim"],
+  "Colorado": ["Denver","Colorado Springs","Aurora","Fort Collins","Lakewood","Thornton","Arvada","Westminster","Pueblo","Boulder"],
+  "Connecticut": ["Bridgeport","New Haven","Stamford","Hartford","Waterbury","Norwalk","Danbury","New Britain","West Hartford","Greenwich"],
+  "Delaware": ["Wilmington","Dover","Newark","Middletown","Smyrna","Milford","Seaford","Georgetown","Elsmere","New Castle"],
+  "District of Columbia": ["Washington"],
+  "Florida": ["Jacksonville","Miami","Tampa","Orlando","St. Petersburg","Hialeah","Tallahassee","Port St. Lucie","Cape Coral","Fort Lauderdale"],
+  "Georgia": ["Atlanta","Augusta","Columbus","Macon","Savannah","Athens","Sandy Springs","Roswell","Johns Creek","Albany"],
+  "Hawaii": ["Honolulu","Hilo","Kailua","Kapolei","Kaneohe","Mililani Town","Kahului","Ewa Gentry","Mililani Mauka","Wahiawa"],
+  "Idaho": ["Boise","Meridian","Nampa","Idaho Falls","Pocatello","Caldwell","Coeur d'Alene","Twin Falls","Lewiston","Post Falls"],
+  "Illinois": ["Chicago","Aurora","Naperville","Joliet","Rockford","Springfield","Elgin","Peoria","Champaign","Waukegan"],
+  "Indiana": ["Indianapolis","Fort Wayne","Evansville","South Bend","Carmel","Fishers","Bloomington","Hammond","Gary","Muncie"],
+  "Iowa": ["Des Moines","Cedar Rapids","Davenport","Sioux City","Iowa City","Waterloo","Council Bluffs","Ames","West Des Moines","Dubuque"],
+  "Kansas": ["Wichita","Overland Park","Kansas City","Topeka","Olathe","Lawrence","Shawnee","Manhattan","Lenexa","Salina"],
+  "Kentucky": ["Louisville","Lexington","Bowling Green","Owensboro","Covington","Richmond","Georgetown","Florence","Hopkinsville","Nicholasville"],
+  "Louisiana": ["New Orleans","Baton Rouge","Shreveport","Lafayette","Lake Charles","Kenner","Bossier City","Monroe","Alexandria","Houma"],
+  "Maine": ["Portland","Lewiston","Bangor","South Portland","Auburn","Biddeford","Sanford","Saco","Augusta","Westbrook"],
+  "Maryland": ["Baltimore","Columbia","Germantown","Silver Spring","Waldorf","Glen Burnie","Ellicott City","Frederick","Dundalk","Rockville"],
+  "Massachusetts": ["Boston","Worcester","Springfield","Cambridge","Lowell","Brockton","New Bedford","Quincy","Lynn","Fall River"],
+  "Michigan": ["Detroit","Grand Rapids","Warren","Sterling Heights","Ann Arbor","Lansing","Flint","Dearborn","Livonia","Troy"],
+  "Minnesota": ["Minneapolis","St. Paul","Rochester","Duluth","Bloomington","Brooklyn Park","Plymouth","St. Cloud","Woodbury","Eagan"],
+  "Mississippi": ["Jackson","Gulfport","Southaven","Hattiesburg","Biloxi","Meridian","Tupelo","Greenville","Olive Branch","Horn Lake"],
+  "Missouri": ["Kansas City","St. Louis","Springfield","Columbia","Independence","Lee's Summit","O'Fallon","St. Joseph","St. Charles","Blue Springs"],
+  "Montana": ["Billings","Missoula","Great Falls","Bozeman","Butte","Helena","Kalispell","Havre","Anaconda","Miles City"],
+  "Nebraska": ["Omaha","Lincoln","Bellevue","Grand Island","Kearney","Fremont","Hastings","Norfolk","North Platte","Papillion"],
+  "Nevada": ["Las Vegas","Henderson","Reno","North Las Vegas","Sparks","Carson City","Fernley","Elko","Mesquite","Boulder City"],
+  "New Hampshire": ["Manchester","Nashua","Concord","Derry","Dover","Rochester","Salem","Merrimack","Londonderry","Hudson"],
+  "New Jersey": ["Newark","Jersey City","Paterson","Elizabeth","Edison","Woodbridge","Lakewood","Toms River","Hamilton","Trenton"],
+  "New Mexico": ["Albuquerque","Las Cruces","Rio Rancho","Santa Fe","Roswell","Farmington","Clovis","Hobbs","Alamogordo","Carlsbad"],
+  "New York": ["New York City","Buffalo","Rochester","Yonkers","Syracuse","Albany","New Rochelle","Mount Vernon","Schenectady","Utica"],
+  "North Carolina": ["Charlotte","Raleigh","Greensboro","Durham","Winston-Salem","Fayetteville","Cary","Wilmington","High Point","Asheville"],
+  "North Dakota": ["Fargo","Bismarck","Grand Forks","Minot","West Fargo","Williston","Dickinson","Mandan","Jamestown","Wahpeton"],
+  "Ohio": ["Columbus","Cleveland","Cincinnati","Toledo","Akron","Dayton","Parma","Canton","Youngstown","Lorain"],
+  "Oklahoma": ["Oklahoma City","Tulsa","Norman","Broken Arrow","Lawton","Edmond","Moore","Midwest City","Enid","Stillwater"],
+  "Oregon": ["Portland","Eugene","Salem","Gresham","Hillsboro","Beaverton","Bend","Medford","Springfield","Corvallis"],
+  "Pennsylvania": ["Philadelphia","Pittsburgh","Allentown","Erie","Reading","Scranton","Bethlehem","Lancaster","Harrisburg","Altoona"],
+  "Rhode Island": ["Providence","Cranston","Warwick","Pawtucket","East Providence","Woonsocket","Coventry","Cumberland","North Providence","South Kingstown"],
+  "South Carolina": ["Columbia","Charleston","North Charleston","Mount Pleasant","Rock Hill","Greenville","Summerville","Sumter","Goose Creek","Hilton Head Island"],
+  "South Dakota": ["Sioux Falls","Rapid City","Aberdeen","Brookings","Watertown","Mitchell","Yankton","Pierre","Huron","Vermillion"],
+  "Tennessee": ["Nashville","Memphis","Knoxville","Chattanooga","Clarksville","Murfreesboro","Franklin","Jackson","Johnson City","Bartlett"],
+  "Texas": ["Houston","San Antonio","Dallas","Austin","Fort Worth","El Paso","Arlington","Corpus Christi","Plano","Laredo"],
+  "Utah": ["Salt Lake City","West Valley City","Provo","West Jordan","Orem","Sandy","Ogden","St. George","Layton","South Jordan"],
+  "Vermont": ["Burlington","South Burlington","Rutland","Barre","Montpelier","Winooski","St. Albans","Newport","Vergennes","Essex Junction"],
+  "Virginia": ["Virginia Beach","Norfolk","Chesapeake","Richmond","Newport News","Alexandria","Hampton","Roanoke","Portsmouth","Suffolk"],
+  "Washington": ["Seattle","Spokane","Tacoma","Vancouver","Bellevue","Kent","Everett","Renton","Spokane Valley","Federal Way"],
+  "West Virginia": ["Charleston","Huntington","Morgantown","Parkersburg","Wheeling","Weirton","Fairmont","Martinsburg","Beckley","Clarksburg"],
+  "Wisconsin": ["Milwaukee","Madison","Green Bay","Kenosha","Racine","Appleton","Waukesha","Eau Claire","Oshkosh","Janesville"],
+  "Wyoming": ["Cheyenne","Casper","Laramie","Gillette","Rock Springs","Sheridan","Green River","Evanston","Riverton","Jackson"]
+};
+
+const ORG_DIRECTORY = [
+  { name:"Second Harvest of Silicon Valley", cat:"Food banks & shelters", area:"San Jose" },
+  { name:"Sacred Heart Community Service", cat:"Food banks & shelters", area:"San Jose" },
+  { name:"Loaves & Fishes Family Kitchen", cat:"Food banks & shelters", area:"San Jose" },
+  { name:"Front Door Communities", cat:"Food banks & shelters", area:"San Jose" },
+  { name:"CityTeam", cat:"Food banks & shelters", area:"San Jose" },
+
+  { name:"Humane Society Silicon Valley", cat:"Animal welfare", area:"West San Jose" },
+  { name:"Silicon Valley Animal Control Authority", cat:"Animal welfare", area:"Santa Clara" },
+  { name:"Wildlife Center of Silicon Valley", cat:"Animal welfare", area:"San Jose" },
+  { name:"Uplift Rescue Ranch", cat:"Animal welfare", area:"Morgan Hill" },
+  { name:"Pet Food Pantry of Silicon Valley", cat:"Animal welfare", area:"San Jose" },
+
+  { name:"Guadalupe River Park Conservancy", cat:"Environmental cleanups", area:"San Jose" },
+  { name:"Grassroots Ecology", cat:"Environmental cleanups", area:"Palo Alto" },
+  { name:"Keep Coyote Creek Beautiful", cat:"Environmental cleanups", area:"San Jose" },
+  { name:"San Francisco Bay Bird Observatory", cat:"Environmental cleanups", area:"Milpitas" },
+  { name:"Our City Forest", cat:"Environmental cleanups", area:"San Jose" },
+
+  { name:"Bill Wilson Center", cat:"Youth mentorship", area:"San Jose" },
+  { name:"Genesys Works Bay Area", cat:"Youth mentorship", area:"San Jose" },
+  { name:"Boys & Girls Clubs of Silicon Valley", cat:"Youth mentorship", area:"San Jose" },
+  { name:"Girls Inc. of Silicon Valley", cat:"Youth mentorship", area:"San Jose" },
+  { name:"Breakthrough Silicon Valley", cat:"Youth mentorship", area:"San Jose" },
+
+  { name:"Villages Silicon Valley", cat:"Elder care", area:"San Jose" },
+  { name:"Avenidas", cat:"Elder care", area:"Palo Alto" },
+  { name:"HealthTrust", cat:"Elder care", area:"San Jose" },
+  { name:"Institute on Aging Bay Area", cat:"Elder care", area:"San Jose" },
+  { name:"Front Porch Senior Services", cat:"Elder care", area:"San Jose" },
+
+  { name:"Somos Mayfair", cat:"Community organizing", area:"San Jose" },
+  { name:"PACT (People Acting in Community Together)", cat:"Community organizing", area:"San Jose" },
+  { name:"SIREN (Services, Immigrant Rights & Education)", cat:"Community organizing", area:"San Jose" },
+  { name:"Amigos De Guadalupe", cat:"Community organizing", area:"San Jose" },
+  { name:"Vietnamese Voluntary Foundation (VIVO)", cat:"Community organizing", area:"San Jose" },
+];
+
+const TASK_TEMPLATES = {
+  "Food banks & shelters": ["Food sorting & packing", "Meal prep", "Mobile pantry distribution"],
+  "Animal welfare": ["Dog socializing", "Cat enrichment", "Kennel cleaning"],
+  "Environmental cleanups": ["Trail cleanup", "Garden weeding", "Creek debris removal"],
+  "Youth mentorship": ["After-school tutoring", "Career mentoring session", "Group activity leader"],
+  "Elder care": ["Friendly visit", "Meal delivery", "Tech help session"],
+  "Community organizing": ["Canvassing", "Event setup", "Phone banking"],
+};
+
+// A varied pool of day/time combinations, each tagged with a day-of-week
+// and the exact time-slot label used on the availability screen, so shifts
+// can be matched against what a volunteer said they're free for.
+const SHIFT_POOL = [
+  { day:"Mon", slot:"4–6 PM",        date:"Mon, Jul 13", time:"4:00–6:00 PM" },
+  { day:"Tue", slot:"6–8 PM",        date:"Tue, Jul 14", time:"6:00–8:00 PM" },
+  { day:"Wed", slot:"4–6 PM",        date:"Wed, Jul 15", time:"5:00–7:00 PM" },
+  { day:"Thu", slot:"8–10 AM",       date:"Thu, Jul 16", time:"8:00–10:00 AM" },
+  { day:"Fri", slot:"2–4 PM",        date:"Fri, Jul 17", time:"2:00–4:00 PM" },
+  { day:"Sat", slot:"8–10 AM",       date:"Sat, Jul 11", time:"9:00–11:30 AM" },
+  { day:"Sat", slot:"10 AM–12 PM",   date:"Sat, Jul 18", time:"10:00 AM–12:00 PM" },
+  { day:"Sun", slot:"10 AM–12 PM",   date:"Sun, Jul 19", time:"10:00 AM–12:00 PM" },
+];
+
+// Deterministically assigns 3 shifts per org so different orgs have
+// different day/time combinations (rather than every org sharing one schedule).
+function getOrgShifts(orgIndex){
+  const i = orgIndex % SHIFT_POOL.length;
+  return [
+    SHIFT_POOL[i],
+    SHIFT_POOL[(i + 3) % SHIFT_POOL.length],
+    SHIFT_POOL[(i + 5) % SHIFT_POOL.length],
+  ];
+}
+
+function getUserAvailability(){
+  const days = Array.from(document.querySelectorAll('#screen-availability [data-day].selected')).map(el => el.dataset.day);
+  const slots = Array.from(document.querySelectorAll('#screen-availability [data-timeslot].selected')).map(el => el.dataset.timeslot);
+  return { days, slots };
+}
+
+function orgMatchesAvailability(orgIndex, avail){
+  if(avail.days.length === 0 && avail.slots.length === 0) return true;
+  const shifts = getOrgShifts(orgIndex);
+  return shifts.some(s =>
+    (avail.days.length === 0 || avail.days.includes(s.day)) &&
+    (avail.slots.length === 0 || avail.slots.includes(s.slot))
+  );
+}
+
+function iconRateRowHTML(groupId){
+  return `
+    <div class="icon-rate-row" data-rate-group="${groupId}">
+      <button class="icon-rate-btn" data-rate="bad">✕</button>
+      <button class="icon-rate-btn" data-rate="leaning-bad">✎</button>
+      <button class="icon-rate-btn" data-rate="neutral">−</button>
+      <button class="icon-rate-btn" data-rate="leaning-good">✓</button>
+      <button class="icon-rate-btn" data-rate="good">↑</button>
+    </div>
+    <div class="icon-rate-labels"><span>Bad</span><span>Good</span></div>`;
+}
+
+function orgCardHTML(o, badgeHTML){
+  return `
+    <div class="discover-card" data-category="${o.cat}" data-org-detail="${encodeURIComponent(o.name)}">
+      <div class="row-top">
+        <div><h4>${o.name}</h4><p class="org">${o.cat} · ${o.area}</p></div>
+        ${badgeHTML || ''}
+      </div>
+      <div class="discover-actions"><button class="primary" style="flex:none; width:100%;" data-org-detail="${encodeURIComponent(o.name)}">View shifts</button></div>
+    </div>`;
+}
+
+function openOrgDetail(orgNameEncoded){
+  const orgName = decodeURIComponent(orgNameEncoded);
+  const org = ORG_DIRECTORY.find(o => o.name === orgName);
+  if(!org) return;
+  currentDetailOrgName = org.name;
+  const orgIndex = ORG_DIRECTORY.indexOf(org);
+  const nameEl = document.getElementById('orgDetailName');
+  const metaEl = document.getElementById('orgDetailMeta');
+  const descEl = document.getElementById('orgDetailDesc');
+  const shiftsEl = document.getElementById('orgDetailShifts');
+  if(nameEl) nameEl.textContent = org.name;
+  if(metaEl) metaEl.textContent = `${org.cat} · ${org.area}`;
+  if(descEl) descEl.textContent = `A ${org.cat.toLowerCase()} organization based in ${org.area}. Volunteers work hands-on, side by side with staff, on shifts like these.`;
+  const tasks = TASK_TEMPLATES[org.cat] || ["General volunteering"];
+  const avail = getUserAvailability();
+  const allShifts = getOrgShifts(orgIndex);
+  let shiftsToShow = allShifts.filter(s =>
+    (avail.days.length === 0 || avail.days.includes(s.day)) &&
+    (avail.slots.length === 0 || avail.slots.includes(s.slot))
+  );
+  if(shiftsToShow.length === 0) shiftsToShow = allShifts; // safety net, shouldn't normally happen
+  if(shiftsEl){
+    const lockNote = isVerified ? '' : `<p class="rationale" style="margin-bottom:10px; color:#8A5A18; font-weight:600;">🔒 You can look around, but selecting a shift unlocks once your ID is verified.</p>`;
+    shiftsEl.innerHTML = lockNote + shiftsToShow.map((t, i) => `
+      <div class="discover-card ${isVerified ? '' : 'locked'}" data-shift-pick data-shift-index="${i}">
+        <div class="row-top">
+          <div><h4>${tasks[i % tasks.length]}</h4><p class="org">${t.date} · ${t.time}</p></div>
+        </div>
+        <div class="discover-actions"><button class="primary" data-shift-pick data-shift-index="${i}" style="flex:none; width:100%;">${isVerified ? 'Select this shift' : '🔒 Verify to select'}</button></div>
+      </div>`).join('');
+  }
+  const contBtn = document.getElementById('orgDetailContinue');
+  if(contBtn) contBtn.disabled = true;
+  history.push('orgDetail');
+  show('orgDetail');
+}
+
+const screens = [
+// 0 — intro
+{
+  id:'intro', topbar:false,
+  body:`
+    <div class="screen-scroll" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; height:100%;">
+      <svg width="70" height="70" viewBox="0 0 70 70" style="margin-bottom:18px;">
+        <circle cx="27" cy="35" r="15" fill="none" stroke="#4F6F52" stroke-width="2.5"/>
+        <circle cx="43" cy="35" r="15" fill="none" stroke="#D98E3F" stroke-width="2.5"/>
+      </svg>
+      <h1 class="wordmark">InGood Company</h1>
+      <p class="sub" style="max-width:260px; margin-top:14px;">Volunteer alongside someone new. We pair you with another vetted volunteer for a real shift, at a real place — the shared task does the icebreaking.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="emailCapture">Get started</button>
+          <button class="btn btn-quiet" data-goto="logIn">I already have an account</button>
+          <button class="btn btn-quiet" data-goto="orgOnboard">I'm signing up an organization</button>`
+},
+// 0.3 — email capture
+{
+  id:'emailCapture', back:true,
+  body:`
+    <div class="screen-scroll" style="padding-top:8px;">
+      <span class="eyebrow">Get started</span>
+      <h2>What's your email?</h2>
+      <p class="rationale">We'll use this for shift confirmations, receipts, and getting back into your account. A Gmail address lets you sign in with one tap next time.</p>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="signupEmailInput" placeholder="you@gmail.com" autocomplete="email">
+      </div>
+      <p class="rationale" id="gmailHint" style="display:none; margin-top:8px; color:var(--moss-dark); font-weight:600;">✓ Gmail detected — you'll be able to sign in with one tap next time.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="emailContinue" data-goto="quickProfile" disabled>Continue</button>`
+},
+// 0.32 — quick profile (moved up, before verification)
+{
+  id:'quickProfile', step:1, total:2,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 1 of 2</span>
+      <h2>Build a quick profile</h2>
+      <p class="rationale">This is what your future volunteer partner sees — keep it real, not polished.</p>
+      <div class="field"><label>First name</label><input type="text" placeholder="Jordan" value="Alex"></div>
+      <div class="field" style="display:flex; gap:10px;">
+        <div style="flex:1;"><label>Age</label><input type="text" placeholder="29" value="27"></div>
+        <div style="flex:2;"><label>Occupation or school</label><input type="text" placeholder="Nurse, SJSU..." value="Product designer"></div>
+      </div>
+      <div class="field">
+        <label>Gender</label>
+        <select>
+          <option>Male</option>
+          <option>Female</option>
+          <option>Non-binary</option>
+          <option>Prefer to self-describe</option>
+        </select>
+      </div>
+      <div class="field"><label>1–3 hobbies outside volunteering</label><input type="text" placeholder="hiking, ceramics, trivia nights" value="bouldering, farmers markets"></div>
+      <div class="field">
+        <label>What's bringing you to your volunteering journey?</label>
+        <textarea placeholder="A sentence or two is plenty.">Moved here two years ago and never found my people outside of work.</textarea>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="verify">Continue</button>`
+},
+// 0.35 — verification
+{
+  id:'verify', back:true,
+  body:`
+    <div class="screen-scroll" style="padding-top:8px;">
+      <span class="eyebrow">Get started</span>
+      <h2>Verify your ID</h2>
+      <p class="rationale">Keeps everyone safe. A person checks it by hand — takes <strong>2–3 business days</strong>. We'll email you once you're approved.</p>
+
+      <div class="field">
+        <label>What are you scanning?</label>
+        <div class="chip-grid" id="docTypeGrid">
+          <div class="chip" data-single data-doc-type="Driver's license">Driver's license</div>
+          <div class="chip" data-single data-doc-type="Passport">Passport</div>
+          <div class="chip" data-single data-doc-type="State ID">State ID</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>1. Front of your ID</label>
+        <label class="upload-card" for="idFrontInput">
+          <input type="file" accept="image/*" class="id-upload-input" data-target="idFront" id="idFrontInput" style="display:none;">
+          <div id="idFrontEmpty">
+            <div class="pin">🪪</div>
+            <p style="font-weight:600; margin-top:8px;">Tap to scan the front</p>
+            <p class="rationale" style="margin-top:4px;">We read your name, photo, and date of birth — right on your device.</p>
+          </div>
+          <div id="idFrontFilled" style="display:none;">
+            <img id="idFrontPreview" class="id-preview" alt="Front of ID">
+            <p class="upload-check">✓ Front captured</p>
+            <span class="change-link">Tap to retake</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>2. Back of your ID</label>
+        <label class="upload-card" for="idBackInput">
+          <input type="file" accept="image/*" class="id-upload-input" data-target="idBack" id="idBackInput" style="display:none;">
+          <div id="idBackEmpty">
+            <div class="pin">🔖</div>
+            <p style="font-weight:600; margin-top:8px;">Tap to scan the back</p>
+            <p class="rationale" style="margin-top:4px;">We decode the barcode or machine-readable strip — more reliable than reading the printed text.</p>
+          </div>
+          <div id="idBackFilled" style="display:none;">
+            <img id="idBackPreview" class="id-preview" alt="Back of ID">
+            <p class="upload-check">✓ Back captured</p>
+            <span class="change-link">Tap to retake</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>3. Quick selfie — this is the only time we'll ask</label>
+        <label class="upload-card" for="selfieInput" style="background:var(--teal-tint);">
+          <input type="file" accept="image/*" class="id-upload-input" data-target="selfie" id="selfieInput" style="display:none;">
+          <div id="selfieEmpty">
+            <div class="pin">🤳</div>
+            <p style="font-weight:600; margin-top:8px;">Tap for a quick selfie</p>
+            <p class="rationale" style="margin-top:4px;">One live check that you match your ID photo. We never ask again after this.</p>
+          </div>
+          <div id="selfieFilled" style="display:none;">
+            <img id="selfiePreview" class="id-preview" alt="Selfie">
+            <p class="upload-check">✓ Selfie captured</p>
+            <span class="change-link">Tap to retake</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span class="label">I consent to a one-time biometric face match</span>
+        <div class="switch" id="biometricConsentSwitch"></div>
+      </div>
+      <p class="rationale" style="margin-top:4px;">Separate from our Terms of Service — face data gets extra protection under laws like BIPA and GDPR.</p>
+
+      <p class="rationale" style="margin-top:14px;">Everything above is matched right on your device. We only ever receive a signed verified yes/no, plus a scrambled check that this document hasn't already verified another account — never your ID, photo, or document number.</p>
+      <p class="rationale">If you're approved, an encrypted copy is kept for 90 days in case of a dispute, then permanently deleted — extended only if a dispute is still open on your record specifically.</p>
+
+      <div class="cta-inline" style="margin-top:20px; text-align:left;">
+        <p style="margin-bottom:0;">Meanwhile, you can edit your profile and scroll through the events coming up.</p>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="verifyBtn" data-goto="verifyConfirm" disabled>Review & submit</button>`
+},
+// 0.35b — on-device match confirmation (the signed attestation, in plain language)
+{
+  id:'verifyConfirm', back:true,
+  body:`
+    <div class="screen-scroll" style="padding-top:8px;">
+      <span class="eyebrow">Before we send anything</span>
+      <h2>Here's what matched</h2>
+      <p class="rationale">This comparison happened on your device. This summary — not your ID or photo — is what gets sent, signed so it can't be altered in transit.</p>
+
+      <div class="deposit-box" style="margin-top:16px;">
+        <div class="deposit-line"><span>Name on ID</span><span id="matchNameRow">✓ Matches profile</span></div>
+        <div class="deposit-line"><span>Date of birth</span><span>✓ Matches profile</span></div>
+        <div class="deposit-line"><span>Document type</span><span id="matchDocTypeRow">✓ Confirmed</span></div>
+        <div class="deposit-line"><span>Not expired</span><span>✓ Confirmed</span></div>
+        <div class="deposit-line total"><span>Selfie live-match</span><span>✓ Passed</span></div>
+      </div>
+
+      <p class="rationale" style="margin-top:14px;">We also send a scrambled version of your document number so we can catch a document being used on two accounts — the actual number never leaves your device, and it can't be reversed from what we do send.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="prefs">Submit for verification</button>`
+},
+// 0.4 — preferences (moved up, right after verification)
+{
+  id:'prefs', step:2, total:2,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 2 of 2</span>
+      <h2>Who we pair you with</h2>
+      <p class="rationale">This only affects matching. You can change it anytime.</p>
+      <div class="toggle-row">
+        <span class="label">Only match me with the same gender</span>
+        <div class="switch" id="genderSwitch"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="label">I'm here for friendship, not romance</span>
+        <div class="switch" id="friendSwitch"></div>
+      </div>
+      <p class="rationale" style="margin-top:14px;">This is a volunteering platform first — the pairing is about showing up to something good together, not a dating mechanic. Telling us this just helps us match you with people looking for the same thing.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="home">Go to your dashboard</button>`
+},
+// 0.45 — log in
+{
+  id:'logIn', back:true,
+  body:`
+    <div class="screen-scroll" style="padding-top:8px;">
+      <span class="eyebrow">Welcome back</span>
+      <h2>Sign in to InGood Company</h2>
+      <p class="rationale">Use the same method you signed up with.</p>
+
+      <button class="auth-btn" type="button" data-goto="home"><span class="auth-icon">G</span> Continue with Google</button>
+      <button class="auth-btn" type="button" data-goto="home"><span class="auth-icon">🍎</span> Continue with Apple</button>
+      <button class="auth-btn" type="button" data-goto="home"><span class="auth-icon">f</span> Continue with Facebook</button>
+
+      <div class="auth-divider">or</div>
+
+      <div class="field"><label>Email</label><input type="email" placeholder="you@email.com"></div>
+      <div class="field"><label>Password</label><input type="password" placeholder="••••••••"></div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="home">Sign in</button>`
+},
+// 1 — location
+{
+  id:'location', step:1, total:4,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 1 of 4</span>
+      <h2>Where are you volunteering?</h2>
+      <p class="rationale">We use this to find nearby shifts and match you with someone close enough that getting there is easy — nothing else.</p>
+      <div class="locate-card">
+        <div class="pin">📍</div>
+        <p style="font-weight:600; margin-top:6px;">San Jose / Cupertino</p>
+        <p class="rationale" style="margin-top:2px;">Detected from your device</p>
+      </div>
+      <div class="field">
+        <label>Or choose manually</label>
+        <div style="display:flex; gap:10px;">
+          <select id="stateSelect" style="flex:1;">
+            <option value="">State</option>
+            ${Object.keys(STATE_CITIES).map(s => `<option value="${s}">${s}</option>`).join('')}
+          </select>
+          <select id="citySelect" style="flex:1;" disabled>
+            <option value="">Select a state first</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-next>Continue</button>`
+},
+// 2 — availability (moved up so it can filter org/shift options downstream)
+{
+  id:'availability', step:2, total:4,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 2 of 4</span>
+      <h2>When can you go?</h2>
+      <p class="rationale">Pick every window that works — we'll use this to only show you orgs and shifts that actually fit your schedule. Edit anytime.</p>
+
+      <div class="field">
+        <label>Specific days (optional)</label>
+        <div class="chip-grid">
+          <div class="chip" data-multi data-day="Mon">Mon</div>
+          <div class="chip" data-multi data-day="Tue">Tue</div>
+          <div class="chip" data-multi data-day="Wed">Wed</div>
+          <div class="chip" data-multi data-day="Thu">Thu</div>
+          <div class="chip" data-multi data-day="Fri">Fri</div>
+          <div class="chip selected" data-multi data-day="Sat">Sat</div>
+          <div class="chip selected" data-multi data-day="Sun">Sun</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>What times work? (pick as many as you like)</label>
+        <div class="chip-grid">
+          <div class="chip" data-multi data-timeslot="6–8 AM">6–8 AM</div>
+          <div class="chip selected" data-multi data-timeslot="8–10 AM">8–10 AM</div>
+          <div class="chip selected" data-multi data-timeslot="10 AM–12 PM">10 AM–12 PM</div>
+          <div class="chip" data-multi data-timeslot="12–2 PM">12–2 PM</div>
+          <div class="chip" data-multi data-timeslot="2–4 PM">2–4 PM</div>
+          <div class="chip" data-multi data-timeslot="4–6 PM">4–6 PM</div>
+          <div class="chip" data-multi data-timeslot="6–8 PM">6–8 PM</div>
+          <div class="chip" data-multi data-timeslot="8–10 PM">8–10 PM</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label>How far are you willing to travel?</label>
+          <span class="value-pill" id="radiusValue">8 mi</span>
+        </div>
+        <input type="range" id="radiusSlider" min="1" max="20" value="8" style="accent-color:#4F6F52; width:100%;">
+        <div class="fit-labels"><span>1 mi</span><span>20 mi</span></div>
+      </div>
+
+      <div class="field">
+        <label>How often would you like to go?</label>
+        <div class="chip-grid">
+          <div class="chip" data-freq="std">Once a month</div>
+          <div class="chip selected" data-freq="std">Twice a month</div>
+          <div class="chip" data-freq="std">Three times a month</div>
+          <div class="chip" data-freq="std">Weekly</div>
+          <div class="chip" data-freq="other">Other</div>
+        </div>
+        <input type="text" id="freqOther" placeholder="Tell us what works for you" style="display:none; margin-top:10px; width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 14px; font-size:13.5px; font-family:'Inter';">
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="orgOrCause">Continue</button>`
+},
+// 3 — org or cause first
+{
+  id:'orgOrCause', step:3, total:4,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 3 of 4</span>
+      <h2>Do you already know where you want to volunteer?</h2>
+      <p class="rationale">Either way you'll end up in the same place — we just use this to skip straight to what's useful for you.</p>
+      <div class="option-card" data-goto="orgSearch">
+        <div class="option-icon">🔎</div>
+        <div class="option-text">
+          <h4>I know an org</h4>
+          <p>Search and select it directly</p>
+        </div>
+        <span class="option-arrow">→</span>
+      </div>
+      <div class="option-card" data-goto="causes">
+        <div class="option-icon">🌱</div>
+        <div class="option-text">
+          <h4>Not sure — show me by cause</h4>
+          <p>Browse by what you care about</p>
+        </div>
+        <span class="option-arrow">→</span>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 2b — search for an org
+{
+  id:'orgSearch', step:4, total:4,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 4 of 4</span>
+      <h2>Find your organization</h2>
+      <p class="rationale">Search by name, or filter by category.</p>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search organizations…" id="orgSearchInput">
+      </div>
+      <div class="chip-grid" id="orgCatGrid" style="margin-top:14px;">
+        ${['Food banks & shelters','Animal welfare','Environmental cleanups','Youth mentorship','Elder care','Community organizing'].map(c=>`<div class="chip" data-orgcat="${c}">${c}</div>`).join('')}
+      </div>
+      <div class="section-title" id="orgResultsHeader" style="margin-top:16px; display:none;">
+        <h3 id="orgResultsCount" style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); font-weight:600;"></h3>
+        <a id="orgClearFilters" style="display:none;">Clear filters</a>
+      </div>
+
+      <div id="orgSearchPrompt" class="cta-inline" style="margin-top:18px;">
+        <p style="margin-bottom:0;">Type a name above, or tap a category to browse organizations on InGood Company.</p>
+      </div>
+
+      <div id="orgResultsList">
+        ${ORG_DIRECTORY.map(o => orgCardHTML(o).replace('class="discover-card"', 'class="discover-card" style="display:none;"')).join('')}
+      </div>
+      <p class="rationale" id="orgNoResults" style="display:none; margin-top:14px;">No organizations match that filter yet — try clearing a category, or tell us who you're looking for below.</p>
+
+      <div id="orgRecommended" style="display:none; margin-top:16px;">
+        <div class="section-title" style="margin-top:0;">
+          <h3>Similar organizations you might like</h3>
+        </div>
+        <p class="rationale" id="orgRecommendedSub" style="margin-top:-4px; margin-bottom:2px;">We don't have that one listed yet — here are a few close to it.</p>
+        <div id="orgRecommendedList"></div>
+      </div>
+
+      <div class="cta-inline">
+        <p>Can't find your org? Tell us who — we'll reach out, and match you with something close in the meantime.</p>
+        <input type="text" id="orgNameInput" placeholder="Organization name" style="width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 14px; font-size:13.5px; font-family:'Inter'; margin-bottom:10px;">
+        <button class="btn btn-ghost" style="width:auto; padding:11px 22px;" data-modal="orgNotify">Notify us</button>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 3 — causes
+{
+  id:'causes', step:4, total:4,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Step 4 of 4</span>
+      <h2>What do you care about?</h2>
+      <p class="rationale">Pick at least 2 — this is what we'll use to find shifts and people you'll click with. Change these anytime.</p>
+      <div class="chip-grid" id="causeGrid">
+        ${['Food banks & shelters','Animal welfare','Environmental cleanups','Youth mentorship','Elder care','Community organizing'].map(c=>`<div class="chip" data-cause="${c}">${c}</div>`).join('')}
+        <div class="chip disabled">Disaster relief · coming soon</div>
+        <div class="chip disabled">Health & disability · coming soon</div>
+      </div>
+
+      <div id="causeOrgSection" style="margin-top:26px;">
+        <div class="section-title" style="margin-top:0;">
+          <h3 id="causeOrgHeading">Showing all ${ORG_DIRECTORY.length} organizations</h3>
+        </div>
+        <p class="rationale" id="causeOrgSub" style="margin-top:-4px; margin-bottom:2px;">Browse who's out there, or pick a cause above to narrow it down. Tap one to see shifts.</p>
+        <div id="causeOrgResults">
+          ${ORG_DIRECTORY.map(o => orgCardHTML(o)).join('')}
+        </div>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="causeContinue" data-goto="waiting" disabled>Continue</button>`
+},
+// 3.5 — org detail (shifts)
+{
+  id:'orgDetail', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow" id="orgDetailMeta">Category · Area</span>
+      <h2 id="orgDetailName">Organization</h2>
+      <p class="rationale" id="orgDetailDesc"></p>
+
+      <div class="section-title" style="margin-top:20px;">
+        <h3>How past volunteers rated this org</h3>
+      </div>
+      <p class="rationale" style="margin-top:-4px;">How well-run the shift was — public, from everyone who's volunteered here.</p>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="good">↑</span>
+        <div class="bar-track"><div class="bar-fill" style="width:62%; background:#34AD64;"></div></div>
+        <span class="bar-count">31</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="leaning-good">✓</span>
+        <div class="bar-track"><div class="bar-fill" style="width:24%; background:#7ECB9B;"></div></div>
+        <span class="bar-count">12</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="neutral">−</span>
+        <div class="bar-track"><div class="bar-fill" style="width:10%; background:#C6B597;"></div></div>
+        <span class="bar-count">5</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="leaning-bad">✎</span>
+        <div class="bar-track"><div class="bar-fill" style="width:4%; background:#E8917E;"></div></div>
+        <span class="bar-count">2</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="bad">✕</span>
+        <div class="bar-track"><div class="bar-fill" style="width:0%; background:#DD4A3F;"></div></div>
+        <span class="bar-count">0</span>
+      </div>
+
+      <div class="section-title" style="margin-top:22px;">
+        <h3>Upcoming shifts</h3>
+      </div>
+      <p class="rationale" style="margin-top:-4px; margin-bottom:2px;">Pick the one that works — this locks in your match.</p>
+      <div id="orgDetailShifts"></div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="orgDetailContinue" data-goto="payment" disabled>Continue</button>`
+},
+// 7 — waiting (signature)
+{
+  id:'waiting', topbar:false,
+  body:`
+    <div class="wait-wrap">
+      <svg class="converge-svg" viewBox="0 0 260 150">
+        <path class="path-a" d="M20,20 C90,20 120,80 130,110" stroke-width="2.5"/>
+        <path class="path-b" d="M240,20 C170,20 140,80 130,110" stroke-width="2.5"/>
+        <circle cx="20" cy="20" r="5" fill="#4F6F52"/>
+        <circle cx="240" cy="20" r="5" fill="#D98E3F"/>
+        <g class="pin-pulse">
+          <circle cx="130" cy="115" r="7" fill="#20291F"/>
+          <circle cx="130" cy="115" r="13" fill="none" stroke="#20291F" stroke-width="1.5" opacity=".4"/>
+        </g>
+      </svg>
+      <p class="wait-status">Looking for your volunteer<br>partner and a spot nearby…</p>
+      <p class="wait-sub">This usually takes 1–3 days. We'll notify you the moment it's set — no need to keep checking back.</p>
+      <div class="wait-alt">
+        <span class="eyebrow" style="margin-bottom:2px;">While you wait</span>
+        <p>Prefer not to wait? RSVP solo to a shift below and we'll still try to pair you with someone before it starts.</p>
+      </div>
+      <button class="demo-skip" data-goto="match">demo → skip ahead to a match</button>
+    </div>
+  `,
+  footer:false
+},
+// 8 — match
+{
+  id:'match', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">You're paired</span>
+      <h2>Saturday, 9:00 AM</h2>
+      <div class="partner-card" data-goto="partnerProfile" style="cursor:pointer;">
+        <div class="partner-top">
+          <div class="avatar">J</div>
+          <div>
+            <h3>Jordan, 31</h3>
+            <div class="partner-meta">Nurse · lives 2.4 mi away</div>
+            <div class="badge-verified">✓ Verified</div>
+          </div>
+          <span style="margin-left:auto; color:var(--ink-soft); font-size:16px;">›</span>
+        </div>
+        <p class="blurb">"Started volunteering at shelters after fostering my first dog — now I can't stop."</p>
+        <div class="history-row">
+          <span class="tag-pill">12 shifts</span>
+          <span class="tag-pill">Animal welfare</span>
+          <span class="tag-pill">Food banks</span>
+        </div>
+      </div>
+
+      <div class="shift-card">
+        <span class="eyebrow">The shift</span>
+        <h3>Humane Society Silicon Valley</h3>
+        <div class="shift-row"><span>Cause</span><span>Animal welfare</span></div>
+        <div class="shift-row"><span>When</span><span>Sat, 9:00–11:30 AM</span></div>
+        <div class="shift-row"><span>Where</span><span>West San Jose</span></div>
+        <div class="shift-row"><span>Task</span><span>Dog socializing</span></div>
+      </div>
+
+      <div class="deposit-box" id="matchDepositBox">
+        <div class="deposit-line"><span>Deposit to Humane Society SV</span><span>$5.00</span></div>
+        <div class="deposit-line"><span>Platform fee</span><span>$1.00</span></div>
+        <div class="deposit-line total"><span>Total, refunded if you both show</span><span>$6.00</span></div>
+        <p class="finetext">Your $5 goes to the org in full. You're only charged once you confirm this exact shift.</p>
+      </div>
+      <div class="safety-card" id="matchAlreadyPaid" style="display:none; background:var(--moss-tint);">
+        <p style="font-size:13px; font-weight:700; color:var(--moss-dark);">✓ Already paid</p>
+        <p class="rationale">You paid your $6.00 deposit when you booked this shift.</p>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="matchPayBtn" data-goto="payment">Confirm & pay $6.00</button>`
+},
+// 8.5 — payment
+{
+  id:'payment', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Payment</span>
+      <h2>Confirm your payment</h2>
+      <p class="rationale" id="paymentSubtext">This is what locks in Saturday's shift with Jordan.</p>
+
+      <div class="deposit-box">
+        <div class="deposit-line"><span id="paymentOrgLabel">Deposit to Humane Society SV</span><span>$5.00</span></div>
+        <div class="deposit-line"><span>Platform fee</span><span>$1.00</span></div>
+        <div class="deposit-line total"><span>Total due now</span><span>$6.00</span></div>
+      </div>
+
+      <div class="safety-card" style="margin-top:16px; background:var(--ochre-tint); border-color:#C98A2E;">
+        <p style="font-size:13px; font-weight:700; color:#8A5A18;">⏱ Cancellation policy</p>
+        <p class="rationale" style="color:#8A5A18;">Cancel or don't show up within <strong>8 hours</strong> of the shift, and your $5 goes to the org — no refund. Cancel <strong>8+ hours before</strong>, and you're refunded in full.</p>
+      </div>
+
+      <button class="auth-btn" type="button" data-modal="applePay" style="margin-top:20px;"><span class="auth-icon">🍎</span> Pay with Apple Pay</button>
+      <button class="auth-btn" type="button" data-modal="googlePay"><span class="auth-icon">G</span> Pay with Google Pay</button>
+
+      <div class="auth-divider">or pay with card</div>
+
+      <div class="field"><label>Card number</label><input type="text" placeholder="1234 1234 1234 1234"></div>
+      <div class="field" style="display:flex; gap:10px;">
+        <div style="flex:1;"><label>Expiry</label><input type="text" placeholder="MM/YY"></div>
+        <div style="flex:1;"><label>CVC</label><input type="text" placeholder="123"></div>
+      </div>
+      <div class="field"><label>Name on card</label><input type="text" placeholder="Alex Rivera"></div>
+
+      <div class="toggle-row">
+        <span class="label">Save card for future shifts</span>
+        <div class="switch on"></div>
+      </div>
+
+      <p class="finetext" style="margin-top:14px;">Your $5 goes to the org in full. See the cancellation policy above for refund terms.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="paymentPayBtn" data-goto="chat">Pay $6.00</button>`
+},
+// 9 — chat
+{
+  id:'chat', back:true,
+  body:`
+    <div class="screen-scroll" style="padding-bottom:6px;">
+      <div class="chat-header" data-goto="partnerProfile" style="cursor:pointer;">
+        <div class="avatar" style="width:40px;height:40px;font-size:15px;">J</div>
+        <div>
+          <h3 style="font-size:15px;">Jordan</h3>
+          <p class="rationale" style="margin-top:0;">Sat, 9:00 AM · Humane Society SV</p>
+        </div>
+        <span style="margin-left:auto; color:var(--ink-soft); font-size:16px;">›</span>
+      </div>
+      <div class="chat-thread">
+        <div class="msg system">You've been paired with Jordan for Saturday's shift at Humane Society Silicon Valley! Jordan is a nurse who's been volunteering with animal shelters for the past year and loves weekend hikes.</div>
+        <div class="msg them">hey! excited for saturday, have you socialized shelter dogs before?</div>
+        <div class="msg me">first time honestly, a little nervous 😅 have you done this shift before?</div>
+        <div class="msg them">couple times, it's easy — mostly just sitting with them so they get used to people. see you there!</div>
+        <div class="starter-chip">💡 Ask what got them into animal welfare</div>
+      </div>
+      <p class="rationale" style="text-align:center; margin-top:14px;"><a data-goto="cancelShift" style="color:var(--danger); font-weight:600; cursor:pointer;">Can't make it? Cancel your shift</a></p>
+    </div>
+  `,
+  footerCustom:`<div class="chat-input-row"><input type="text" placeholder="Message Jordan…"><button class="send-btn">→</button></div>`
+},
+// 9.6 — cancel shift
+{
+  id:'cancelShift', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Cancel shift</span>
+      <h2>Cancel your shift with Jordan?</h2>
+      <p class="rationale">Sat, 9:00 AM · Humane Society Silicon Valley</p>
+
+      <div class="field">
+        <label>When are you canceling? (demo toggle — a real app reads this from the clock)</label>
+        <div class="chip-grid">
+          <div class="chip selected" data-single data-cancel-window="early">12+ hours before</div>
+          <div class="chip" data-single data-cancel-window="late">Within 12 hours</div>
+        </div>
+      </div>
+
+      <div class="safety-card" id="cancelEarlyNote" style="background:var(--moss-tint);">
+        <p style="font-size:13px; font-weight:700; color:var(--moss-dark);">✓ You'll get a full refund</p>
+        <p class="rationale">Your $6.00 will be refunded in full. Jordan will be notified right away and asked whether they'd like a new match or a refund of their own.</p>
+      </div>
+      <div class="safety-card" id="cancelLateNote" style="display:none; background:var(--ochre-tint); border-color:#C98A2E;">
+        <p style="font-size:13px; font-weight:700; color:#8A5A18;">⚠ No refund — this is within 12 hours</p>
+        <p class="rationale" style="color:#8A5A18;">Your $5 deposit goes to Humane Society Silicon Valley — it won't be refunded. Jordan will be notified their match canceled and asked whether they'd like a new match or a refund of their own.</p>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="cancelConfirmBtn" data-goto="partnerNotice">Confirm cancellation</button>`
+},
+// 9.7 — partner notified (the other side of the cancellation)
+{
+  id:'partnerNotice', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Preview · what Jordan sees</span>
+      <h2>Your match canceled</h2>
+      <div class="partner-card">
+        <div class="partner-top">
+          <div class="avatar">A</div>
+          <div>
+            <h3>Alex</h3>
+            <div class="partner-meta">can't make Saturday's shift anymore</div>
+          </div>
+        </div>
+        <p class="blurb" id="partnerNoticeText">Alex had to cancel Saturday, 9:00 AM at Humane Society Silicon Valley.</p>
+      </div>
+
+      <p class="rationale" style="margin-top:16px; font-weight:600;">Want us to find you someone new, or would you rather get your deposit back?</p>
+
+      <div class="yesno-row" style="margin-top:12px;">
+        <button class="btn btn-primary" id="wantNewMatchBtn" style="width:auto; flex:1;">Find me someone new</button>
+        <button class="btn btn-ghost" id="wantRefundBtn" style="width:auto; flex:1;">Just refund me</button>
+      </div>
+
+      <div id="partnerNoticeResult" style="display:none; margin-top:20px;"></div>
+    </div>
+  `,
+  footer:false
+},
+// 9.5 — partner profile
+{
+  id:'partnerProfile', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Volunteer partner</span>
+      <div class="profile-head">
+        <div class="avatar" style="width:60px;height:60px;font-size:22px;">J</div>
+        <div>
+          <h3>Jordan, 31</h3>
+          <p class="partner-meta">Nurse · lives 2.4 mi away</p>
+          <div class="badge-verified">✓ Verified</div>
+        </div>
+      </div>
+      <p class="blurb">"Started volunteering at shelters after fostering my first dog — now I can't stop."</p>
+
+      <div class="stat-row" style="margin-top:18px;">
+        <div class="stat-box"><div class="num">14</div><div class="lbl">Shifts</div></div>
+        <div class="stat-box"><div class="num">31.5</div><div class="lbl">Hours</div></div>
+      </div>
+
+      <div class="section-title" style="margin-top:22px;"><h3>Causes</h3></div>
+      <div class="history-row">
+        <span class="tag-pill">Animal welfare</span>
+        <span class="tag-pill">Food banks & shelters</span>
+      </div>
+
+      <div class="safety-card" style="margin-top:22px;">
+        <p style="font-size:13px; font-weight:600;">Something feel off?</p>
+        <p class="rationale">Report any concern — reviewed by a real person, not a bot.</p>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 10 — event day
+{
+  id:'event', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Saturday · 9:00 AM</span>
+      <h2>Your event ticket</h2>
+      <p class="rationale" style="text-align:center; margin-top:-6px;">🔒 Unlock your phone with Face ID or your passcode to show this ticket.</p>
+      <div class="ticket-card" id="ticketCard">
+        <div class="avatar" style="margin:0 auto 10px; width:52px; height:52px; font-size:19px; border:2px solid var(--ochre);">A</div>
+        <div class="ticket-qr">
+          <svg width="88" height="88" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+            <rect width="96" height="96" fill="#fff"/>
+            <rect x="6" y="6" width="18" height="18" fill="#111"/><rect x="10" y="10" width="10" height="10" fill="#fff"/><rect x="13" y="13" width="4" height="4" fill="#111"/>
+            <rect x="72" y="6" width="18" height="18" fill="#111"/><rect x="76" y="10" width="10" height="10" fill="#fff"/><rect x="79" y="13" width="4" height="4" fill="#111"/>
+            <rect x="6" y="72" width="18" height="18" fill="#111"/><rect x="10" y="76" width="10" height="10" fill="#fff"/><rect x="13" y="79" width="4" height="4" fill="#111"/>
+            <rect x="30" y="6" width="4" height="4" fill="#111"/><rect x="38" y="6" width="4" height="4" fill="#111"/><rect x="46" y="10" width="4" height="4" fill="#111"/><rect x="54" y="6" width="4" height="4" fill="#111"/>
+            <rect x="30" y="14" width="4" height="4" fill="#111"/><rect x="42" y="18" width="4" height="4" fill="#111"/><rect x="58" y="14" width="4" height="4" fill="#111"/>
+            <rect x="30" y="30" width="4" height="4" fill="#111"/><rect x="38" y="34" width="4" height="4" fill="#111"/><rect x="46" y="30" width="4" height="4" fill="#111"/><rect x="54" y="38" width="4" height="4" fill="#111"/><rect x="62" y="30" width="4" height="4" fill="#111"/>
+            <rect x="30" y="46" width="4" height="4" fill="#111"/><rect x="46" y="50" width="4" height="4" fill="#111"/><rect x="54" y="46" width="4" height="4" fill="#111"/><rect x="62" y="54" width="4" height="4" fill="#111"/>
+            <rect x="30" y="62" width="4" height="4" fill="#111"/><rect x="38" y="70" width="4" height="4" fill="#111"/><rect x="46" y="78" width="4" height="4" fill="#111"/><rect x="54" y="62" width="4" height="4" fill="#111"/><rect x="62" y="72" width="4" height="4" fill="#111"/>
+            <rect x="70" y="46" width="4" height="4" fill="#111"/><rect x="78" y="54" width="4" height="4" fill="#111"/><rect x="70" y="62" width="4" height="4" fill="#111"/><rect x="78" y="70" width="4" height="4" fill="#111"/>
+          </svg>
+        </div>
+        <h3>Alex Rivera</h3>
+        <div class="badge-verified" style="margin:6px auto 0; justify-content:center; display:inline-flex;">✓ Verified</div>
+        <p class="ticket-meta">Humane Society Silicon Valley · Sat, Jul 11 · 9:00 AM</p>
+        <p class="ticket-hint" id="ticketHint">Staff will scan this, then check three things match: your physical ID, you standing there, and this photo.</p>
+      </div>
+      <button class="btn btn-ghost" id="simulateScanBtn" style="margin-top:14px;">Demo: simulate staff scan</button>
+      <p class="rationale" style="margin-top:8px;">This ticket is tied to this device and only valid for this shift — a screenshot or a copy on another phone won't scan as valid.</p>
+
+      <div class="safety-card">
+        <div class="row-top">
+          <span class="label" style="font-weight:600; font-size:14px;">Share my plans</span>
+          <div class="switch on"></div>
+        </div>
+        <p class="rationale" style="margin-top:6px;">Sam (emergency contact) has Jordan's verified profile, plus this shift's time and location.</p>
+      </div>
+      <div class="safety-card">
+        <p style="font-size:13px; font-weight:600;">Something feel off?</p>
+        <p class="rationale">Report any concern — reviewed by a real person, not a bot.</p>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="eventContinueBtn" data-next disabled>Check in to continue</button>`
+},
+// 11 — rating
+{
+  id:'rating', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Shift complete</span>
+      <h2>How'd it go?</h2>
+
+      <div class="rate-group">
+        <h3>Rate Humane Society SV</h3>
+        <p class="rationale">Was it well-run — clear instructions, enough real work to do? This is public on their profile, and feeds our matching for future volunteers.</p>
+        ${iconRateRowHTML('orgOperational')}
+      </div>
+
+      <div class="fit-slider-row">
+        <p style="font-size:13px; font-weight:600;">Did this cause resonate with you?</p>
+        <input type="range" min="1" max="5" value="4">
+        <div class="fit-labels"><span>Not really for me</span><span>Loved it</span></div>
+        <div class="private-note">🔒 Private — helps your matching, never shown to the org or Jordan.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="rate-group">
+        <h3>How about Jordan?</h3>
+        <p class="rationale">Did they show up?</p>
+        <div class="yesno-row">
+          <button class="btn btn-ghost" data-showed="yes">They showed up</button>
+        </div>
+
+        <p class="rationale" style="margin-top:16px; font-weight:600;">Would you volunteer with them again?</p>
+        <div class="thumb-row">
+          <button class="thumb-btn" id="thumbUpBtn" data-thumb="up">👍</button>
+          <button class="thumb-btn" id="thumbDownBtn" data-thumb="down">👎</button>
+        </div>
+        <p class="rationale" id="thumbNote" style="margin-top:10px;">👍 keeps you open to matching with them again — if you both say yes, you become buddies. 👎 means neither of you will ever be paired with the other again. Only you'll ever see how you answered.</p>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="done">Submit</button>`
+},
+// 12 — done
+{
+  id:'done', topbar:false,
+  body:`
+    <div class="done-wrap">
+      <div class="done-badge">✓</div>
+      <h2>Nice work — that's shift #1.</h2>
+      <p class="sub" style="margin-top:8px; max-width:260px;">2 hrs 30 min at Humane Society Silicon Valley, with Jordan. See you again soon.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="home">Go to your dashboard</button>
+          <button class="btn btn-quiet" data-goto="intro">Restart demo</button>`
+},
+// 13 — home dashboard
+{
+  id:'home', topbar:false, nav:'home',
+  body:`
+    <div class="screen-scroll">
+      <div class="greet-row">
+        <div>
+          <span class="eyebrow">Wednesday</span>
+          <h2>Hi, Alex</h2>
+        </div>
+        <div class="bell">🔔</div>
+      </div>
+
+      <div class="cta-inline" id="pendingBanner" style="margin-top:16px; text-align:left; background:var(--ochre-tint); border-color:#C98A2E;">
+        <p style="color:#8A5A18; margin-bottom:0;">⏳ <strong>Verification pending</strong> — usually 2–3 business days. We'll email you as soon as you're approved.</p>
+      </div>
+
+      <div id="verifyCodeBox" class="cta-inline" style="margin-top:12px; text-align:left;">
+        <p style="margin-bottom:8px;">Got the approval email? Enter your verification code to unlock your account.</p>
+        <input type="text" id="verifyCodeInput" placeholder="6-digit code" maxlength="6" inputmode="numeric" style="width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 14px; font-size:15px; font-family:'IBM Plex Mono', monospace; letter-spacing:.15em; text-align:center; margin-bottom:10px;">
+        <button class="btn btn-primary" id="verifyCodeSubmit" style="width:auto; padding:11px 22px;">Confirm code</button>
+        <p class="rationale" id="verifyCodeError" style="display:none; margin-top:8px; color:var(--danger);">That code doesn't look right — double check the email and try again.</p>
+      </div>
+
+      <div class="status-card waiting" id="matchingStatusCard" data-goto="waiting">
+        <span class="eyebrow">Matching paused</span>
+        <div class="row">
+          <div>
+            <h3>We'll start matching you once you're verified</h3>
+            <p>Usually 2–3 business days. Your picks are saved — we'll pick up right where you left off.</p>
+          </div>
+          <span class="status-arrow">→</span>
+        </div>
+      </div>
+
+      <div class="cta-inline">
+        <p>Ready for another one? Tell us when you're free and we'll start looking.</p>
+        <button class="btn btn-primary" data-goto="location">Find your next shift</button>
+      </div>
+
+      <div id="upcomingEventsSection" style="display:none;">
+        <div class="section-title">
+          <h3>Today's event</h3>
+        </div>
+        <div class="status-card" data-goto="event">
+          <span class="eyebrow">Check in when you arrive</span>
+          <div class="row">
+            <div>
+              <h3>9:00 AM · Humane Society Silicon Valley</h3>
+              <p>Dog socializing, with Jordan</p>
+            </div>
+            <span class="status-arrow">→</span>
+          </div>
+        </div>
+
+        <div class="section-title">
+          <h3>Upcoming events</h3>
+        </div>
+        <div class="discover-card">
+          <div class="row-top">
+            <div><h4>Trail cleanup</h4><p class="org">Guadalupe River Park Conservancy · Sun, Jul 19</p></div>
+          </div>
+        </div>
+        <div class="discover-card">
+          <div class="row-top">
+            <div><h4>Food sorting & packing</h4><p class="org">Second Harvest of Silicon Valley · Wed, Jul 22</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="buddiesSection" style="display:none;">
+        <div class="section-title">
+          <h3>Your buddies</h3>
+          <a data-goto="buddies">See all</a>
+        </div>
+        <div class="buddy-mini" data-goto="partnerProfile" style="cursor:pointer;">
+          <div class="avatar">J</div>
+          <div class="info">
+            <h4>Jordan</h4>
+            <span>3 shifts together · Animal welfare</span>
+          </div>
+          <button class="mini-btn" data-goto="availability">Rebook</button>
+        </div>
+      </div>
+
+      <div class="section-title">
+        <h3>Your impact</h3>
+        <a data-goto="profile">Full profile</a>
+      </div>
+      <div class="stat-row" id="homeStatRow">
+        <div class="stat-box"><div class="num">0</div><div class="lbl">Shifts</div></div>
+        <div class="stat-box"><div class="num">0</div><div class="lbl">Hours</div></div>
+        <div class="stat-box"><div class="num">0</div><div class="lbl">Orgs</div></div>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 14 — discover
+{
+  id:'discover', topbar:false, nav:'discover',
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Discover</span>
+      <h2>Shifts near you</h2>
+      <p class="rationale">Sorted by how soon we can pair you — denser cause areas match faster.</p>
+
+      <div class="discover-card">
+        <div class="row-top">
+          <div>
+            <h4>Front Door Communities</h4>
+            <p class="org">Food banks & shelters · 1.8 mi</p>
+          </div>
+          <span class="density-tag">Fast match</span>
+        </div>
+        <p class="meta">Fri & Sat, 10:00 AM · food prep and packing</p>
+        <div class="discover-actions">
+          <button class="primary">Request a match</button>
+          <button class="ghost">RSVP solo</button>
+        </div>
+      </div>
+
+      <div class="discover-card">
+        <div class="row-top">
+          <div>
+            <h4>Humane Society Silicon Valley</h4>
+            <p class="org">Animal welfare · 2.4 mi</p>
+          </div>
+          <span class="density-tag">Fast match</span>
+        </div>
+        <p class="meta">Daily, 9:00–11:30 AM · dog socializing</p>
+        <div class="discover-actions">
+          <button class="primary">Request a match</button>
+          <button class="ghost">RSVP solo</button>
+        </div>
+      </div>
+
+      <div class="discover-card">
+        <div class="row-top">
+          <div>
+            <h4>Guadalupe River Park Conservancy</h4>
+            <p class="org">Environmental cleanups · 3.1 mi</p>
+          </div>
+          <span class="density-tag" style="color:var(--ink-soft); background:var(--bg-deep);">1–2 day wait</span>
+        </div>
+        <p class="meta">Sundays, 8:30 AM · trail and garden cleanup</p>
+        <div class="discover-actions">
+          <button class="primary">Request a match</button>
+          <button class="ghost">RSVP solo</button>
+        </div>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 15 — buddies
+{
+  id:'buddies', topbar:false, nav:'buddies',
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Buddies</span>
+      <h2>Your volunteer buddies</h2>
+      <p class="rationale">Free plan: 1 active buddy at a time. Either of you can end this anytime, no explanation needed.</p>
+
+      <div class="buddy-mini" data-goto="partnerProfile" style="margin-top:16px; cursor:pointer;">
+        <div class="avatar">J</div>
+        <div class="info">
+          <h4>Jordan</h4>
+          <span>3 shifts together · last: Jul 2</span>
+        </div>
+        <button class="mini-btn" data-goto="availability">Rebook</button>
+      </div>
+
+      <div class="cta-inline" style="margin-top:24px;">
+        <p>Want to meet someone new instead of rebooking with Jordan? Any new shift, you choose.</p>
+        <button class="btn btn-ghost" style="width:auto; padding:11px 22px;" data-goto="discover">Browse shifts</button>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 16 — profile
+{
+  id:'profile', topbar:false, nav:'profile',
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">Profile</span>
+      <div class="profile-head">
+        <div class="avatar">A</div>
+        <div>
+          <h3>Alex, 27</h3>
+          <p class="partner-meta">Product designer</p>
+          <span class="tier-pill pending">⏳ Verification pending</span>
+        </div>
+      </div>
+      <p class="rationale" style="margin-top:8px;">We're reviewing your ID by hand — usually 2–3 business days. We'll email you the moment it's approved, and your verified badge will appear here.</p>
+
+      <div class="history-row" style="margin-top:16px;">
+        <span class="tag-pill">Animal welfare</span>
+        <span class="tag-pill">Food banks & shelters</span>
+        <span class="tag-pill">Environmental cleanups</span>
+      </div>
+
+      <div class="section-title" style="margin-top:22px;">
+        <h3>Your rating history</h3>
+      </div>
+      <p class="rationale" style="margin-top:-4px;">What orgs have said after past shifts — this feeds how you're matched. Only you can see this breakdown.</p>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="good">↑</span>
+        <div class="bar-track"><div class="bar-fill" style="width:70%; background:#34AD64;"></div></div>
+        <span class="bar-count">5</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="leaning-good">✓</span>
+        <div class="bar-track"><div class="bar-fill" style="width:28%; background:#7ECB9B;"></div></div>
+        <span class="bar-count">2</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="neutral">−</span>
+        <div class="bar-track"><div class="bar-fill" style="width:0%; background:#C6B597;"></div></div>
+        <span class="bar-count">0</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="leaning-bad">✎</span>
+        <div class="bar-track"><div class="bar-fill" style="width:0%; background:#E8917E;"></div></div>
+        <span class="bar-count">0</span>
+      </div>
+      <div class="rating-history-row">
+        <span class="icon-rate-btn" data-rate="bad">✕</span>
+        <div class="bar-track"><div class="bar-fill" style="width:0%; background:#DD4A3F;"></div></div>
+        <span class="bar-count">0</span>
+      </div>
+
+      <div class="upgrade-card">
+        <span class="eyebrow" style="color:var(--ochre);">Free plan</span>
+        <h4>2 of 3 matched shifts used this month</h4>
+        <p>Go premium for unlimited matches, advanced filters, and a lower per-event fee — $12.99/mo.</p>
+        <button class="btn">See premium</button>
+      </div>
+
+      <div style="margin-top:22px;">
+        <div class="settings-row"><span>Cause areas & preferences</span><span class="arrow">›</span></div>
+        <div class="settings-row"><span>Volunteering frequency</span><span class="arrow">›</span></div>
+        <div class="settings-row"><span>Payment method</span><span class="arrow">›</span></div>
+        <div class="settings-row"><span>Safety & sharing</span><span class="arrow">›</span></div>
+        <div class="settings-row"><span>Notifications</span><span class="arrow">›</span></div>
+      </div>
+    </div>
+  `,
+  footer:false
+},
+// 17 — org onboarding (secondary path)
+{
+  id:'orgOnboard', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">For organizations</span>
+      <h2>Let's get to know you</h2>
+      <p class="rationale">A few basics so we can verify you're a real nonprofit — free, forever, no per-volunteer fees, ever. You'll list your first shift right after this.</p>
+      <div class="field"><label>Organization name</label><input type="text" placeholder="Humane Society Silicon Valley"></div>
+      <div class="field"><label>501(c)(3) or equivalent</label><input type="text" placeholder="EIN / registration number"></div>
+      <div class="field">
+        <label>Organization website</label>
+        <input type="url" id="orgWebsiteInput" placeholder="https://yourorg.org">
+        <p class="rationale">Helps us confirm you're a real, registered organization before you go live.</p>
+      </div>
+      <div class="field">
+        <label>Liability waiver</label>
+        <p class="rationale" style="margin-top:0; margin-bottom:8px;">Upload your own signed waiver, or use our default — a photo or scan works. Reviewed by counsel, and you can swap it in anytime.</p>
+        <label class="upload-card" for="waiverFileInput" id="waiverUploadCard">
+          <input type="file" accept="image/*" id="waiverFileInput" style="display:none;">
+          <div id="waiverUploadEmpty">
+            <div class="pin">📄</div>
+            <p style="font-weight:600; margin-top:8px;">Tap to upload a photo of your waiver</p>
+            <p class="rationale" style="margin-top:4px;">Your own waiver, or a photo of our default once signed.</p>
+          </div>
+          <div id="waiverUploadFilled" style="display:none;">
+            <img id="waiverPreview" class="id-preview" alt="Uploaded waiver preview">
+            <p class="upload-check">✓ Waiver uploaded</p>
+            <span class="change-link">Tap to replace</span>
+          </div>
+        </label>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" id="orgListBtn" data-goto="orgListShift" disabled>Continue</button>`
+},
+// 18 — list your shift
+{
+  id:'orgListShift', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">For organizations</span>
+      <h2>List your shift</h2>
+      <p class="rationale">This is what volunteers will see when they're matched to it. You can add more shifts anytime.</p>
+
+      <div class="field"><label>Shift title</label><input type="text" placeholder="Dog socializing"></div>
+
+      <div class="field">
+        <label>Cause area</label>
+        <div class="chip-grid" id="orgShiftCauseGrid">
+          ${['Food banks & shelters','Animal welfare','Environmental cleanups','Youth mentorship','Elder care','Community organizing'].map((c,i)=>`<div class="chip ${i===1?'selected':''}" data-single>${c}</div>`).join('')}
+        </div>
+      </div>
+
+      <div class="field" style="display:flex; gap:10px;">
+        <div style="flex:1;"><label>Date</label><input type="text" placeholder="Sat, Jul 11"></div>
+        <div style="flex:1;"><label>Time</label><input type="text" placeholder="9:00–11:30 AM"></div>
+      </div>
+
+      <div class="field"><label>Location</label><input type="text" placeholder="Street address or neighborhood"></div>
+
+      <div class="field"><label>Capacity</label><input type="text" placeholder="e.g. 6 volunteers"></div>
+
+      <div class="field">
+        <label>Description</label>
+        <textarea placeholder="What will volunteers actually be doing?">Socializing shelter dogs to help them get comfortable around people before adoption events.</textarea>
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="orgShiftPublished">Publish shift</button>`
+},
+// 17.5 — org shift published confirmation
+{
+  id:'orgShiftPublished', topbar:false,
+  body:`
+    <div class="done-wrap">
+      <div class="done-badge">✓</div>
+      <h2>Your shift is live</h2>
+      <p class="sub" style="margin-top:8px; max-width:260px;">Volunteers matching your causes will start seeing it right away.</p>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="orgRateVolunteers">Rate volunteers from your last shift</button>
+          <button class="btn btn-quiet" data-goto="intro">Back to start</button>`
+},
+// 17.6 — org rates volunteers
+{
+  id:'orgRateVolunteers', back:true,
+  body:`
+    <div class="screen-scroll">
+      <span class="eyebrow">For organizations</span>
+      <h2>Rate your volunteers</h2>
+      <p class="rationale">Attendance and contribution, separately. This becomes part of each volunteer's history — the matching algorithm uses it, other volunteers never see it.</p>
+
+      <div class="rate-group" style="margin-top:18px;">
+        <h3>Alex Rivera</h3>
+        <p class="rationale">Attendance</p>
+        ${iconRateRowHTML('alexAttendance')}
+        <p class="rationale" style="margin-top:14px;">Contribution quality</p>
+        ${iconRateRowHTML('alexContribution')}
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="rate-group">
+        <h3>Jordan Kim</h3>
+        <p class="rationale">Attendance</p>
+        ${iconRateRowHTML('jordanAttendance')}
+        <p class="rationale" style="margin-top:14px;">Contribution quality</p>
+        ${iconRateRowHTML('jordanContribution')}
+      </div>
+    </div>
+  `,
+  footer:`<button class="btn btn-primary" data-goto="intro">Submit ratings</button>`
+},
+];
+
+const screensEl = document.getElementById('screens');
+screens.forEach((s) => {
+  const div = document.createElement('div');
+  div.className = 'screen';
+  div.id = 'screen-' + s.id;
+  let topbarHtml = '';
+  if(s.topbar !== false){
+    topbarHtml = `<div class="topbar">
+      ${s.back || s.step ? `<div class="back-btn" data-back>←</div>` : `<div class="spacer32"></div>`}
+      ${s.step ? `<div class="progress">${Array.from({length:s.total}).map((_,i)=>`<span class="${i < s.step ? 'done':''}"></span>`).join('')}</div>` : `<div style="flex:1;"></div>`}
+      <div class="spacer32"></div>
+    </div>`;
+  }
+  const footerHtml = s.footerCustom ? s.footerCustom :
+    (s.footer === false ? '' : `<div class="footer-cta stack">${s.footer}</div>`);
+  const navItems = [
+    {id:'home', icon:'⌂', label:'Home'},
+    {id:'discover', icon:'⊚', label:'Discover'},
+    {id:'buddies', icon:'♡', label:'Buddies'},
+    {id:'profile', icon:'●', label:'Profile'},
+  ];
+  const navHtml = s.nav ? `<div class="bottom-nav">
+    ${navItems.map(n => `<div class="nav-item ${n.id === s.nav ? 'active' : ''}" data-goto="${n.id}">
+      <span class="icon">${n.icon}</span><span>${n.label}</span>
+    </div>`).join('')}
+  </div>` : '';
+  div.innerHTML = topbarHtml + s.body + footerHtml + navHtml;
+  screensEl.appendChild(div);
+});
+
+let history = ['intro'];
+let sideButtonClicks = 0;
+let isVerified = false;
+let paymentNextTarget = 'chat';
+let currentDetailOrgName = null;
+let hasPaid = false;
+
+function show(id){
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  if(id === 'orgSearch' && typeof filterOrgResults === 'function'){
+    filterOrgResults();
+  }
+  if(id === 'causes' && typeof renderCauseOrgMatches === 'function'){
+    renderCauseOrgMatches();
+  }
+  if(id === 'match'){
+    const depositBox = document.getElementById('matchDepositBox');
+    const paidNote = document.getElementById('matchAlreadyPaid');
+    const payBtn = document.getElementById('matchPayBtn');
+    if(hasPaid){
+      if(depositBox) depositBox.style.display = 'none';
+      if(paidNote) paidNote.style.display = 'block';
+      if(payBtn){ payBtn.textContent = 'Continue to chat'; payBtn.dataset.goto = 'chat'; }
+    } else {
+      if(depositBox) depositBox.style.display = '';
+      if(paidNote) paidNote.style.display = 'none';
+      if(payBtn){ payBtn.textContent = 'Confirm & pay $6.00'; payBtn.dataset.goto = 'payment'; }
+    }
+  }
+  if(id === 'verifyConfirm'){
+    const docType = document.querySelector('#docTypeGrid .chip.selected')?.dataset.docType || 'ID';
+    const row = document.getElementById('matchDocTypeRow');
+    if(row) row.textContent = `✓ Confirmed as ${docType}`;
+  }
+  if(id === 'home'){
+    const eventsSection = document.getElementById('upcomingEventsSection');
+    if(eventsSection) eventsSection.style.display = isVerified ? 'block' : 'none';
+    const buddiesSection = document.getElementById('buddiesSection');
+    if(buddiesSection) buddiesSection.style.display = hasPaid ? 'block' : 'none';
+  }
+}
+show('intro');
+
+document.addEventListener('click', (e) => {
+  const nextBtn = e.target.closest('[data-next]');
+  const gotoBtn = e.target.closest('[data-goto]');
+  const backBtn = e.target.closest('[data-back]');
+  const causeChip = e.target.closest('[data-cause]');
+  const orgCatChip = e.target.closest('[data-orgcat]');
+  const singleChip = e.target.closest('[data-single]');
+  const multiChip = e.target.closest('[data-multi]');
+  const freqChip = e.target.closest('[data-freq]');
+  const genderSwitch = e.target.closest('#genderSwitch');
+  const friendSwitch = e.target.closest('#friendSwitch');
+  const starEl = e.target.closest('[data-star]');
+  const thumbBtn = e.target.closest('[data-thumb]');
+  const iconRateBtn = e.target.closest('.icon-rate-btn');
+  const showedBtn = e.target.closest('[data-showed]');
+  const modalTrigger = e.target.closest('[data-modal]');
+  const modalClose = e.target.closest('[data-modal-close]');
+  const sideButton = e.target.closest('#sideButtonSim');
+  const gpayMethod = e.target.closest('[data-gpay-method]');
+  const orgDetailTrigger = e.target.closest('[data-org-detail]');
+  const shiftPick = e.target.closest('[data-shift-pick]');
+  const causeContinueBtn = e.target.closest('#causeContinue');
+  const orgDetailContinueBtn = e.target.closest('#orgDetailContinue');
+  const matchPayBtn = e.target.closest('#matchPayBtn');
+  const paymentPayBtn = e.target.closest('#paymentPayBtn, #applePaySuccessBtn, #googlePayConfirmBtn');
+
+  if(causeContinueBtn && !causeContinueBtn.disabled){
+    if(!isVerified){
+      history.push('home');
+      show('home');
+      return;
+    }
+    // else fall through to the normal gotoBtn handling below, which sends it to 'waiting'
+  }
+
+  if(orgDetailContinueBtn && !orgDetailContinueBtn.disabled){
+    paymentNextTarget = 'waiting';
+    const subEl = document.getElementById('paymentSubtext');
+    const orgLabelEl = document.getElementById('paymentOrgLabel');
+    const orgName = currentDetailOrgName || 'this organization';
+    if(subEl) subEl.textContent = `This locks in your shift at ${orgName} — we'll start looking for a volunteer partner for you right after.`;
+    if(orgLabelEl) orgLabelEl.textContent = `Deposit to ${orgName}`;
+    // falls through to the normal gotoBtn handling below, which sends it to 'payment'
+  }
+
+  if(matchPayBtn){
+    paymentNextTarget = 'chat';
+    const subEl = document.getElementById('paymentSubtext');
+    const orgLabelEl = document.getElementById('paymentOrgLabel');
+    if(subEl) subEl.textContent = `This is what locks in Saturday's shift with Jordan.`;
+    if(orgLabelEl) orgLabelEl.textContent = `Deposit to Humane Society SV`;
+    // falls through to the normal gotoBtn handling below, which sends it to 'payment'
+  }
+
+  if(paymentPayBtn){
+    hasPaid = true;
+    const overlay = paymentPayBtn.closest('.modal-overlay');
+    if(overlay) overlay.classList.remove('active');
+    history.push(paymentNextTarget);
+    show(paymentNextTarget);
+    return;
+  }
+
+  const simulateScanBtn = e.target.closest('#simulateScanBtn');
+  if(simulateScanBtn){
+    const card = document.getElementById('ticketCard');
+    const hint = document.getElementById('ticketHint');
+    if(card) card.classList.add('scanned');
+    if(hint) hint.innerHTML = `✓ Device confirmed present, and staff checked your ID, you, and this photo match. Your $5 deposit will be refunded automatically.`;
+    simulateScanBtn.textContent = '✓ Scanned by staff';
+    simulateScanBtn.disabled = true;
+    const contBtn = document.getElementById('eventContinueBtn');
+    if(contBtn){ contBtn.disabled = false; contBtn.textContent = 'Continue'; }
+    return;
+  }
+
+  if(orgDetailTrigger){
+    openOrgDetail(orgDetailTrigger.dataset.orgDetail);
+    return;
+  }
+  if(shiftPick){
+    if(!isVerified) return; // browsing is fine, selecting is locked until verified
+    const idx = shiftPick.dataset.shiftIndex;
+    document.querySelectorAll('#orgDetailShifts [data-shift-pick]').forEach(el => {
+      el.classList.remove('selected');
+      if(el.tagName === 'BUTTON') el.textContent = 'Select this shift';
+    });
+    document.querySelectorAll(`#orgDetailShifts [data-shift-index="${idx}"]`).forEach(el => {
+      el.classList.add('selected');
+      if(el.tagName === 'BUTTON') el.textContent = '✓ Selected';
+    });
+    const contBtn = document.getElementById('orgDetailContinue');
+    if(contBtn) contBtn.disabled = false;
+    return;
+  }
+
+  if(sideButton){
+    sideButtonClicks++;
+    if(sideButtonClicks >= 2){
+      document.getElementById('apayPrompt').style.display = 'none';
+      document.getElementById('apaySuccess').style.display = 'block';
+    }
+    return;
+  }
+  if(gpayMethod){
+    gpayMethod.parentElement.querySelectorAll('[data-gpay-method]').forEach(m => m.classList.remove('selected'));
+    gpayMethod.classList.add('selected');
+    return;
+  }
+
+  if(modalTrigger){
+    if(modalTrigger.dataset.modal === 'applePay'){
+      sideButtonClicks = 0;
+      document.getElementById('apayPrompt').style.display = 'block';
+      document.getElementById('apaySuccess').style.display = 'none';
+    }
+    const orgName = document.getElementById('orgNameInput')?.value.trim();
+    const modalText = document.getElementById('modalOrgText');
+    if(modalText){
+      modalText.textContent = orgName
+        ? `We've sent "${orgName}" to our team. We'll do everything we can to get them onboard.`
+        : `We've sent your organization to our team. We'll do everything we can to get them onboard.`;
+    }
+    document.getElementById('modal-' + modalTrigger.dataset.modal)?.classList.add('active');
+    return;
+  }
+  if(modalClose){
+    modalClose.closest('.modal-overlay')?.classList.remove('active');
+    // fall through so its own data-goto (if any) still navigates
+  }
+
+  if(causeChip){
+    causeChip.classList.toggle('selected');
+    const selectedCount = document.querySelectorAll('#causeGrid .chip.selected').length;
+    const contBtn = document.getElementById('causeContinue');
+    if(contBtn) contBtn.disabled = selectedCount < 2;
+    renderCauseOrgMatches();
+    return;
+  }
+  if(orgCatChip){
+    orgCatChip.classList.toggle('selected');
+    filterOrgResults();
+    return;
+  }
+  if(e.target.id === 'orgClearFilters'){
+    document.querySelectorAll('#orgCatGrid .chip.selected').forEach(c => c.classList.remove('selected'));
+    const searchInput = document.getElementById('orgSearchInput');
+    if(searchInput) searchInput.value = '';
+    filterOrgResults();
+    return;
+  }
+  if(singleChip){
+    singleChip.parentElement.querySelectorAll('[data-single]').forEach(c=>c.classList.remove('selected'));
+    singleChip.classList.add('selected');
+    if(singleChip.dataset.cancelWindow){
+      const earlyNote = document.getElementById('cancelEarlyNote');
+      const lateNote = document.getElementById('cancelLateNote');
+      const isEarly = singleChip.dataset.cancelWindow === 'early';
+      if(earlyNote) earlyNote.style.display = isEarly ? 'block' : 'none';
+      if(lateNote) lateNote.style.display = isEarly ? 'none' : 'block';
+    }
+    if(singleChip.dataset.docType){
+      updateVerifySubmitState();
+    }
+    return;
+  }
+  if(multiChip){
+    multiChip.classList.toggle('selected');
+    return;
+  }
+  if(freqChip){
+    freqChip.parentElement.querySelectorAll('[data-freq]').forEach(c=>c.classList.remove('selected'));
+    freqChip.classList.add('selected');
+    const otherInput = document.getElementById('freqOther');
+    if(otherInput) otherInput.style.display = freqChip.dataset.freq === 'other' ? 'block' : 'none';
+    return;
+  }
+  if(genderSwitch){ genderSwitch.classList.toggle('on'); return; }
+  if(friendSwitch){ friendSwitch.classList.toggle('on'); return; }
+  const genericSwitch = e.target.closest('.switch');
+  if(genericSwitch){
+    genericSwitch.classList.toggle('on');
+    if(genericSwitch.id === 'biometricConsentSwitch') updateVerifySubmitState();
+    return;
+  }
+  if(starEl){
+    const val = +starEl.dataset.star;
+    document.querySelectorAll('#starRow .star').forEach(s => {
+      s.classList.toggle('on', +s.dataset.star <= val);
+    });
+    return;
+  }
+  if(thumbBtn){
+    document.querySelectorAll('.thumb-btn').forEach(b => b.classList.remove('selected', 'up', 'down'));
+    thumbBtn.classList.add('selected', thumbBtn.dataset.thumb);
+    const note = document.getElementById('thumbNote');
+    if(note){
+      note.textContent = thumbBtn.dataset.thumb === 'up'
+        ? "👍 You're open to matching with Jordan again — if you both say yes, you become buddies. Only you'll ever see how you answered."
+        : "👎 Got it — you and Jordan will never be paired with each other again. This is private and can't be undone.";
+    }
+    return;
+  }
+  if(iconRateBtn){
+    const row = iconRateBtn.closest('.icon-rate-row');
+    if(row){
+      row.querySelectorAll('.icon-rate-btn').forEach(b => b.classList.remove('selected'));
+      iconRateBtn.classList.add('selected');
+    }
+    return;
+  }
+  if(showedBtn){
+    showedBtn.classList.add('btn-primary');
+    showedBtn.classList.remove('btn-ghost');
+    return;
+  }
+
+  const wantNewMatchBtn = e.target.closest('#wantNewMatchBtn');
+  const wantRefundBtn = e.target.closest('#wantRefundBtn');
+  if(wantNewMatchBtn || wantRefundBtn){
+    const resultEl = document.getElementById('partnerNoticeResult');
+    if(resultEl){
+      resultEl.style.display = 'block';
+      if(wantNewMatchBtn){
+        resultEl.innerHTML = `
+          <div class="safety-card" style="background:var(--moss-tint);">
+            <p style="font-size:13px; font-weight:700; color:var(--moss-dark);">✓ Looking for a new match</p>
+            <p class="rationale">We're finding Jordan another volunteer partner for a nearby shift — usually under 24 hours, since it's a smaller search than a brand-new match. If we can't find one in time, we guarantee Jordan a full refund.</p>
+          </div>`;
+      } else {
+        resultEl.innerHTML = `
+          <div class="safety-card" style="background:var(--moss-tint);">
+            <p style="font-size:13px; font-weight:700; color:var(--moss-dark);">✓ Refund on its way</p>
+            <p class="rationale">Jordan's $6.00 deposit has been refunded in full — no penalty, since they weren't the one who canceled.</p>
+          </div>`;
+      }
+    }
+    return;
+  }
+
+  if(backBtn){
+    if(history.length > 1){
+      history.pop();
+      show(history[history.length - 1]);
+    }
+    return;
+  }
+
+  let targetId = null;
+  if(gotoBtn){
+    if(gotoBtn.disabled) return;
+    targetId = gotoBtn.dataset.goto;
+  } else if(nextBtn){
+    if(nextBtn.disabled) return;
+    const currentId = history[history.length - 1];
+    const idx = screens.findIndex(s => s.id === currentId);
+    targetId = screens[idx + 1] ? screens[idx + 1].id : null;
+  }
+  if(targetId){
+    history.push(targetId);
+    show(targetId);
+  }
+});
+
+function renderCauseOrgMatches(){
+  const selected = Array.from(document.querySelectorAll('#causeGrid .chip.selected')).map(c => c.dataset.cause);
+  const section = document.getElementById('causeOrgSection');
+  const list = document.getElementById('causeOrgResults');
+  const heading = document.getElementById('causeOrgHeading');
+  const sub = document.getElementById('causeOrgSub');
+  if(!section || !list) return;
+
+  const avail = getUserAvailability();
+  const availableOrgs = ORG_DIRECTORY.filter(o => orgMatchesAvailability(ORG_DIRECTORY.indexOf(o), avail));
+
+  if(selected.length === 0){
+    if(heading) heading.textContent = `Showing all ${availableOrgs.length} organizations that fit your schedule`;
+    if(sub) sub.textContent = `Browse who's out there, or pick a cause above to narrow it down. Tap one to see shifts.`;
+    list.innerHTML = availableOrgs.length
+      ? availableOrgs.map(o => orgCardHTML(o)).join('')
+      : `<p class="rationale">No organizations have a shift that fits your current availability — go back and widen your schedule to see more.</p>`;
+    return;
+  }
+
+  const matches = availableOrgs
+    .filter(o => selected.includes(o.cat))
+    .slice()
+    .sort((a, b) => (a.area === 'San Jose' ? -1 : 1) - (b.area === 'San Jose' ? -1 : 1));
+  if(heading) heading.textContent = `Showing ${matches.length} of ${availableOrgs.length} organizations that fit your schedule`;
+  if(sub) sub.textContent = `Based on what you picked — tap one to see shifts, or keep browsing by cause.`;
+  list.innerHTML = matches.length
+    ? matches.map((o, i) => orgCardHTML(o, i === 0 ? '<span class="density-tag">Best fit for you</span>' : '')).join('')
+    : `<p class="rationale">No organizations in these causes fit your current availability — try another cause or widen your schedule.</p>`;
+}
+
+function filterOrgResults(){
+  const selectedCats = Array.from(document.querySelectorAll('#orgCatGrid .chip.selected')).map(c => c.dataset.orgcat);
+  const searchInput = document.getElementById('orgSearchInput');
+  const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const isActive = selectedCats.length > 0 || !!searchVal;
+  const cards = document.querySelectorAll('#orgResultsList .discover-card');
+  const avail = getUserAvailability();
+
+  const promptEl = document.getElementById('orgSearchPrompt');
+  const headerEl = document.getElementById('orgResultsHeader');
+
+  if(!isActive){
+    cards.forEach(card => { card.style.display = 'none'; });
+    if(promptEl) promptEl.style.display = 'block';
+    if(headerEl) headerEl.style.display = 'none';
+    const noResults = document.getElementById('orgNoResults');
+    if(noResults) noResults.style.display = 'none';
+    const recSection = document.getElementById('orgRecommended');
+    if(recSection) recSection.style.display = 'none';
+    return;
+  }
+
+  if(promptEl) promptEl.style.display = 'none';
+  if(headerEl) headerEl.style.display = 'flex';
+
+  let visibleCount = 0;
+  let foundButUnavailable = 0;
+  cards.forEach(card => {
+    const cat = card.dataset.category;
+    const name = (card.querySelector('h4')?.textContent || '').toLowerCase();
+    const org = ORG_DIRECTORY.find(o => o.name.toLowerCase() === name);
+    const matchesCat = selectedCats.length === 0 || selectedCats.includes(cat);
+    const matchesSearch = !searchVal || name.includes(searchVal);
+    const matchesAvail = org ? orgMatchesAvailability(ORG_DIRECTORY.indexOf(org), avail) : true;
+    const visible = matchesCat && matchesSearch && matchesAvail;
+    if(matchesCat && matchesSearch && !matchesAvail) foundButUnavailable++;
+    card.style.display = visible ? '' : 'none';
+    if(visible) visibleCount++;
+  });
+  const noResults = document.getElementById('orgNoResults');
+  const countEl = document.getElementById('orgResultsCount');
+  if(countEl) countEl.textContent = `Showing ${visibleCount} of ${cards.length} organizations that fit your schedule`;
+  const clearLink = document.getElementById('orgClearFilters');
+  if(clearLink) clearLink.style.display = 'inline';
+
+  const recSection = document.getElementById('orgRecommended');
+  const recList = document.getElementById('orgRecommendedList');
+  const recSub = document.getElementById('orgRecommendedSub');
+
+  if(visibleCount === 0 && foundButUnavailable > 0){
+    // The org exists and matches the search/category, it just has no shift in their window.
+    if(noResults){
+      noResults.textContent = `We found a match, but it doesn't have a shift in your current availability — go back and widen your schedule to see it.`;
+      noResults.style.display = 'block';
+    }
+    if(recSection) recSection.style.display = 'none';
+    return;
+  }
+  if(noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+  if(noResults && visibleCount === 0) noResults.textContent = `No organizations match that filter yet — try clearing a category, or tell us who you're looking for below.`;
+
+  if(recSection && recList){
+    if(visibleCount === 0 && searchVal){
+      const pool = (selectedCats.length > 0
+        ? ORG_DIRECTORY.filter(o => selectedCats.includes(o.cat))
+        : ORG_DIRECTORY.filter((o, i, arr) => arr.findIndex(x => x.cat === o.cat) === i)) // one per category
+        .filter(o => orgMatchesAvailability(ORG_DIRECTORY.indexOf(o), avail));
+      const recs = pool.slice(0, 4);
+      recSub.textContent = `We don't have "${searchInput.value.trim()}" listed yet — here are a few close to it that fit your schedule.`;
+      const nameInput = document.getElementById('orgNameInput');
+      if(nameInput && !nameInput.value.trim()) nameInput.value = searchInput.value.trim();
+      recList.innerHTML = recs.length
+        ? recs.map(o => orgCardHTML(o)).join('')
+        : `<p class="rationale">Nothing quite fits your current schedule either — try widening your availability.</p>`;
+      recSection.style.display = 'block';
+    } else {
+      recSection.style.display = 'none';
+    }
+  }
+}
+
+function updateVerifySubmitState(){
+  const docTypeSelected = document.querySelector('#docTypeGrid .chip.selected');
+  const frontDone = document.getElementById('idFrontFilled')?.style.display === 'block';
+  const backDone = document.getElementById('idBackFilled')?.style.display === 'block';
+  const selfieDone = document.getElementById('selfieFilled')?.style.display === 'block';
+  const consent = document.getElementById('biometricConsentSwitch')?.classList.contains('on');
+  const btn = document.getElementById('verifyBtn');
+  if(btn) btn.disabled = !(docTypeSelected && frontDone && backDone && selfieDone && consent);
+}
+
+function updateOrgListButton(){
+  const listBtn = document.getElementById('orgListBtn');
+  if(!listBtn) return;
+  const waiverUploaded = document.getElementById('waiverUploadFilled')?.style.display === 'block';
+  const websiteVal = document.getElementById('orgWebsiteInput')?.value.trim() || '';
+  const websiteValid = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+([/?#].*)?$/i.test(websiteVal);
+  listBtn.disabled = !(waiverUploaded && websiteValid);
+}
+
+document.addEventListener('input', (e) => {
+  if(e.target.id === 'orgSearchInput'){
+    filterOrgResults();
+  }
+  if(e.target.id === 'radiusSlider'){
+    const val = document.getElementById('radiusValue');
+    if(val) val.textContent = e.target.value + ' mi';
+  }
+  if(e.target.id === 'signupEmailInput'){
+    const val = e.target.value.trim().toLowerCase();
+    const looksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    const continueBtn = document.getElementById('emailContinue');
+    if(continueBtn) continueBtn.disabled = !looksValid;
+    const gmailHint = document.getElementById('gmailHint');
+    if(gmailHint) gmailHint.style.display = val.endsWith('@gmail.com') ? 'block' : 'none';
+  }
+  if(e.target.id === 'orgWebsiteInput'){
+    updateOrgListButton();
+  }
+});
+
+document.addEventListener('change', (e) => {
+  if(e.target.classList && e.target.classList.contains('id-upload-input')){
+    const target = e.target.dataset.target;
+    const file = e.target.files && e.target.files[0];
+    if(!file || !target) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const previewEl = document.getElementById(target + 'Preview');
+      const emptyEl = document.getElementById(target + 'Empty');
+      const filledEl = document.getElementById(target + 'Filled');
+      if(previewEl) previewEl.src = ev.target.result;
+      if(emptyEl) emptyEl.style.display = 'none';
+      if(filledEl) filledEl.style.display = 'block';
+      updateVerifySubmitState();
+    };
+    reader.readAsDataURL(file);
+  }
+  if(e.target.id === 'waiverFileInput'){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      document.getElementById('waiverPreview').src = ev.target.result;
+      document.getElementById('waiverUploadEmpty').style.display = 'none';
+      document.getElementById('waiverUploadFilled').style.display = 'block';
+      updateOrgListButton();
+    };
+    reader.readAsDataURL(file);
+  }
+  if(e.target.id === 'stateSelect'){
+    const citySelect = document.getElementById('citySelect');
+    const cities = STATE_CITIES[e.target.value] || [];
+    if(cities.length){
+      citySelect.innerHTML = `<option value="">Select a city</option>` + cities.map(c => `<option value="${c}">${c}</option>`).join('');
+      citySelect.disabled = false;
+    } else {
+      citySelect.innerHTML = `<option value="">Select a state first</option>`;
+      citySelect.disabled = true;
+    }
+  }
+});
+
+function markVerified(){
+  isVerified = true;
+  const banner = document.getElementById('pendingBanner');
+  const codeBox = document.getElementById('verifyCodeBox');
+  const statusCard = document.getElementById('matchingStatusCard');
+  if(banner) banner.style.display = 'none';
+  if(codeBox) codeBox.style.display = 'none';
+  if(statusCard){
+    statusCard.classList.remove('waiting');
+    statusCard.removeAttribute('data-goto');
+    statusCard.style.cursor = 'default';
+    statusCard.innerHTML = `
+      <span class="eyebrow">You're verified ✓</span>
+      <div class="row">
+        <div>
+          <h3>You're all set</h3>
+          <p>Tap "Find your next shift" below whenever you're ready to get matched.</p>
+        </div>
+      </div>`;
+  }
+  const tierPill = document.querySelector('#screen-profile .tier-pill');
+  if(tierPill){
+    tierPill.textContent = '✓ Verified';
+    tierPill.classList.remove('pending');
+  }
+  const profileNote = document.querySelector('#screen-profile .profile-head + .rationale');
+  if(profileNote){
+    profileNote.textContent = "You're verified — orgs and matches can now see your badge.";
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if(e.target.id === 'verifyCodeSubmit'){
+    const input = document.getElementById('verifyCodeInput');
+    const err = document.getElementById('verifyCodeError');
+    const val = input ? input.value.trim() : '';
+    if(!/^\d{6}$/.test(val)){
+      if(err) err.style.display = 'block';
+      return;
+    }
+    if(err) err.style.display = 'none';
+    markVerified();
+  }
+});
+
+</script>
+</body>
+</html>
