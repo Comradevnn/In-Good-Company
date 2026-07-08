@@ -27,3 +27,10 @@ the backend or Metro yourself to verify a change, always use port 3050 for
 the backend and port 8090 for Metro instead:
 - Backend: `PORT=3050 node index.js` (from backend/)
 - Metro: `npx expo start --port 8090` (from mobile/)
+
+## Deleting data
+
+Never delete rows from the shared dev database unless certain they're your
+own test data (e.g. rows you just inserted in the same verification pass).
+If there's any chance a table holds data from the user's own manual testing,
+ask before deleting or clearing it — don't assume and wipe it silently.

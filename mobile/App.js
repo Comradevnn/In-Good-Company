@@ -9,10 +9,14 @@ import {
 } from '@expo-google-fonts/inter';
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 import { BACKEND_URL } from './config/api';
+import { loadSessionToken } from './auth/session';
+import EmailCaptureScreen from './screens/EmailCaptureScreen';
 import QuickProfileScreen from './screens/QuickProfileScreen';
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState('Checking backend...');
+  // undefined = still reading secure storage; null = signed out; string = token
+  const [sessionToken, setSessionToken] = useState(undefined);
 
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
@@ -30,7 +34,13 @@ export default function App() {
       .catch((error) => setBackendStatus(`Backend error: ${error.message}`));
   }, []);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    loadSessionToken()
+      .then((token) => setSessionToken(token ?? null))
+      .catch(() => setSessionToken(null));
+  }, []);
+
+  if (!fontsLoaded || sessionToken === undefined) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator />
@@ -41,7 +51,11 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text style={styles.debugBar}>{backendStatus}</Text>
-      <QuickProfileScreen />
+      {sessionToken ? (
+        <QuickProfileScreen sessionToken={sessionToken} />
+      ) : (
+        <EmailCaptureScreen onSignedUp={setSessionToken} />
+      )}
       <StatusBar style="auto" />
     </View>
   );

@@ -16,12 +16,13 @@ import { BACKEND_URL } from '../config/api';
 
 // Matches the "quickProfile" screen in specs/plotline.html — the first real
 // onboarding screen a new user hits (intro -> emailCapture -> quickProfile).
-// Fields not collected here (location, cause tags, availability, verified,
+// Saves against the logged-in account (session token from signup). Fields
+// not collected here (location, cause tags, availability, verified,
 // reliability, etc.) are left to the defaults already set up in
 // backend/db/schema.sql.
 const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary', 'Prefer to self-describe'];
 
-export default function QuickProfileScreen() {
+export default function QuickProfileScreen({ sessionToken }) {
   const [firstName, setFirstName] = useState('');
   const [age, setAge] = useState('');
   const [occupation, setOccupation] = useState('');
@@ -52,7 +53,10 @@ export default function QuickProfileScreen() {
     try {
       const response = await fetch(`${BACKEND_URL}/users`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
         body: JSON.stringify({
           first_name: firstName,
           age,

@@ -16,8 +16,23 @@
 -- false/null/empty-list rather than being omitted, so the table shape doesn't
 -- need to change once those features land.
 
+-- Accounts: login credentials, created at signup (emailCapture screen) before
+-- any profile data exists. The users profile row is created later, when the
+-- quickProfile onboarding step is submitted, and links back via
+-- users.account_id. Passwords are stored only as bcrypt hashes.
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  password_hash TEXT NOT NULL,
+  session_token TEXT UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+
+  -- Link to the login account this profile belongs to (one profile per account)
+  account_id TEXT UNIQUE REFERENCES accounts(id),
 
   -- Onboarding: basic profile (3.1 step 3)
   full_name TEXT NOT NULL,
