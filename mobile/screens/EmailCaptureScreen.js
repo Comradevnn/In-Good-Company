@@ -33,15 +33,32 @@ export default function EmailCaptureScreen({ onSignedUp }) {
     setError(null);
     setSubmitting(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/signup`, {
+      // Try login first — if the email doesn't have an account yet, fall
+      // through to signup. One form, no separate login/signup toggle.
+      const loginResponse = await fetch(`${BACKEND_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong creating your account.');
+
+      let data;
+      if (loginResponse.status === 404) {
+        const signupResponse = await fetch(`${BACKEND_URL}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        data = await signupResponse.json();
+        if (!signupResponse.ok) {
+          throw new Error(data.error || 'Something went wrong creating your account.');
+        }
+      } else {
+        data = await loginResponse.json();
+        if (!loginResponse.ok) {
+          throw new Error(data.error || 'Something went wrong signing in.');
+        }
       }
+
       await saveSessionToken(data.session_token);
       onSignedUp(data.session_token);
     } catch (err) {
@@ -56,14 +73,6 @@ export default function EmailCaptureScreen({ onSignedUp }) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.topbar}>
-        <View style={styles.backBtn}>
-          <Text style={styles.backBtnText}>←</Text>
-        </View>
-        <View style={{ flex: 1 }} />
-        <View style={styles.spacer32} />
-      </View>
-
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.eyebrow}>Get started</Text>
         <Text style={styles.h2}>What's your email?</Text>
@@ -129,37 +138,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
   },
-  topbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnText: {
-    color: colors.ink,
-    fontSize: 16,
-  },
-  spacer32: {
-    width: 32,
-  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     padding: 22,
-    paddingTop: 8,
+    paddingTop: 32,
   },
   eyebrow: {
     fontFamily: 'IBMPlexMono_500Medium',

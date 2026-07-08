@@ -50,6 +50,20 @@ no screen for something the specs require, flag it and ask rather than
 guessing which one wins — the same way the emailCapture/quickProfile
 ordering was flagged before building it.
 
+## Known bugs (fix later)
+
+- **Re-verifying with the same document number incorrectly 409s.**
+  backend/index.js's POST /verification/attest duplicate-document check
+  (`WHERE doc_hmac = ? AND account_id != ?`) is written to exclude the
+  caller's own account, so resubmitting the exact same document on an
+  already-verified account should succeed and just overwrite that
+  account's doc_hmac/badge — not conflict. The user hit a 409 doing
+  exactly this (same document number, already-verified account) and
+  confirmed it was the identical number, not a different one. Root cause
+  not yet found — the exclusion logic looks correct on inspection, so
+  something else is going on. Needs live debugging (reproduce it and trace
+  what account/doc_hmac the query actually sees), not just a code read.
+
 ## Known-unverified items (re-test during the reinforcement/testing phase)
 
 - **AvailabilityScreen resume pre-fill**: the user once observed the

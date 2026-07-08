@@ -33,5 +33,8 @@ if (!userColumns.some((column) => column.name === 'doc_hmac')) {
   db.exec('ALTER TABLE users ADD COLUMN verified_at TEXT');
   db.exec('ALTER TABLE users ADD COLUMN verification_badge TEXT');
 }
+if (!userColumns.some((column) => column.name === 'deeds_balance')) {
+  db.exec('ALTER TABLE users ADD COLUMN deeds_balance INTEGER NOT NULL DEFAULT 0');
+}
 
 module.exports = db;

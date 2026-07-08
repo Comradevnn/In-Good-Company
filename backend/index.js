@@ -5,6 +5,8 @@ const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('./db');
+const { hardFiltersPass, passesShiftGate, safeParseArray } = require('./matching/engine');
+const { DEMO_SHIFTS } = require('./matching/demoShifts');
 
 const BCRYPT_ROUNDS = 10;
 
@@ -93,6 +95,28 @@ app.post('/auth/signup', async (req, res) => {
 
   const account = db.prepare('SELECT id, email FROM accounts WHERE email = ?').get(emailTrimmed);
   res.status(201).json({ account_id: account.id, email: account.email, session_token: sessionToken });
+});
+
+// Login for an existing account — checks the password against the stored
+// bcrypt hash, issues a fresh session token on success.
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body ?? {};
+
+  const emailTrimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const account = db.prepare('SELECT id, email, password_hash FROM accounts WHERE email = ?').get(emailTrimmed);
+  if (!account) {
+    return res.status(404).json({ error: 'No account with that email.' });
+  }
+
+  const passwordOk = typeof password === 'string' && await bcrypt.compare(password, account.password_hash);
+  if (!passwordOk) {
+    return res.status(401).json({ error: 'Incorrect password.' });
+  }
+
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  db.prepare('UPDATE accounts SET session_token = ? WHERE id = ?').run(sessionToken, account.id);
+
+  res.status(200).json({ account_id: account.id, email: account.email, session_token: sessionToken });
 });
 
 // Resolves "Authorization: Bearer <token>" to an account, or rejects with 401.
@@ -341,6 +365,190 @@ app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
   res.status(200).json(updated);
+});
+
+// ── Matching engine ──
+// Minimal Step 1a + 1b implementation (see backend/matching/engine.js for
+// exactly what's included vs. skipped relative to the full spec). Runs
+// against real user rows and a hardcoded list of demo shifts
+// (backend/matching/demoShifts.js) — there's no real shifts/orgs data model
+// yet, so this is what a "shift" means in this build.
+
+// Plain-text console narration of each matching run, for demo purposes —
+// deliberately readable prose, not JSON dumps, so this terminal can be
+// shown on screen during a live walkthrough.
+function logMatch(line) {
+  console.log(`[matching] ${line}`);
+}
+
+// Turns a raw 0-1 alignment score into a plain-language read, so the log
+// says what the number actually means instead of just printing it.
+function describeScore(score) {
+  if (score >= 0.95) return 'excellent alignment — exact cause match on both sides';
+  if (score >= 0.75) return 'strong alignment';
+  return 'workable alignment — clears the 0.5 minimum threshold, but only barely';
+}
+
+function describeAlignment(gate) {
+  const { shiftAlignment, orgAlignment, closeMatchUsed } = gate.alignment;
+  return `shift=${shiftAlignment.toFixed(1)} org=${orgAlignment.toFixed(1)}${closeMatchUsed ? ' (via close-match adjacency, not an exact cause match)' : ''}`;
+}
+
+function buildMatchResponse(pairing, selfId) {
+  const partnerId = pairing.user_a_id === selfId ? pairing.user_b_id : pairing.user_a_id;
+  const partner = db.prepare('SELECT id, display_name, age, occupation FROM users WHERE id = ?').get(partnerId);
+  const shift = DEMO_SHIFTS.find((s) => s.id === pairing.shift_id);
+  return {
+    status: 'confirmed',
+    pairing_id: pairing.id,
+    partner,
+    // Minimal shift/org display info only — matches the spec's "brief
+    // profile" minimization principle, not a wholesale dump of demo data.
+    shift: shift
+      ? {
+          cause_tags: shift.cause_tags,
+          org_name: shift.org.name,
+          location_label: shift.location_label,
+          date: shift.date,
+          time: shift.time,
+        }
+      : null,
+    score: pairing.score,
+  };
+}
+
+app.post('/matching/run', requireAuth, requireProfile, (req, res) => {
+  const self = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
+  logMatch(`${self.display_name} (${self.id}) requested a match.`);
+
+  // Idempotent: an existing confirmed pairing is returned as-is rather than
+  // recomputed, so re-opening the match screen doesn't risk finding (or
+  // "un-finding") a different partner than before.
+  const existingPairing = db.prepare(`
+    SELECT * FROM pairings WHERE status = 'confirmed' AND (user_a_id = ? OR user_b_id = ?)
+  `).get(self.id, self.id);
+  if (existingPairing) {
+    const response = buildMatchResponse(existingPairing, self.id);
+    logMatch(`${self.display_name} already has a confirmed pairing with ${response.partner.display_name} — returning it unchanged.`);
+    return res.json(response);
+  }
+
+  // Simplified guardrail check (full spec: missing verified/cause_tags/
+  // location/gender_pref all route to 'ineligible_data_incomplete' as a
+  // single reason; gender_pref always has a schema default so it's never
+  // "missing," and a missing location is handled inside passesShiftGate by
+  // skipping the radius check rather than blocking outright — so this only
+  // checks the two fields that can actually be absent in a blocking way).
+  if (!self.verified) {
+    logMatch(`${self.display_name} is not verified — stopping before candidates are even checked.`);
+    return res.json({ status: 'no_match', reason: 'verification_incomplete' });
+  }
+  if (safeParseArray(self.cause_tags).length === 0) {
+    logMatch(`${self.display_name} has no cause tags set — stopping before candidates are even checked.`);
+    return res.json({ status: 'no_match', reason: 'ineligible_data_incomplete' });
+  }
+
+  // DEMO SCOPED: booking a shift needs Deeds, checked here rather than the
+  // real hold-on-confirm/forfeit-on-no-show lifecycle in master prompt 1.6.
+  // Checked for both sides (booking is a two-person commitment) — a
+  // candidate short on Deeds is skipped like a failed hard filter, not
+  // matched and left unable to actually attend.
+  if (self.deeds_balance < 5) {
+    logMatch(`${self.display_name} has ${self.deeds_balance} Deed(s) — below the 5 needed to book a shift.`);
+    return res.json({ status: 'no_match', reason: 'insufficient_deeds' });
+  }
+
+  // Candidates: everyone else with a profile, minus anyone already in a
+  // confirmed pairing (their "slot" is taken).
+  const pairedUserIds = new Set();
+  for (const p of db.prepare(`SELECT user_a_id, user_b_id FROM pairings WHERE status = 'confirmed'`).all()) {
+    pairedUserIds.add(p.user_a_id);
+    pairedUserIds.add(p.user_b_id);
+  }
+  const candidates = db.prepare('SELECT * FROM users WHERE account_id != ?').all(req.account.id)
+    .filter((candidate) => !pairedUserIds.has(candidate.id));
+  logMatch(`Checking ${candidates.length} candidate(s): ${candidates.map((c) => c.display_name).join(', ') || '(none available)'}`);
+
+  // First hard-filter-and-alignment-passing candidate wins — the full
+  // spec's Step 3 soft ranking (which candidate scores highest) is skipped
+  // entirely, see backend/matching/engine.js's header comment.
+  for (const candidate of candidates) {
+    const hardFilters = hardFiltersPass(self, candidate);
+    if (!hardFilters.pass) {
+      logMatch(`  ${candidate.display_name}: rejected at hard filters (${hardFilters.reasons.join(', ')})`);
+      continue;
+    }
+    if (candidate.deeds_balance < 5) {
+      logMatch(`  ${candidate.display_name}: rejected — only has ${candidate.deeds_balance} Deed(s), needs 5 to book`);
+      continue;
+    }
+
+    let matchedShift = null;
+    for (const shift of DEMO_SHIFTS) {
+      const selfGate = passesShiftGate(self, shift);
+      const candidateGate = passesShiftGate(candidate, shift);
+      if (selfGate.pass && candidateGate.pass) {
+        matchedShift = { shift, selfGate, candidateGate };
+        break;
+      }
+    }
+
+    if (!matchedShift) {
+      logMatch(`  ${candidate.display_name}: passed hard filters, but no shift cleared alignment for both of you`);
+      continue;
+    }
+
+    const { shift, selfGate, candidateGate } = matchedShift;
+    const score = (selfGate.alignment.score + candidateGate.alignment.score) / 2;
+    const inserted = db.prepare(`
+      INSERT INTO pairings (user_a_id, user_b_id, shift_id, status, score)
+      VALUES (?, ?, ?, 'confirmed', ?)
+    `).run(self.id, candidate.id, shift.id, score);
+    const pairing = db.prepare('SELECT * FROM pairings WHERE rowid = ?').get(inserted.lastInsertRowid);
+    logMatch(`  ${candidate.display_name}: cleared "${shift.org.name}" (${shift.cause_tags.join(', ')}) on ${shift.date}, ${shift.time} at ${shift.location_label} — CONFIRMED`);
+    logMatch(`    your alignment: ${describeAlignment(selfGate)} | their alignment: ${describeAlignment(candidateGate)}`);
+    logMatch(`Result: ${self.display_name} paired with ${candidate.display_name} — combined score ${score.toFixed(2)} (${describeScore(score)}).`);
+    return res.json(buildMatchResponse(pairing, self.id));
+  }
+
+  logMatch(`Result: no compatible partner found for ${self.display_name}.`);
+  return res.json({ status: 'no_match', reason: 'no_compatible_partner_found' });
+});
+
+// DEMO SCOPED: cancels the user's active pairing so the match screen can
+// reset and matching can be re-run, and forfeits the caller's 5-Deed
+// booking cost. No notification to the other party, no reliability-
+// tracking consequences (§3.4/§5.3's real backout rules) — this is just
+// "make cancel-and-return-to-unmatched work with a Deeds cost," not the
+// real hold/forfeit lifecycle. Only the person backing out loses Deeds,
+// matching the real spec's "the person backed out on never eats the cost."
+app.post('/matching/cancel', requireAuth, requireProfile, (req, res) => {
+  const self = db.prepare('SELECT id, display_name, deeds_balance FROM users WHERE account_id = ?').get(req.account.id);
+  const pairing = db.prepare(`
+    SELECT * FROM pairings WHERE status = 'confirmed' AND (user_a_id = ? OR user_b_id = ?)
+  `).get(self.id, self.id);
+
+  if (!pairing) {
+    return res.status(404).json({ error: 'No active pairing to cancel.' });
+  }
+
+  db.prepare(`UPDATE pairings SET status = 'cancelled' WHERE id = ?`).run(pairing.id);
+  db.prepare('UPDATE users SET deeds_balance = deeds_balance - 5 WHERE id = ?').run(self.id);
+  const newBalance = self.deeds_balance - 5;
+  logMatch(`${self.display_name} backed out of their pairing (pairing ${pairing.id} cancelled, forfeited Deeds, balance now ${newBalance}).`);
+  res.json({ status: 'cancelled', deeds_balance: newBalance });
+});
+
+// DEMO SCOPED: no real payment processing — just increments the balance by
+// whatever pack was "bought." See schema.sql's deeds_balance comment.
+app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {
+  const amount = Number(req.body?.deeds);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'deeds must be a positive integer.' });
+  }
+  db.prepare('UPDATE users SET deeds_balance = deeds_balance + ? WHERE account_id = ?').run(amount, req.account.id);
+  const user = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
+  res.status(200).json(user);
 });
 
 app.listen(port, () => {

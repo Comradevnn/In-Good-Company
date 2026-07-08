@@ -109,6 +109,32 @@ CREATE TABLE IF NOT EXISTS users (
   flagged_users TEXT NOT NULL DEFAULT '[]', -- JSON array of user_ids this user has safety-reported
   flagged_by TEXT NOT NULL DEFAULT '[]', -- JSON array of user_ids who have safety-reported this user
 
+  -- Deeds (master prompt 1.6). DEMO SIMPLIFICATION: real Deeds involves a
+  -- purchase flow, a hold-on-confirm/release-on-attend/forfeit-on-no-show
+  -- lifecycle, and an org/platform revenue split. This is just a plain
+  -- integer balance, mutated by backend/index.js's demo purchase route and
+  -- the matching-engine's 5-Deed match-gate / back-out deduction — no real
+  -- payment processing anywhere.
+  deeds_balance INTEGER NOT NULL DEFAULT 0,
+
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Confirmed pairings from the matching engine (see backend/matching/).
+-- DEMO SIMPLIFICATION: shift_id references a hardcoded demo shift in
+-- backend/matching/demoShifts.js, not a real shifts table (org accounts /
+-- shift listings are an explicitly deferred deliverable — master prompt
+-- section 2). This table exists mainly to give the Step 1a "no duplicate
+-- pairing" hard filter something real to check, and to let a confirmed
+-- match persist across app restarts rather than being recomputed fresh
+-- (and possibly differently) every time.
+CREATE TABLE IF NOT EXISTS pairings (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_a_id TEXT NOT NULL REFERENCES users(id),
+  user_b_id TEXT NOT NULL REFERENCES users(id),
+  shift_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'confirmed',
+  score REAL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

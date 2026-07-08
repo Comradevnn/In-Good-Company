@@ -9,7 +9,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 import { BACKEND_URL } from './config/api';
-import { loadSessionToken } from './auth/session';
+import { loadSessionToken, clearSessionToken } from './auth/session';
 import { CAUSE_FLOW, ORG_FLOW, determineResumeStep } from './onboarding/resume';
 import EmailCaptureScreen from './screens/EmailCaptureScreen';
 import QuickProfileScreen from './screens/QuickProfileScreen';
@@ -20,6 +20,9 @@ import PartnerPrefsScreen from './screens/PartnerPrefsScreen';
 import AvailabilityScreen from './screens/AvailabilityScreen';
 import VerifyIdScreen from './screens/VerifyIdScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import MatchScreen from './screens/MatchScreen';
+import DeedsScreen from './screens/DeedsScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 const EDIT_SECTION_TITLES = {
   quickProfile: 'Edit basic profile',
@@ -47,6 +50,8 @@ export default function App() {
   // the settings list itself, not editing anything).
   const [showSettings, setShowSettings] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
+  const [showMatch, setShowMatch] = useState(false);
+  const [showDeeds, setShowDeeds] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
@@ -147,6 +152,30 @@ export default function App() {
   function finishEditing(updatedProfile) {
     if (updatedProfile) setProfile(updatedProfile);
     setEditingSection(null);
+  }
+
+  // Bubbles a fresh deeds_balance (from /matching/cancel or /deeds/purchase)
+  // back into profile, so the top-right badge and ProfileScreen stay in
+  // sync without a full re-fetch.
+  function handleDeedsChange(newBalance) {
+    if (newBalance == null) return;
+    setProfile((prev) => (prev ? { ...prev, deeds_balance: newBalance } : prev));
+  }
+
+  // Testing convenience for switching between accounts — clears the stored
+  // token and resets everything back to the signup screen's starting state.
+  function handleLogOut() {
+    clearSessionToken();
+    setProfile(null);
+    setFlow(CAUSE_FLOW);
+    setStepIndex(0);
+    setResumeState(undefined);
+    setShowSettings(false);
+    setEditingSection(null);
+    setShowVerify(false);
+    setShowMatch(false);
+    setShowDeeds(false);
+    setSessionToken(null);
   }
 
   const total = flow.length - 1; // "done" isn't a numbered onboarding step
@@ -266,25 +295,33 @@ export default function App() {
             />
           );
         }
+        if (showMatch) {
+          return (
+            <MatchScreen
+              sessionToken={sessionToken}
+              onBack={() => setShowMatch(false)}
+              onDeedsChange={handleDeedsChange}
+            />
+          );
+        }
+        if (showDeeds) {
+          return (
+            <DeedsScreen
+              sessionToken={sessionToken}
+              balance={profile?.deeds_balance}
+              onBalanceChange={handleDeedsChange}
+              onBack={() => setShowDeeds(false)}
+            />
+          );
+        }
         return (
-          <View style={styles.done}>
-            <Text style={styles.doneText}>
-              You're all set — welcome{profile?.display_name ? `, ${profile.display_name}` : ''}.
-              {'\n\n'}Home screen coming next.
-            </Text>
-            {profile?.verified ? (
-              <View style={styles.verifiedChip}>
-                <Text style={styles.verifiedChipText}>✓ Verified (preview)</Text>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.retryBtn} onPress={() => setShowVerify(true)}>
-                <Text style={styles.retryBtnText}>Verify your ID</Text>
-              </TouchableOpacity>
-            )}
-            <Text style={styles.settingsLink} onPress={() => setShowSettings(true)}>
-              Account settings
-            </Text>
-          </View>
+          <ProfileScreen
+            profile={profile}
+            onVerify={() => setShowVerify(true)}
+            onFindMatch={() => setShowMatch(true)}
+            onDeeds={() => setShowDeeds(true)}
+            onSettings={() => setShowSettings(true)}
+          />
         );
     }
   }
@@ -302,6 +339,7 @@ export default function App() {
             setShowSettings(false);
             setShowVerify(true);
           }}
+          onLogOut={handleLogOut}
         />
       );
     }
@@ -311,6 +349,11 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text style={styles.debugBar}>{backendStatus}</Text>
+      {sessionToken && profile ? (
+        <View style={styles.deedsBadge}>
+          <Text style={styles.deedsBadgeText}>🪙 {profile.deeds_balance ?? 0}</Text>
+        </View>
+      ) : null}
       {renderApp()}
       <StatusBar style="auto" />
     </View>
@@ -347,26 +390,6 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
     backgroundColor: '#EDE7DA',
   },
-  done: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 30,
-    gap: 18,
-    backgroundColor: '#FBF9F3',
-  },
-  verifiedChip: {
-    flexDirection: 'row',
-    backgroundColor: '#DCE9E9',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-  },
-  verifiedChipText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: '#2F5D62',
-  },
   doneText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 15,
@@ -374,9 +397,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  settingsLink: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13.5,
-    color: '#354E37',
+  deedsBadge: {
+    position: 'absolute',
+    top: 26,
+    right: 14,
+    zIndex: 10,
+    backgroundColor: '#20291F',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  deedsBadgeText: {
+    fontFamily: 'IBMPlexMono_500Medium',
+    fontSize: 12,
+    color: '#F2EFE4',
   },
 });

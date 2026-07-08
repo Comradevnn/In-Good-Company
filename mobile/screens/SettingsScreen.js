@@ -65,7 +65,7 @@ function Row({ label, value, onPress }) {
   );
 }
 
-export default function SettingsScreen({ profile, onBack, onEditSection, onVerify }) {
+export default function SettingsScreen({ profile, onBack, onEditSection, onVerify, onLogOut }) {
   const summary = summarize(profile ?? {});
 
   return (
@@ -83,10 +83,24 @@ export default function SettingsScreen({ profile, onBack, onEditSection, onVerif
         <Row label="Partner preferences" value={summary.partnerPrefs} onPress={() => onEditSection('partnerPrefs')} />
         <Row label="Availability" value={summary.availability} onPress={() => onEditSection('availability')} />
         <Row label="Verification" value={summary.verification} onPress={onVerify} />
+
+        {/* Testing convenience (multi-account demo prep) — no confirmation
+            dialog, per the ask; just clears the token and drops to signup. */}
+        <Text style={logOutLink} onPress={onLogOut}>
+          Log out
+        </Text>
       </ScrollView>
     </View>
   );
 }
+
+const logOutLink = {
+  fontFamily: 'Inter_600SemiBold',
+  fontSize: 13.5,
+  color: colors.danger,
+  textAlign: 'center',
+  marginTop: 24,
+};
 
 const rowStyle = {
   flexDirection: 'row',
