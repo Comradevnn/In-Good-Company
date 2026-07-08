@@ -34,3 +34,18 @@ Never delete rows from the shared dev database unless certain they're your
 own test data (e.g. rows you just inserted in the same verification pass).
 If there's any chance a table holds data from the user's own manual testing,
 ask before deleting or clearing it — don't assume and wipe it silently.
+
+## plotline.html is a style reference, not the spec
+
+specs/plotline.html only covers the screens someone happened to mock up —
+it does not cover every screen or field the product needs, and its flow
+order (e.g. which screen comes first) can be incidental rather than
+intentional. specs/volunteer-pairing-app-master-prompt.md and
+specs/in-good-company-matching-prompt.md are the source of truth for what
+fields and features must exist; plotline.html only governs visual style
+(colors, type, layout) for the screens it does cover.
+
+If plotline.html and the spec docs seem to disagree, or plotline.html has
+no screen for something the specs require, flag it and ask rather than
+guessing which one wins — the same way the emailCapture/quickProfile
+ordering was flagged before building it.

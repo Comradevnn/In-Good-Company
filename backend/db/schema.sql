@@ -64,6 +64,19 @@ CREATE TABLE IF NOT EXISTS users (
   -- Onboarding: partner preference (3.1 step 5, matching schema's gender_pref)
   gender_pref TEXT NOT NULL DEFAULT 'any' CHECK (gender_pref IN ('same_gender_only', 'any')),
 
+  -- Onboarding: friendship-vs-romance framing (3.1 step 5). Not part of the
+  -- matching-prompt.md User profile schema — collected and stored, but the
+  -- matching engine must NOT read this for ranking or eligibility, same as
+  -- the tier field. Do not wire this into matching logic later.
+  seeking TEXT NOT NULL DEFAULT 'open' CHECK (seeking IN ('friendship_only', 'open')),
+
+  -- True once the partner-preferences screen has actually been submitted.
+  -- gender_pref/seeking both default to valid values on their own, so this
+  -- flag is the only way to tell "user confirmed this step" apart from
+  -- "user never got here and is just sitting on defaults" — needed for
+  -- onboarding resume logic.
+  partner_prefs_confirmed INTEGER NOT NULL DEFAULT 0,
+
   -- Onboarding: volunteering frequency (3.1 step 7)
   volunteering_frequency TEXT,
 

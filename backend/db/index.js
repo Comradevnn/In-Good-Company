@@ -18,5 +18,12 @@ if (!userColumns.some((column) => column.name === 'account_id')) {
   db.exec('ALTER TABLE users ADD COLUMN account_id TEXT REFERENCES accounts(id)');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_id ON users(account_id)');
 }
+if (!userColumns.some((column) => column.name === 'seeking')) {
+  // See schema.sql: intentionally excluded from matching logic, same as tier.
+  db.exec(`ALTER TABLE users ADD COLUMN seeking TEXT NOT NULL DEFAULT 'open' CHECK (seeking IN ('friendship_only', 'open'))`);
+}
+if (!userColumns.some((column) => column.name === 'partner_prefs_confirmed')) {
+  db.exec('ALTER TABLE users ADD COLUMN partner_prefs_confirmed INTEGER NOT NULL DEFAULT 0');
+}
 
 module.exports = db;

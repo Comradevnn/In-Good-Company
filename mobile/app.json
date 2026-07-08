@@ -22,7 +22,14 @@
     },
     "plugins": [
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "In Good Company uses your location to find nearby volunteer shifts and match you with someone close enough that getting there is easy."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }
