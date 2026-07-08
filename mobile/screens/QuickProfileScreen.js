@@ -26,7 +26,8 @@ function parseInterestTags(json) {
   }
 }
 
-export default function QuickProfileScreen({ sessionToken, step, total, onNext, initialValues }) {
+export default function QuickProfileScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
+  const isVerified = Boolean(initialValues?.verified);
   const [firstName, setFirstName] = useState(initialValues?.display_name ?? '');
   const [age, setAge] = useState(initialValues?.age != null ? String(initialValues.age) : '');
   const [occupation, setOccupation] = useState(initialValues?.occupation ?? '');
@@ -81,7 +82,7 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
         throw new Error(data.error || 'Something went wrong saving your profile.');
       }
 
-      onNext();
+      onNext(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -91,14 +92,22 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
 
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <OnboardingTopBar step={step} total={total} />
+      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Step {step} of {total}</Text>
+        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>Build a quick profile</Text>
         <Text style={s.rationale}>
           This is what your future volunteer partner sees — keep it real, not polished.
         </Text>
+
+        {isVerified ? (
+          <View style={verifiedNotice}>
+            <Text style={verifiedNoticeText}>
+              Changing your name or age will remove your Verified badge until you verify again.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={s.field}>
           <Text style={s.label}>First name</Text>
@@ -187,3 +196,18 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
     </KeyboardAvoidingView>
   );
 }
+
+const verifiedNotice = {
+  marginTop: 18,
+  borderWidth: 1.5,
+  borderColor: colors.ochre,
+  borderRadius: 14,
+  padding: 13,
+  backgroundColor: colors.ochreTint,
+};
+const verifiedNoticeText = {
+  fontFamily: 'Inter_500Medium',
+  fontSize: 12.5,
+  lineHeight: 18,
+  color: '#8A5A18',
+};

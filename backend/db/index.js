@@ -25,5 +25,13 @@ if (!userColumns.some((column) => column.name === 'seeking')) {
 if (!userColumns.some((column) => column.name === 'partner_prefs_confirmed')) {
   db.exec('ALTER TABLE users ADD COLUMN partner_prefs_confirmed INTEGER NOT NULL DEFAULT 0');
 }
+if (!userColumns.some((column) => column.name === 'doc_hmac')) {
+  // See schema.sql: identity-verification columns. UNIQUE via index (SQLite
+  // ALTER TABLE can't add UNIQUE columns directly).
+  db.exec('ALTER TABLE users ADD COLUMN doc_hmac TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_doc_hmac ON users(doc_hmac)');
+  db.exec('ALTER TABLE users ADD COLUMN verified_at TEXT');
+  db.exec('ALTER TABLE users ADD COLUMN verification_badge TEXT');
+}
 
 module.exports = db;

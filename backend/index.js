@@ -1,10 +1,43 @@
 const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
 const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('./db');
 
 const BCRYPT_ROUNDS = 10;
+
+// ── Identity verification: platform badge-signing key (Ed25519) ──
+// Generated on first run, persisted under backend/keys/ (gitignored) so
+// issued badges stay verifiable across restarts. In production this would
+// live in a KMS; a local PEM file is the honest prototype version.
+const KEYS_DIR = path.join(__dirname, 'keys');
+const BADGE_KEY_PATH = path.join(KEYS_DIR, 'badge-signing-key.pem');
+
+function loadOrCreateBadgeKey() {
+  if (!fs.existsSync(BADGE_KEY_PATH)) {
+    fs.mkdirSync(KEYS_DIR, { recursive: true });
+    const { privateKey } = crypto.generateKeyPairSync('ed25519');
+    fs.writeFileSync(BADGE_KEY_PATH, privateKey.export({ type: 'pkcs8', format: 'pem' }));
+  }
+  const privateKey = crypto.createPrivateKey(fs.readFileSync(BADGE_KEY_PATH));
+  const publicKey = crypto.createPublicKey(privateKey);
+  return { privateKey, publicKey };
+}
+
+const badgeKeys = loadOrCreateBadgeKey();
+
+// Pepper for the duplicate-document HMAC (spec point 9). Served to the
+// device so the HMAC is computed on-device and the plaintext document
+// number never reaches the server (spec point 10). PROTOTYPE NOTE:
+// distributing the pepper to authenticated clients weakens its secrecy —
+// production needs a hardened key-distribution or on-device derivation
+// design before real IDs flow through this.
+const DOC_HMAC_PEPPER = process.env.DOC_HMAC_PEPPER || 'dev-pepper-not-for-production';
+if (!process.env.DOC_HMAC_PEPPER) {
+  console.warn('DOC_HMAC_PEPPER not set — using the dev default. Do not use in production.');
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -111,13 +144,24 @@ app.post('/users', requireAuth, (req, res) => {
     personal_values: typeof personal_values === 'string' ? personal_values.trim() : null,
   };
 
-  const existing = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
+  const existing = db.prepare('SELECT id, full_name, age, verified FROM users WHERE account_id = ?').get(req.account.id);
   if (existing) {
+    // Editing name/age after verification: allowed, but the Verified badge
+    // attests specifically to these two fields (see specs/identity-
+    // verification-encryption-spec.md) — changing either while verified
+    // would leave a signed badge silently claiming a name/age the profile
+    // no longer has. Server-enforced (not client-trusted) so this can't be
+    // bypassed by a client that doesn't send the right flag: revoke here,
+    // in the same update, whenever they actually change.
+    const identityChanged = existing.full_name !== profile.full_name || existing.age !== profile.age;
+    const revoke = Boolean(existing.verified) && identityChanged;
+
     db.prepare(`
       UPDATE users SET
         full_name = @full_name, display_name = @display_name, age = @age,
         gender = @gender, occupation = @occupation, interest_tags = @interest_tags,
         bio = @bio, personal_values = @personal_values, updated_at = datetime('now')
+        ${revoke ? ", verified = 0, verified_at = NULL, verification_badge = NULL, doc_hmac = NULL" : ''}
       WHERE account_id = @account_id
     `).run(profile);
   } else {
@@ -220,6 +264,83 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
   res.status(200).json(user);
+});
+
+// ── Identity verification routes ──
+// Prototype scope per the planning decisions: manual-entry extraction (no
+// scanning SDK), no selfie/face-match, no retained ID imagery anywhere.
+// What persists: attestation result, doc_hmac, signed "preview" badge.
+
+// The device fetches the pepper to compute the doc-number HMAC locally.
+app.get('/verification/config', requireAuth, (req, res) => {
+  res.json({ doc_hmac_pepper: DOC_HMAC_PEPPER });
+});
+
+// Orgs (and tests) verify badge signatures against this.
+app.get('/verification/public-key', (req, res) => {
+  res.type('text/plain').send(badgeKeys.publicKey.export({ type: 'spki', format: 'pem' }));
+});
+
+// Receives the on-device attestation (spec point 8 shape) + doc HMAC (point
+// 9). The device signature slot is stubbed at prototype stage — no hardware
+// key without a dev build — so transport trust is TLS only, loudly labeled.
+app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
+  const { name_match, dob_match, doc_type_confirmed, expiry_date, doc_hmac } = req.body ?? {};
+
+  for (const [field, value] of Object.entries({ name_match, dob_match, doc_type_confirmed })) {
+    if (value !== true) {
+      // Server re-checks what the device asserts; a failed local check
+      // should never have been submitted, but don't trust the client.
+      return res.status(400).json({ error: `Verification failed: ${field} is not true.` });
+    }
+  }
+
+  // V3: expiry is actually checked, not just extracted and ignored.
+  if (typeof expiry_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(expiry_date)) {
+    return res.status(400).json({ error: 'expiry_date must be a YYYY-MM-DD date.' });
+  }
+  if (expiry_date <= new Date().toISOString().slice(0, 10)) {
+    return res.status(400).json({ error: 'This document is expired.' });
+  }
+
+  if (typeof doc_hmac !== 'string' || !/^[0-9a-f]{64}$/.test(doc_hmac)) {
+    return res.status(400).json({ error: 'doc_hmac must be a 64-char hex HMAC-SHA256.' });
+  }
+
+  // V4: one document, one account — checked against the HMAC, never the
+  // plaintext number.
+  const dupe = db.prepare('SELECT account_id FROM users WHERE doc_hmac = ? AND account_id != ?')
+    .get(doc_hmac, req.account.id);
+  if (dupe) {
+    return res.status(409).json({ error: 'This document has already verified another account.' });
+  }
+
+  const user = db.prepare('SELECT id, display_name FROM users WHERE account_id = ?').get(req.account.id);
+
+  // Ed25519-signed badge. status "preview" is part of the SIGNED payload:
+  // until a real scanning SDK replaces manual entry, verified means
+  // "completed the flow," not "identity confirmed" — the badge itself must
+  // never claim more than the pipeline can back.
+  const badgePayload = {
+    user_id: user.id,
+    display_name: user.display_name,
+    verified: true,
+    status: 'preview',
+    issued_at: new Date().toISOString(),
+  };
+  const payloadJson = JSON.stringify(badgePayload);
+  const signature = crypto.sign(null, Buffer.from(payloadJson), badgeKeys.privateKey).toString('base64');
+  const badge = JSON.stringify({ payload: badgePayload, signature });
+
+  db.prepare(`
+    UPDATE users SET
+      verified = 1, verified_at = datetime('now'), doc_hmac = @doc_hmac,
+      verification_badge = @badge, updated_at = datetime('now')
+    WHERE account_id = @account_id
+  `).run({ doc_hmac, badge, account_id: req.account.id });
+
+  const updated = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
+  res.status(200).json(updated);
 });
 
 app.listen(port, () => {

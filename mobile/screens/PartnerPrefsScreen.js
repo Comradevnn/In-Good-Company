@@ -20,7 +20,7 @@ function Toggle({ label, value, onToggle }) {
   );
 }
 
-export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, initialValues }) {
+export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const [sameGenderOnly, setSameGenderOnly] = useState(initialValues?.gender_pref === 'same_gender_only');
   const [friendshipOnly, setFriendshipOnly] = useState(initialValues?.seeking === 'friendship_only');
   const [submitting, setSubmitting] = useState(false);
@@ -30,11 +30,11 @@ export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, 
     setError(null);
     setSubmitting(true);
     try {
-      await patchProfile(sessionToken, {
+      const updated = await patchProfile(sessionToken, {
         gender_pref: sameGenderOnly ? 'same_gender_only' : 'any',
         seeking: friendshipOnly ? 'friendship_only' : 'open',
       });
-      onNext();
+      onNext(updated);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,9 +44,9 @@ export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, 
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} />
+      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Step {step} of {total}</Text>
+        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>Who we pair you with</Text>
         <Text style={s.rationale}>This only affects matching. You can change it anytime.</Text>
 

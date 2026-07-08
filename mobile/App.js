@@ -18,6 +18,17 @@ import OrgOrCauseScreen from './screens/OrgOrCauseScreen';
 import CausesScreen from './screens/CausesScreen';
 import PartnerPrefsScreen from './screens/PartnerPrefsScreen';
 import AvailabilityScreen from './screens/AvailabilityScreen';
+import VerifyIdScreen from './screens/VerifyIdScreen';
+import SettingsScreen from './screens/SettingsScreen';
+
+const EDIT_SECTION_TITLES = {
+  quickProfile: 'Edit basic profile',
+  location: 'Edit location',
+  orgOrCause: 'Edit causes / org',
+  causes: 'Edit causes',
+  partnerPrefs: 'Edit partner preferences',
+  availability: 'Edit availability',
+};
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState('Checking backend...');
@@ -29,6 +40,13 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [flow, setFlow] = useState(CAUSE_FLOW);
   const [stepIndex, setStepIndex] = useState(0);
+  const [showVerify, setShowVerify] = useState(false);
+
+  // Settings: reachable from the "done" placeholder. editingSection is the
+  // one onboarding screen currently reopened for editing (null = showing
+  // the settings list itself, not editing anything).
+  const [showSettings, setShowSettings] = useState(false);
+  const [editingSection, setEditingSection] = useState(null);
 
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
@@ -106,23 +124,65 @@ export default function App() {
     );
   }
 
-  function goNext() {
+  // Advancing the linear onboarding flow. Each screen's save call returns
+  // the updated row, so profile stays fresh even mid-session (previously it
+  // only reflected whatever was fetched at launch).
+  function goNext(updatedProfile) {
+    if (updatedProfile) setProfile(updatedProfile);
     setStepIndex((i) => i + 1);
   }
 
-  function choseOrgPath() {
+  function choseOrgPath(updatedProfile) {
+    if (updatedProfile) setProfile(updatedProfile);
     setFlow(ORG_FLOW);
-    goNext();
+    setStepIndex((i) => i + 1);
   }
 
   function choseCausePath() {
     setFlow(CAUSE_FLOW);
-    goNext();
+    setStepIndex((i) => i + 1);
+  }
+
+  // Returning to Settings after editing one section.
+  function finishEditing(updatedProfile) {
+    if (updatedProfile) setProfile(updatedProfile);
+    setEditingSection(null);
   }
 
   const total = flow.length - 1; // "done" isn't a numbered onboarding step
   const step = stepIndex + 1;
   const currentScreen = flow[stepIndex];
+
+  function renderEditingScreen() {
+    const commonProps = {
+      sessionToken,
+      initialValues: profile,
+      title: EDIT_SECTION_TITLES[editingSection],
+      onBack: () => setEditingSection(null),
+    };
+    switch (editingSection) {
+      case 'quickProfile':
+        return <QuickProfileScreen {...commonProps} onNext={finishEditing} />;
+      case 'location':
+        return <LocationScreen {...commonProps} onNext={finishEditing} />;
+      case 'orgOrCause':
+        return (
+          <OrgOrCauseScreen
+            {...commonProps}
+            onKnowsOrg={finishEditing}
+            onBrowseByCause={() => setEditingSection('causes')}
+          />
+        );
+      case 'causes':
+        return <CausesScreen {...commonProps} onNext={finishEditing} />;
+      case 'partnerPrefs':
+        return <PartnerPrefsScreen {...commonProps} onNext={finishEditing} />;
+      case 'availability':
+        return <AvailabilityScreen {...commonProps} onNext={finishEditing} />;
+      default:
+        return null;
+    }
+  }
 
   function renderOnboardingStep() {
     switch (currentScreen) {
@@ -189,22 +249,69 @@ export default function App() {
         );
       case 'done':
       default:
-        // Placeholder — the real home screen doesn't exist yet.
+        // Placeholder — the real home screen doesn't exist yet. Verification
+        // hangs off here per the flow-placement decision: optional, never
+        // blocking onboarding ("required before first pairing, not before
+        // browsing" — enforcement wired when pairing exists).
+        if (showVerify) {
+          return (
+            <VerifyIdScreen
+              sessionToken={sessionToken}
+              profile={profile}
+              onVerified={(updatedUser) => {
+                setProfile(updatedUser);
+                setShowVerify(false);
+              }}
+              onCancel={() => setShowVerify(false)}
+            />
+          );
+        }
         return (
           <View style={styles.done}>
             <Text style={styles.doneText}>
               You're all set — welcome{profile?.display_name ? `, ${profile.display_name}` : ''}.
               {'\n\n'}Home screen coming next.
             </Text>
+            {profile?.verified ? (
+              <View style={styles.verifiedChip}>
+                <Text style={styles.verifiedChipText}>✓ Verified (preview)</Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.retryBtn} onPress={() => setShowVerify(true)}>
+                <Text style={styles.retryBtnText}>Verify your ID</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={styles.settingsLink} onPress={() => setShowSettings(true)}>
+              Account settings
+            </Text>
           </View>
         );
     }
   }
 
+  function renderApp() {
+    if (!sessionToken) return <EmailCaptureScreen onSignedUp={setSessionToken} />;
+    if (showSettings) {
+      if (editingSection) return renderEditingScreen();
+      return (
+        <SettingsScreen
+          profile={profile}
+          onBack={() => setShowSettings(false)}
+          onEditSection={setEditingSection}
+          onVerify={() => {
+            setShowSettings(false);
+            setShowVerify(true);
+          }}
+        />
+      );
+    }
+    return renderOnboardingStep();
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.debugBar}>{backendStatus}</Text>
-      {sessionToken ? renderOnboardingStep() : <EmailCaptureScreen onSignedUp={setSessionToken} />}
+      {renderApp()}
       <StatusBar style="auto" />
     </View>
   );
@@ -245,7 +352,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 30,
+    gap: 18,
     backgroundColor: '#FBF9F3',
+  },
+  verifiedChip: {
+    flexDirection: 'row',
+    backgroundColor: '#DCE9E9',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  verifiedChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#2F5D62',
   },
   doneText: {
     fontFamily: 'Inter_500Medium',
@@ -253,5 +373,10 @@ const styles = StyleSheet.create({
     color: '#20291F',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  settingsLink: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13.5,
+    color: '#354E37',
   },
 });

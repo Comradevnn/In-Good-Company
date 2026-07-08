@@ -27,7 +27,7 @@ function parseCauseTags(json) {
   }
 }
 
-export default function CausesScreen({ sessionToken, step, total, onNext, initialValues }) {
+export default function CausesScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const [selected, setSelected] = useState(
     initialValues?.cause_tags ? parseCauseTags(initialValues.cause_tags) : []
   );
@@ -46,8 +46,8 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
     setError(null);
     setSubmitting(true);
     try {
-      await patchProfile(sessionToken, { cause_tags: selected });
-      onNext();
+      const updated = await patchProfile(sessionToken, { cause_tags: selected });
+      onNext(updated);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -57,9 +57,9 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} />
+      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Step {step} of {total}</Text>
+        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>What do you care about?</Text>
         <Text style={s.rationale}>
           Pick at least {MIN_CAUSES} — this is what we'll use to find shifts and people you'll

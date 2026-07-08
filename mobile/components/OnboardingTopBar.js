@@ -1,19 +1,33 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 
 // Shared topbar across onboarding screens — back button + step progress
 // dots, matching specs/plotline.html's .topbar/.progress styling.
-export default function OnboardingTopBar({ step, total }) {
+//
+// Two modes:
+// - Linear onboarding: pass step/total, back button is decorative (no
+//   onBack — there's nowhere to go back to in the linear flow yet).
+// - Reopened from Settings to edit one section: pass title + onBack
+//   instead of step/total — shows a plain title and a working back button
+//   that returns to Settings, rather than a step-progress readout that
+//   wouldn't mean anything outside the linear flow.
+export default function OnboardingTopBar({ step, total, title, onBack }) {
+  const isEditMode = step == null;
+
   return (
     <View style={styles.topbar}>
-      <View style={styles.backBtn}>
+      <TouchableOpacity style={styles.backBtn} onPress={onBack} disabled={!onBack}>
         <Text style={styles.backBtnText}>←</Text>
-      </View>
-      <View style={styles.progress}>
-        {Array.from({ length: total }).map((_, i) => (
-          <View key={i} style={[styles.progressDot, i < step && styles.progressDotDone]} />
-        ))}
-      </View>
+      </TouchableOpacity>
+      {isEditMode ? (
+        <Text style={styles.editTitle}>{title}</Text>
+      ) : (
+        <View style={styles.progress}>
+          {Array.from({ length: total }).map((_, i) => (
+            <View key={i} style={[styles.progressDot, i < step && styles.progressDotDone]} />
+          ))}
+        </View>
+      )}
       <View style={styles.spacer32} />
     </View>
   );
@@ -41,6 +55,13 @@ const styles = StyleSheet.create({
   backBtnText: {
     color: colors.ink,
     fontSize: 16,
+  },
+  editTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: colors.ink,
   },
   progress: {
     flexDirection: 'row',

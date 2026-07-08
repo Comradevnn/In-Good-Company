@@ -19,7 +19,7 @@ function formatDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
-export default function AvailabilityScreen({ sessionToken, step, total, onNext, initialValues }) {
+export default function AvailabilityScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const today = new Date();
   const inFiveDays = new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000);
 
@@ -48,13 +48,13 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
     setError(null);
     setSubmitting(true);
     try {
-      await patchProfile(sessionToken, {
+      const updated = await patchProfile(sessionToken, {
         availability_window_start: formatDate(startDate),
         availability_window_end: formatDate(endDate),
         travel_radius_miles: radius,
         volunteering_frequency: frequency,
       });
-      onNext();
+      onNext(updated);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -64,9 +64,9 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} />
+      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Step {step} of {total}</Text>
+        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>When can you go?</Text>
         <Text style={s.rationale}>
           Pick the window you're free for your first shift — we'll do the matching from there.

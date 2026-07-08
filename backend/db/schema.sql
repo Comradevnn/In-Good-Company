@@ -86,6 +86,17 @@ CREATE TABLE IF NOT EXISTS users (
 
   -- Matching schema fields not filled in until later features exist
   verified INTEGER NOT NULL DEFAULT 0, -- boolean, ID verification completed
+
+  -- Identity verification (see specs/identity-verification-encryption-spec.md).
+  -- PROTOTYPE STAGE: extraction is manual entry (no scanning SDK yet), no
+  -- selfie/face-match, no retained ID imagery on server or device. Only the
+  -- attestation result, an irreversible HMAC of the document number, and the
+  -- signed badge persist. doc_hmac is HMAC-SHA256(doc number, server pepper),
+  -- computed on-device — the plaintext number never reaches the server
+  -- (spec points 9-10). Unique so one document can't verify two accounts.
+  doc_hmac TEXT UNIQUE,
+  verified_at TEXT,
+  verification_badge TEXT, -- JSON: Ed25519-signed badge, status "preview" until real extraction exists
   cause_tags_experienced TEXT NOT NULL DEFAULT '[]', -- JSON array, derived from volunteer_history
   total_volunteer_hours REAL NOT NULL DEFAULT 0, -- org-verified via check-in
   volunteering_since TEXT, -- date, null until first completed shift

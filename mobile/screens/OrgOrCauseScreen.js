@@ -11,7 +11,7 @@ import { patchProfile } from '../auth/api';
 // (org accounts are a separate deliverable — master prompt section 2), so
 // "I know an org" just captures a free-text name into prospective_org_name
 // (matching plotline's org-not-listed fallback) rather than a real search.
-export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg, onBrowseByCause, initialValues }) {
+export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg, onBrowseByCause, initialValues, title, onBack }) {
   const [showOrgInput, setShowOrgInput] = useState(Boolean(initialValues?.prospective_org_name));
   const [orgName, setOrgName] = useState(initialValues?.prospective_org_name ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -25,8 +25,8 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
     setError(null);
     setSubmitting(true);
     try {
-      await patchProfile(sessionToken, { prospective_org_name: orgName.trim() });
-      onKnowsOrg();
+      const updated = await patchProfile(sessionToken, { prospective_org_name: orgName.trim() });
+      onKnowsOrg(updated);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -36,9 +36,9 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} />
+      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Step {step} of {total}</Text>
+        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>Do you already know where you want to volunteer?</Text>
         <Text style={s.rationale}>
           Either way you'll end up in the same place — we just use this to skip straight to

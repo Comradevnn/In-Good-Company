@@ -49,3 +49,14 @@ If plotline.html and the spec docs seem to disagree, or plotline.html has
 no screen for something the specs require, flag it and ask rather than
 guessing which one wins — the same way the emailCapture/quickProfile
 ordering was flagged before building it.
+
+## Known-unverified items (re-test during the reinforcement/testing phase)
+
+- **AvailabilityScreen resume pre-fill**: the user once observed the
+  availability screen (mobile/screens/AvailabilityScreen.js) not showing
+  previously-entered date range/radius/frequency on return to that step, but
+  couldn't reproduce it or recall the exact steps. Code inspection at the
+  time found no bug in the pre-fill logic itself. Don't chase this further
+  ad hoc — specifically re-test resuming onto this screen (ideally via a
+  profile with availability fields partially set) during the dedicated
+  testing pass called for in specs/in-good-company-test-prompt.md.

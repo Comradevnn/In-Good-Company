@@ -13,7 +13,7 @@ import { patchProfile } from '../auth/api';
 // rather than plotline's full state/city dropderown dataset — there's no
 // geocoding step to turn a typed city into coordinates either way, so a
 // manual entry only ever sets location_city, never lat/lng.
-export default function LocationScreen({ sessionToken, step, total, onNext, initialValues }) {
+export default function LocationScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const hasSavedCoords = initialValues?.location_lat != null && initialValues?.location_lng != null;
 
   const [detecting, setDetecting] = useState(false);
@@ -57,8 +57,8 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
       const fields = detected
         ? { location_lat: detected.lat, location_lng: detected.lng }
         : { location_city: manualCity.trim() };
-      await patchProfile(sessionToken, fields);
-      onNext();
+      const updated = await patchProfile(sessionToken, fields);
+      onNext(updated);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -68,9 +68,9 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} />
+      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Step {step} of {total}</Text>
+        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>Where are you volunteering?</Text>
         <Text style={s.rationale}>
           We use this to find nearby shifts and match you with someone close enough that
