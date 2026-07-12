@@ -1,3 +1,4 @@
+require('./env'); // loads backend/.env into process.env (no dependency)
 const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -5,6 +6,7 @@ const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('./db');
+const { normalizeDocumentIdentity, docHmacHex } = require('./docIdentity');
 const { hardFiltersPass, passesShiftGate, safeParseArray } = require('./matching/engine');
 const { DEMO_SHIFTS } = require('./matching/demoShifts');
 
@@ -30,15 +32,18 @@ function loadOrCreateBadgeKey() {
 
 const badgeKeys = loadOrCreateBadgeKey();
 
-// Pepper for the duplicate-document HMAC (spec point 9). Served to the
-// device so the HMAC is computed on-device and the plaintext document
-// number never reaches the server (spec point 10). PROTOTYPE NOTE:
-// distributing the pepper to authenticated clients weakens its secrecy —
-// production needs a hardened key-distribution or on-device derivation
-// design before real IDs flow through this.
-const DOC_HMAC_PEPPER = process.env.DOC_HMAC_PEPPER || 'dev-pepper-not-for-production';
-if (!process.env.DOC_HMAC_PEPPER) {
-  console.warn('DOC_HMAC_PEPPER not set — using the dev default. Do not use in production.');
+// Pepper for the duplicate-document HMAC (spec point 9). Supplied only via
+// the DOC_PEPPER environment variable (backend/.env is loaded by ./env.js);
+// there is deliberately no fallback — the old hardcoded dev default is in
+// public git history, so any default value defeats the secret-keyed HMAC.
+// PROTOTYPE NOTE: GET /verification/config still serves this to
+// authenticated clients so the on-device HMAC flow keeps working; that
+// exposure is a known open issue pending a decision on moving HMAC
+// computation server-side.
+const DOC_PEPPER = process.env.DOC_PEPPER;
+if (!DOC_PEPPER) {
+  console.error('DOC_PEPPER is not set. Add DOC_PEPPER=<secret> to backend/.env (or the environment) before starting.');
+  process.exit(1);
 }
 
 const app = express();
@@ -294,10 +299,75 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
 // Prototype scope per the planning decisions: manual-entry extraction (no
 // scanning SDK), no selfie/face-match, no retained ID imagery anywhere.
 // What persists: attestation result, doc_hmac, signed "preview" badge.
+//
+// D6 (Option A): document-number hashing happens SERVER-SIDE. The plaintext
+// number is accepted transiently at exactly one endpoint
+// (POST /verification/document-check), hashed in memory, and discarded —
+// never stored, logged, or echoed back. If request-body logging or an
+// APM/error tracker is ever added to this app, that route must be excluded
+// from payload capture. An OPRF is the recorded future upgrade path that
+// would restore "number never reaches the server" without giving up the
+// server-held pepper; it is deliberately not built at this scale.
 
-// The device fetches the pepper to compute the doc-number HMAC locally.
+// D6 tombstone: the pepper is no longer distributed to clients. Old app
+// versions that still call this to hash on-device must fail loudly here —
+// not quietly hash with a stale value and submit unmatchable tags.
 app.get('/verification/config', requireAuth, (req, res) => {
-  res.json({ doc_hmac_pepper: DOC_HMAC_PEPPER });
+  res.status(410).json({
+    error: 'On-device document hashing is no longer supported. Update the app to continue verification.',
+  });
+});
+
+// Staged results from document-check: attest no longer receives any document
+// data from the client, so the server-computed hash waits here (briefly, in
+// memory) for the same account's follow-up attest call. Single-process
+// prototype scope, like the rest of this file.
+const PENDING_DOC_CHECK_TTL_MS = 10 * 60 * 1000;
+const pendingDocChecks = new Map(); // account_id -> { hmac, expiresAt }
+
+// Per-account velocity limit (D6 point 6): verification is a rare action, so
+// a tight cap costs honest users nothing while stopping a client from
+// brute-forcing candidate document numbers at server speed.
+const DOC_CHECK_LIMIT = 10;
+const DOC_CHECK_WINDOW_MS = 60 * 60 * 1000;
+const docCheckHistory = new Map(); // account_id -> [timestamps]
+
+function underDocCheckLimit(accountId) {
+  const now = Date.now();
+  const recent = (docCheckHistory.get(accountId) || []).filter((t) => now - t < DOC_CHECK_WINDOW_MS);
+  recent.push(now);
+  docCheckHistory.set(accountId, recent);
+  return recent.length <= DOC_CHECK_LIMIT;
+}
+
+// D6: the one endpoint that accepts the plaintext document fields. Computes
+// the normalized HMAC in memory, answers only the duplicate question, and
+// stages the hash for the follow-up attest. Validation errors are static
+// strings — the submitted values are never echoed.
+app.post('/verification/document-check', requireAuth, requireProfile, (req, res) => {
+  if (!underDocCheckLimit(req.account.id)) {
+    return res.status(429).json({ error: 'Too many document checks. Try again in an hour.' });
+  }
+
+  const normalized = normalizeDocumentIdentity(req.body ?? {});
+  if (!normalized) {
+    return res.status(400).json({
+      error: 'document_type, issuing_country, and document_number are required; the number must contain letters or digits, and ":" is not allowed in type or country.',
+    });
+  }
+
+  const hmac = docHmacHex(DOC_PEPPER, normalized);
+
+  // One document, one account — same guard as before, now server-computed.
+  // The other account's identity is deliberately not returned to the client.
+  const dupe = db.prepare('SELECT account_id FROM users WHERE doc_hmac = ? AND account_id != ?')
+    .get(hmac, req.account.id);
+  if (dupe) {
+    return res.status(200).json({ duplicate: true });
+  }
+
+  pendingDocChecks.set(req.account.id, { hmac, expiresAt: Date.now() + PENDING_DOC_CHECK_TTL_MS });
+  res.status(200).json({ duplicate: false });
 });
 
 // Orgs (and tests) verify badge signatures against this.
@@ -305,11 +375,12 @@ app.get('/verification/public-key', (req, res) => {
   res.type('text/plain').send(badgeKeys.publicKey.export({ type: 'spki', format: 'pem' }));
 });
 
-// Receives the on-device attestation (spec point 8 shape) + doc HMAC (point
-// 9). The device signature slot is stubbed at prototype stage — no hardware
-// key without a dev build — so transport trust is TLS only, loudly labeled.
+// Receives the on-device attestation (spec point 8 shape). The document hash
+// comes from this account's recent document-check staging (D6) — never from
+// the client. The device signature slot is stubbed at prototype stage — no
+// hardware key without a dev build — so transport trust is TLS only.
 app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
-  const { name_match, dob_match, doc_type_confirmed, expiry_date, doc_hmac } = req.body ?? {};
+  const { name_match, dob_match, doc_type_confirmed, expiry_date } = req.body ?? {};
 
   for (const [field, value] of Object.entries({ name_match, dob_match, doc_type_confirmed })) {
     if (value !== true) {
@@ -327,15 +398,19 @@ app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
     return res.status(400).json({ error: 'This document is expired.' });
   }
 
-  if (typeof doc_hmac !== 'string' || !/^[0-9a-f]{64}$/.test(doc_hmac)) {
-    return res.status(400).json({ error: 'doc_hmac must be a 64-char hex HMAC-SHA256.' });
+  const staged = pendingDocChecks.get(req.account.id);
+  if (!staged || staged.expiresAt < Date.now()) {
+    pendingDocChecks.delete(req.account.id);
+    return res.status(400).json({ error: 'No recent document check. Start verification again.' });
   }
+  const doc_hmac = staged.hmac;
 
-  // V4: one document, one account — checked against the HMAC, never the
-  // plaintext number.
+  // V4: one document, one account — re-checked at commit time in case another
+  // account verified the same document between check and attest.
   const dupe = db.prepare('SELECT account_id FROM users WHERE doc_hmac = ? AND account_id != ?')
     .get(doc_hmac, req.account.id);
   if (dupe) {
+    pendingDocChecks.delete(req.account.id);
     return res.status(409).json({ error: 'This document has already verified another account.' });
   }
 
@@ -362,6 +437,7 @@ app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
       verification_badge = @badge, updated_at = datetime('now')
     WHERE account_id = @account_id
   `).run({ doc_hmac, badge, account_id: req.account.id });
+  pendingDocChecks.delete(req.account.id);
 
   const updated = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
   res.status(200).json(updated);

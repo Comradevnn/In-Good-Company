@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { sha256 } from 'js-sha256';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import PrimaryButton from '../components/PrimaryButton';
@@ -25,11 +24,21 @@ import { nameMatches, dobMatchesAge, expiryIsValid } from '../verification/local
 // - No selfie/face-match, no biometric data, no consent screen owed yet.
 // - The ID photo is discarded the moment the flow completes (nothing
 //   retained on device or server).
-// - Only the attestation result + an HMAC of the document number leave the
-//   device; the plaintext number and the photo never do (spec points 8-10).
+// - D6 (server-side hashing): the attestation result + the document fields
+//   leave the device over TLS; the server checks for duplicate use, keeps
+//   only an irreversible HMAC of the number, and never stores or logs the
+//   number itself. The photo never leaves the device.
 // - Copy reflects the spec's instant on-device design, not plotline.html's
 //   stale "2-3 business days" human-review text.
 const DOC_TYPES = ["Driver's license", 'Passport', 'State ID'];
+
+// Stable identity slugs for the server's normalized document identity —
+// display labels can change; these must not.
+const DOC_TYPE_SLUGS = {
+  "Driver's license": 'drivers_license',
+  Passport: 'passport',
+  'State ID': 'state_id',
+};
 
 export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCancel }) {
   const [phase, setPhase] = useState('form'); // 'form' | 'review'
@@ -38,6 +47,7 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
   const [idName, setIdName] = useState('');
   const [dob, setDob] = useState('');
   const [docNumber, setDocNumber] = useState('');
+  const [issuingCountry, setIssuingCountry] = useState('');
   const [expiry, setExpiry] = useState('');
   const [checks, setChecks] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -105,15 +115,26 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
     setError(null);
     setSubmitting(true);
     try {
-      const configResponse = await fetch(`${BACKEND_URL}/verification/config`, {
-        headers: { Authorization: `Bearer ${sessionToken}` },
+      // D6: the document fields go to the server over TLS; the server
+      // computes and checks the irreversible hash and stores only that —
+      // never the number itself.
+      const checkResponse = await fetch(`${BACKEND_URL}/verification/document-check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          document_type: DOC_TYPE_SLUGS[docType],
+          issuing_country: issuingCountry.trim(),
+          document_number: docNumber.trim(),
+        }),
       });
-      const config = await configResponse.json();
-      if (!configResponse.ok) throw new Error(config.error || 'Could not start verification.');
-
-      // HMAC computed on-device: the plaintext document number never
-      // reaches the server (spec points 9-10).
-      const docHmac = sha256.hmac(config.doc_hmac_pepper, docNumber.trim());
+      const check = await checkResponse.json();
+      if (!checkResponse.ok) throw new Error(check.error || 'Could not check the document.');
+      if (check.duplicate) {
+        throw new Error('This document has already verified another account.');
+      }
 
       const response = await fetch(`${BACKEND_URL}/verification/attest`, {
         method: 'POST',
@@ -121,14 +142,15 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
           'Content-Type': 'application/json',
           Authorization: `Bearer ${sessionToken}`,
         },
-        // Spec point 8 attestation shape. Device signature stubbed —
-        // hardware-bound keys need a dev build; TLS is the transport trust.
+        // Spec point 8 attestation shape. The document hash is staged
+        // server-side by the document-check above — nothing document-related
+        // is sent here. Device signature stubbed — hardware-bound keys need
+        // a dev build; TLS is the transport trust.
         body: JSON.stringify({
           name_match: checks.name_match,
           dob_match: checks.dob_match,
           doc_type_confirmed: checks.doc_type_confirmed,
           expiry_date: expiry.trim(),
-          doc_hmac: docHmac,
         }),
       });
       const data = await response.json();
@@ -150,8 +172,8 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
           <Text style={s.eyebrow}>Before we send anything</Text>
           <Text style={s.h2}>Here's what matched</Text>
           <Text style={s.rationale}>
-            These checks ran on your device. This summary — not your ID photo or document
-            number — is what gets sent.
+            These checks ran on your device. This summary and your document details — never
+            your ID photo — are what get sent.
           </Text>
 
           <View style={reviewBox}>
@@ -163,9 +185,9 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
           </View>
 
           <Text style={[s.rationale, { marginTop: 14 }]}>
-            We send a scrambled, irreversible version of your document number so one document
-            can't verify two accounts — the actual number never leaves this device. Your ID
-            photo is deleted from this device the moment you submit.
+            Your document number is sent securely and checked so one document can't verify
+            two accounts. We store only a scrambled, irreversible check-value — never the
+            number itself. Your ID photo is deleted from this device the moment you submit.
           </Text>
           <Text style={[s.rationale, { marginTop: 8, fontFamily: 'Inter_600SemiBold' }]}>
             Prototype note: document details are typed, not scanned, so your badge will show
@@ -190,8 +212,8 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
         <Text style={s.eyebrow}>Verify your ID</Text>
         <Text style={s.h2}>Confirm it's really you</Text>
         <Text style={s.rationale}>
-          Checked instantly, on your device. We never receive your ID photo or document
-          number — only the result.
+          Checked instantly. We never receive or keep your ID photo, and we store only an
+          irreversible check-value of your document number — never the number itself.
         </Text>
 
         <View style={s.field}>
@@ -269,21 +291,34 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
           </View>
         </View>
 
-        <View style={s.field}>
-          <Text style={s.label}>Document number</Text>
-          <TextInput
-            style={s.input}
-            placeholder="As printed on the document"
-            placeholderTextColor={colors.inkSoft}
-            value={docNumber}
-            onChangeText={setDocNumber}
-            autoCapitalize="characters"
-          />
-          <Text style={[s.rationale, { marginTop: 6 }]}>
-            Only a scrambled, irreversible check-value of this number is sent — never the
-            number itself.
-          </Text>
+        <View style={[s.field, s.row]}>
+          <View style={{ flex: 2 }}>
+            <Text style={s.label}>Document number</Text>
+            <TextInput
+              style={s.input}
+              placeholder="As printed on the document"
+              placeholderTextColor={colors.inkSoft}
+              value={docNumber}
+              onChangeText={setDocNumber}
+              autoCapitalize="characters"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.label}>Issuing country</Text>
+            <TextInput
+              style={s.input}
+              placeholder="US"
+              placeholderTextColor={colors.inkSoft}
+              value={issuingCountry}
+              onChangeText={setIssuingCountry}
+              autoCapitalize="characters"
+            />
+          </View>
         </View>
+        <Text style={[s.rationale, { marginTop: 6 }]}>
+          Sent securely to check that one document can't verify two accounts. We keep only a
+          scrambled, irreversible check-value — never the number itself.
+        </Text>
 
         {error ? <Text style={s.errorText}>{error}</Text> : null}
 
@@ -300,7 +335,7 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
       <PrimaryButton
         label="Review & submit"
         onPress={runLocalChecks}
-        disabled={!docType || !photoUri || !idName.trim() || !dob.trim() || !docNumber.trim() || !expiry.trim()}
+        disabled={!docType || !photoUri || !idName.trim() || !dob.trim() || !docNumber.trim() || !issuingCountry.trim() || !expiry.trim()}
       />
     </KeyboardAvoidingView>
   );

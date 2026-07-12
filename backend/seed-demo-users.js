@@ -55,7 +55,14 @@ function loadOrCreateBadgeKey() {
   return crypto.createPrivateKey(fs.readFileSync(BADGE_KEY_PATH));
 }
 
-const DOC_HMAC_PEPPER = process.env.DOC_HMAC_PEPPER || 'dev-pepper-not-for-production';
+require('./env'); // loads backend/.env, same as index.js
+const { normalizeDocumentIdentity, docHmacHex } = require('./docIdentity');
+
+const DOC_PEPPER = process.env.DOC_PEPPER;
+if (!DOC_PEPPER) {
+  console.error('DOC_PEPPER is not set. Add DOC_PEPPER=<secret> to backend/.env before seeding, so demo doc_hmacs match what the running server computes.');
+  process.exit(1);
+}
 
 function signBadge(privateKey, userId, displayName) {
   const payload = {
@@ -80,6 +87,8 @@ const DEMO_USERS = [
     cause_tags: ['Animal welfare'],
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-1',
+    document_type: 'drivers_license',
+    issuing_country: 'US',
   },
   {
     email: 'demo-2@example.com',
@@ -90,6 +99,8 @@ const DEMO_USERS = [
     cause_tags: ['Animal welfare'],
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-2',
+    document_type: 'drivers_license',
+    issuing_country: 'US',
   },
   {
     email: 'demo-3@example.com',
@@ -100,6 +111,8 @@ const DEMO_USERS = [
     cause_tags: ['Environmental cleanups'],
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-3',
+    document_type: 'passport',
+    issuing_country: 'US',
   },
   {
     email: 'demo-4@example.com',
@@ -110,6 +123,8 @@ const DEMO_USERS = [
     cause_tags: ['Elder care'],
     gender_pref: 'same_gender_only', // deliberately incompatible with demo-5
     doc_number: 'DEMO-DOC-4',
+    document_type: 'state_id',
+    issuing_country: 'US',
   },
   {
     email: 'demo-5@example.com',
@@ -120,6 +135,8 @@ const DEMO_USERS = [
     cause_tags: ['Elder care'], // same cause as demo-4, blocked by gender_pref
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-5',
+    document_type: 'drivers_license',
+    issuing_country: 'US',
   },
   {
     email: 'demo-6@example.com',
@@ -130,6 +147,8 @@ const DEMO_USERS = [
     cause_tags: ['Youth mentorship'], // no adjacency, unique in this set
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-6',
+    document_type: 'passport',
+    issuing_country: 'US',
   },
 ];
 
@@ -151,7 +170,13 @@ async function seed() {
     `).run(demo.email, passwordHash, sessionToken);
     const account = db.prepare('SELECT id FROM accounts WHERE email = ?').get(demo.email);
 
-    const docHmac = crypto.createHmac('sha256', DOC_HMAC_PEPPER).update(demo.doc_number).digest('hex');
+    // Same normalized preimage as POST /verification/document-check (D6), so
+    // a live duplicate check against a seeded document actually matches.
+    const docHmac = docHmacHex(DOC_PEPPER, normalizeDocumentIdentity({
+      document_type: demo.document_type,
+      issuing_country: demo.issuing_country,
+      document_number: demo.doc_number,
+    }));
 
     const userFields = {
       account_id: account.id,

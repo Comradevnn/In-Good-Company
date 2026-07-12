@@ -168,24 +168,26 @@ device keys for per-event ticket proof-of-possession — most of which
     DOB, this checks the age implied by the typed DOB against the stored
     profile age, ±1 year.
   - `expiryIsValid` — must be a real, non-expired date.
-- **What reaches the server is an attestation, not the ID.** `POST
+- **What reaches the server is an attestation plus the document fields —
+  never the ID image.** `POST /verification/document-check` transiently
+  receives `{document_type, issuing_country, document_number}`, and `POST
   /verification/attest` receives only booleans (`name_match`, `dob_match`,
-  `doc_type_confirmed`), an expiry date, and a document-number HMAC — never
-  a document image or the plaintext document number. The server
-  independently re-validates the expiry date and re-checks that all
-  three booleans are `true` server-side rather than trusting the client.
-- **Duplicate-document detection via HMAC-SHA256, not a bare hash,** exactly
-  per spec point 9: the client fetches a server-held pepper
-  (`GET /verification/config`), computes `HMAC-SHA256(doc_number, pepper)`
-  on-device, and only that HMAC — stored as `users.doc_hmac`, `UNIQUE` in
-  the schema — is ever sent or stored. This makes the value irreversible
-  even if the database is exposed, and lets the server catch "this exact
-  document already verified a different account" (`409` on
-  `POST /verification/attest`) without ever learning the document number.
-  *Prototype caveat, called out in the code:* the pepper is served to any
-  authenticated client so the HMAC can be computed on-device, which weakens
-  its secrecy versus a production design — flagged directly in
-  `backend/index.js`.
+  `doc_type_confirmed`) and an expiry date. The server independently
+  re-validates the expiry date and re-checks that all three booleans are
+  `true` server-side rather than trusting the client.
+- **Duplicate-document detection via server-side HMAC-SHA256, not a bare
+  hash** (decision D6): the server computes
+  `HMAC-SHA256(pepper, type:country:number)` in memory over a normalized
+  document identity, discards the plaintext immediately (never stored,
+  logged, or echoed), and keeps only the HMAC — stored as `users.doc_hmac`,
+  `UNIQUE` in the schema. This makes the value irreversible even if the
+  database is exposed, and lets the server catch "this exact document
+  already verified a different account" without retaining the document
+  number. The pepper lives only in `backend/.env` (`DOC_PEPPER`) and is
+  never distributed to clients; the endpoint is velocity-limited per
+  account. *Recorded trade-off:* the server briefly observes the plaintext
+  number in memory — an OPRF is the named future upgrade that would remove
+  even that, deliberately not built at this scale.
 - **Signed badges, not a raw "verified" flag.** On success, the server
   issues an **Ed25519-signed** JSON badge (`{ user_id, display_name,
   verified: true, status: 'preview', issued_at }`) using a key pair
