@@ -6,6 +6,8 @@
 // never touch a real account or unrelated test data, even by accident.
 
 const db = require('./db');
+const { SqliteDocumentHashStore } = require('./recryption/hashStore');
+const { SqliteBadgeStore } = require('./recryption/badgeStore');
 
 const DEMO_EMAIL_RE = /^demo-\d+@example\.com$/;
 
@@ -31,6 +33,16 @@ function clear() {
       DELETE FROM pairings WHERE user_a_id IN (${userPlaceholders}) OR user_b_id IN (${userPlaceholders})
     `).run(...userIds, ...userIds);
     console.log(`deleted ${pairingsDeleted.changes} pairing row(s) involving demo users`);
+
+    // Demo users' document claims (document_hashes is subject-keyed by
+    // users.id) — without this, orphaned claims would make the next seed's
+    // checkDuplicate see DEMO-DOC-N as taken by a deleted user.
+    const claimsDeleted = new SqliteDocumentHashStore(db).deleteBySubjectIds(userIds);
+    console.log(`deleted ${claimsDeleted} document claim(s) for demo users`);
+
+    // Their badge lifecycle rows too (badges + the signed archive, module 3).
+    const badgesDeleted = new SqliteBadgeStore(db).deleteBySubjectIds(userIds);
+    console.log(`deleted ${badgesDeleted.badges} badge record(s) and ${badgesDeleted.signed} signed badge(s) for demo users`);
   }
 
   const usersDeleted = db.prepare(`DELETE FROM users WHERE account_id IN (${placeholders})`).run(...accountIds);

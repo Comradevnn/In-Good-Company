@@ -32,8 +32,6 @@
 // order is still a legitimate demo of that exact "first-candidate-wins"
 // simplification.
 
-const fs = require('node:fs');
-const path = require('node:path');
 const crypto = require('node:crypto');
 const bcrypt = require('bcrypt');
 const db = require('./db');
@@ -41,41 +39,15 @@ const db = require('./db');
 const BCRYPT_ROUNDS = 10;
 const DEMO_PASSWORD = 'demopassword123';
 
-// Same key file backend/index.js uses, so these badges verify against the
-// public key the running server actually serves at GET /verification/public-key.
-const KEYS_DIR = path.join(__dirname, 'keys');
-const BADGE_KEY_PATH = path.join(KEYS_DIR, 'badge-signing-key.pem');
-
-function loadOrCreateBadgeKey() {
-  if (!fs.existsSync(BADGE_KEY_PATH)) {
-    fs.mkdirSync(KEYS_DIR, { recursive: true });
-    const { privateKey } = crypto.generateKeyPairSync('ed25519');
-    fs.writeFileSync(BADGE_KEY_PATH, privateKey.export({ type: 'pkcs8', format: 'pem' }));
-  }
-  return crypto.createPrivateKey(fs.readFileSync(BADGE_KEY_PATH));
-}
-
 require('./env'); // loads backend/.env, same as index.js
-const { normalizeDocumentIdentity, docHmacHex } = require('./docIdentity');
-
-const DOC_PEPPER = process.env.DOC_PEPPER;
-if (!DOC_PEPPER) {
-  console.error('DOC_PEPPER is not set. Add DOC_PEPPER=<secret> to backend/.env before seeding, so demo doc_hmacs match what the running server computes.');
-  process.exit(1);
-}
-
-function signBadge(privateKey, userId, displayName) {
-  const payload = {
-    user_id: userId,
-    display_name: displayName,
-    verified: true,
-    status: 'preview',
-    issued_at: new Date().toISOString(),
-  };
-  const payloadJson = JSON.stringify(payload);
-  const signature = crypto.sign(null, Buffer.from(payloadJson), privateKey).toString('base64');
-  return JSON.stringify({ payload, signature });
-}
+// Document claims go through Recryption's DuplicateDetector (integration
+// module 2) and badges through BadgeService (module 3) — the exact same
+// code paths as live verification, so seeded state is indistinguishable
+// from state produced through the routes. Per decision D7 (see
+// recryption/badgeStore.js), badges are issued for users.id — this seeder
+// previously signed account_id, which module 3 fixed.
+const { makeDetector } = require('./recryption/hashStore');
+const { makeBadgeService, badgeClaims } = require('./recryption/badgeStore');
 
 const DEMO_USERS = [
   {
@@ -153,8 +125,11 @@ const DEMO_USERS = [
 ];
 
 async function seed() {
-  const privateKey = loadOrCreateBadgeKey();
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
+  // Throws with a clear message if DOC_PEPPER is missing/weak — same
+  // fail-loudly startup behavior as index.js.
+  const { detector } = await makeDetector(db);
+  const { badgeService, signer } = await makeBadgeService(db);
 
   for (const demo of DEMO_USERS) {
     const existingAccount = db.prepare('SELECT id FROM accounts WHERE email = ?').get(demo.email);
@@ -169,14 +144,6 @@ async function seed() {
       VALUES (?, ?, ?)
     `).run(demo.email, passwordHash, sessionToken);
     const account = db.prepare('SELECT id FROM accounts WHERE email = ?').get(demo.email);
-
-    // Same normalized preimage as POST /verification/document-check (D6), so
-    // a live duplicate check against a seeded document actually matches.
-    const docHmac = docHmacHex(DOC_PEPPER, normalizeDocumentIdentity({
-      document_type: demo.document_type,
-      issuing_country: demo.issuing_country,
-      document_number: demo.doc_number,
-    }));
 
     const userFields = {
       account_id: account.id,
@@ -200,7 +167,6 @@ async function seed() {
       availability_window_end: '2026-07-18',
       travel_radius_miles: 15,
       verified: 1,
-      doc_hmac: docHmac,
       // At least 5 (the /matching/run gate) plus headroom to demo a back-out
       // (which forfeits 5) followed by a fresh match without re-seeding.
       deeds_balance: 10,
@@ -212,18 +178,38 @@ async function seed() {
         location_city, cause_tags, interest_tags, personal_values, bio,
         gender_pref, seeking, partner_prefs_confirmed, volunteering_frequency,
         availability_window_start, availability_window_end, travel_radius_miles,
-        verified, verified_at, doc_hmac, verification_badge, deeds_balance
+        verified, verified_at, deeds_balance
       ) VALUES (
         @account_id, @full_name, @display_name, @age, @gender, @occupation,
         @location_city, @cause_tags, @interest_tags, @personal_values, @bio,
         @gender_pref, @seeking, @partner_prefs_confirmed, @volunteering_frequency,
         @availability_window_start, @availability_window_end, @travel_radius_miles,
-        @verified, datetime('now'), @doc_hmac, @verification_badge, @deeds_balance
+        @verified, datetime('now'), @deeds_balance
       )
-    `).run({
-      ...userFields,
-      verification_badge: signBadge(privateKey, account.id, demo.first_name),
-    });
+    `).run(userFields);
+    const user = db.prepare('SELECT id, display_name FROM users WHERE account_id = ?').get(account.id);
+
+    // Claim the demo document through the detector — identical write path to
+    // a live document-check.
+    const result = await detector.checkDuplicate(
+      {
+        document_type: demo.document_type,
+        issuing_country: demo.issuing_country,
+        document_number: demo.doc_number,
+      },
+      user.id
+    );
+    if (result.duplicate) {
+      throw new Error(`demo document for ${demo.email} is already claimed by another account — run clear-demo-users.js first?`);
+    }
+
+    // Issue the badge through BadgeService — same path as a live attest
+    // (D7: subject is users.id) — and mirror it for display like attest does.
+    const signedBadge = await badgeService.issue(
+      { subject_id: user.id, claims: badgeClaims(user) },
+      signer
+    );
+    db.prepare('UPDATE users SET verification_badge = ? WHERE id = ?').run(JSON.stringify(signedBadge), user.id);
 
     console.log(`added ${demo.email} — ${demo.first_name}, ${demo.age}, ${demo.gender}, gender_pref=${demo.gender_pref}, causes=${demo.cause_tags.join('/')}`);
   }

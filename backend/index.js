@@ -1,50 +1,29 @@
 require('./env'); // loads backend/.env into process.env (no dependency)
 const os = require('node:os');
-const fs = require('node:fs');
-const path = require('node:path');
 const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('./db');
-const { normalizeDocumentIdentity, docHmacHex } = require('./docIdentity');
+const { makeDetector } = require('./recryption/hashStore');
+const { makeBadgeService, badgeClaims, upgradeLegacyBadges } = require('./recryption/badgeStore');
 const { hardFiltersPass, passesShiftGate, safeParseArray } = require('./matching/engine');
 const { DEMO_SHIFTS } = require('./matching/demoShifts');
 
 const BCRYPT_ROUNDS = 10;
 
-// ── Identity verification: platform badge-signing key (Ed25519) ──
-// Generated on first run, persisted under backend/keys/ (gitignored) so
-// issued badges stay verifiable across restarts. In production this would
-// live in a KMS; a local PEM file is the honest prototype version.
-const KEYS_DIR = path.join(__dirname, 'keys');
-const BADGE_KEY_PATH = path.join(KEYS_DIR, 'badge-signing-key.pem');
-
-function loadOrCreateBadgeKey() {
-  if (!fs.existsSync(BADGE_KEY_PATH)) {
-    fs.mkdirSync(KEYS_DIR, { recursive: true });
-    const { privateKey } = crypto.generateKeyPairSync('ed25519');
-    fs.writeFileSync(BADGE_KEY_PATH, privateKey.export({ type: 'pkcs8', format: 'pem' }));
-  }
-  const privateKey = crypto.createPrivateKey(fs.readFileSync(BADGE_KEY_PATH));
-  const publicKey = crypto.createPublicKey(privateKey);
-  return { privateKey, publicKey };
-}
-
-const badgeKeys = loadOrCreateBadgeKey();
-
-// Pepper for the duplicate-document HMAC (spec point 9). Supplied only via
-// the DOC_PEPPER environment variable (backend/.env is loaded by ./env.js);
-// there is deliberately no fallback — the old hardcoded dev default is in
-// public git history, so any default value defeats the secret-keyed HMAC.
-// PROTOTYPE NOTE: GET /verification/config still serves this to
-// authenticated clients so the on-device HMAC flow keeps working; that
-// exposure is a known open issue pending a decision on moving HMAC
-// computation server-side.
-const DOC_PEPPER = process.env.DOC_PEPPER;
-if (!DOC_PEPPER) {
-  console.error('DOC_PEPPER is not set. Add DOC_PEPPER=<secret> to backend/.env (or the environment) before starting.');
-  process.exit(1);
-}
+// Identity verification runs through Recryption (backend/recryption/):
+// DuplicateDetector owns duplicate-document state (module 2, hashStore.js);
+// BadgeService + KeyManager own the badge lifecycle (module 3,
+// badgeStore.js). The raw-PEM signing path is gone — signing goes through
+// the library's Signer callback, and the PEM is touched only inside
+// keyStore.js. All of these are assigned in main() before listen(); no
+// route can observe them unset.
+let docDetector = null;
+let docHashStore = null;
+let InvalidDocumentError = null;
+let badgeService = null;
+let badgeKeyManager = null;
+let badgeSigner = null;
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -143,7 +122,7 @@ function requireAuth(req, res, next) {
 // saved against the logged-in account. Creates the profile row on first
 // submit, updates it on resubmit. Every other users column is left to the
 // schema's own defaults (see backend/db/schema.sql).
-app.post('/users', requireAuth, (req, res) => {
+app.post('/users', requireAuth, async (req, res) => {
   const { first_name, age, occupation, gender, hobbies, blurb, personal_values } = req.body ?? {};
 
   if (!first_name || typeof first_name !== 'string' || !first_name.trim()) {
@@ -175,24 +154,28 @@ app.post('/users', requireAuth, (req, res) => {
 
   const existing = db.prepare('SELECT id, full_name, age, verified FROM users WHERE account_id = ?').get(req.account.id);
   if (existing) {
-    // Editing name/age after verification: allowed, but the Verified badge
-    // attests specifically to these two fields (see specs/identity-
-    // verification-encryption-spec.md) — changing either while verified
-    // would leave a signed badge silently claiming a name/age the profile
-    // no longer has. Server-enforced (not client-trusted) so this can't be
-    // bypassed by a client that doesn't send the right flag: revoke here,
-    // in the same update, whenever they actually change.
-    const identityChanged = existing.full_name !== profile.full_name || existing.age !== profile.age;
-    const revoke = Boolean(existing.verified) && identityChanged;
-
     db.prepare(`
       UPDATE users SET
         full_name = @full_name, display_name = @display_name, age = @age,
         gender = @gender, occupation = @occupation, interest_tags = @interest_tags,
         bio = @bio, personal_values = @personal_values, updated_at = datetime('now')
-        ${revoke ? ", verified = 0, verified_at = NULL, verification_badge = NULL, doc_hmac = NULL" : ''}
       WHERE account_id = @account_id
     `).run(profile);
+
+    // Revocation-on-claim-change, eager path (Recryption §3.2 via
+    // onClaimsChanged): the badge attests full_name/age source values, so
+    // after the row is updated the service recomputes the claims digest and
+    // revokes any badge it no longer matches — server-enforced at write
+    // time, not client-trusted, and unbypassable by a client that "forgets"
+    // a flag. users.verified/verification_badge are display mirrors, synced
+    // here when a revocation actually happened. (The library's per-verify
+    // recompute is the lazy backstop for paths that skip this route.)
+    const revoked = await badgeService.onClaimsChanged(existing.id);
+    if (revoked.length > 0) {
+      db.prepare(`
+        UPDATE users SET verified = 0, verified_at = NULL, verification_badge = NULL WHERE id = ?
+      `).run(existing.id);
+    }
   } else {
     db.prepare(`
       INSERT INTO users (account_id, full_name, display_name, age, gender, occupation, interest_tags, bio, personal_values)
@@ -298,7 +281,9 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
 // ── Identity verification routes ──
 // Prototype scope per the planning decisions: manual-entry extraction (no
 // scanning SDK), no selfie/face-match, no retained ID imagery anywhere.
-// What persists: attestation result, doc_hmac, signed "preview" badge.
+// What persists: attestation result, the document_hashes claim, and the
+// BadgeService-signed "preview" badge (badges/signed_badges + the display
+// mirror on users.verification_badge).
 //
 // D6 (Option A): document-number hashing happens SERVER-SIDE. The plaintext
 // number is accepted transiently at exactly one endpoint
@@ -340,46 +325,79 @@ function underDocCheckLimit(accountId) {
   return recent.length <= DOC_CHECK_LIMIT;
 }
 
-// D6: the one endpoint that accepts the plaintext document fields. Computes
-// the normalized HMAC in memory, answers only the duplicate question, and
-// stages the hash for the follow-up attest. Validation errors are static
-// strings — the submitted values are never echoed.
-app.post('/verification/document-check', requireAuth, requireProfile, (req, res) => {
+// D6: the one endpoint that accepts the plaintext document fields. The
+// plaintext exists only inside DuplicateDetector.checkDuplicate() (library
+// guarantee: never stored, logged, or returned); what's staged for attest is
+// the record the library wrote — server-computed, never client-supplied.
+// Validation errors are static strings — the submitted values are never
+// echoed. NOTE: checkDuplicate is claim-at-check (lookup AND record in one
+// call, per the library's design) — the duplicate claim exists from this
+// moment, not from attest time. Same-subject re-checks refresh rather than
+// conflict.
+app.post('/verification/document-check', requireAuth, requireProfile, async (req, res) => {
   if (!underDocCheckLimit(req.account.id)) {
     return res.status(429).json({ error: 'Too many document checks. Try again in an hour.' });
   }
 
-  const normalized = normalizeDocumentIdentity(req.body ?? {});
-  if (!normalized) {
-    return res.status(400).json({
-      error: 'document_type, issuing_country, and document_number are required; the number must contain letters or digits, and ":" is not allowed in type or country.',
-    });
+  const { document_type, issuing_country, document_number } = req.body ?? {};
+  const fieldsInvalid =
+    typeof document_type !== 'string' ||
+    typeof issuing_country !== 'string' ||
+    typeof document_number !== 'string';
+  const staticFieldError = {
+    error: 'document_type, issuing_country, and document_number are required; the number must contain letters or digits, and ":" is not allowed in type or country.',
+  };
+  if (fieldsInvalid) {
+    return res.status(400).json(staticFieldError);
   }
 
-  const hmac = docHmacHex(DOC_PEPPER, normalized);
+  const user = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
 
-  // One document, one account — same guard as before, now server-computed.
-  // The other account's identity is deliberately not returned to the client.
-  const dupe = db.prepare('SELECT account_id FROM users WHERE doc_hmac = ? AND account_id != ?')
-    .get(hmac, req.account.id);
-  if (dupe) {
+  let result;
+  try {
+    result = await docDetector.checkDuplicate(
+      { document_type, issuing_country, document_number },
+      user.id
+    );
+  } catch (err) {
+    if (err instanceof InvalidDocumentError) {
+      // Same static message as the field guard — the library's error detail
+      // is not echoed, so document values can't leak through error bodies.
+      return res.status(400).json(staticFieldError);
+    }
+    throw err;
+  }
+
+  if (result.duplicate) {
+    // The other account's identity (result.existing_subject_id) is
+    // deliberately not returned to the client.
     return res.status(200).json({ duplicate: true });
   }
 
-  pendingDocChecks.set(req.account.id, { hmac, expiresAt: Date.now() + PENDING_DOC_CHECK_TTL_MS });
+  // checkDuplicate recorded/refreshed this subject's claim; stage that
+  // server-side record for the follow-up attest.
+  const record = await docHashStore.findLatestBySubject(user.id);
+  pendingDocChecks.set(req.account.id, { hmac: record.doc_hmac, expiresAt: Date.now() + PENDING_DOC_CHECK_TTL_MS });
   res.status(200).json({ duplicate: false });
 });
 
-// Orgs (and tests) verify badge signatures against this.
-app.get('/verification/public-key', (req, res) => {
-  res.type('text/plain').send(badgeKeys.publicKey.export({ type: 'spki', format: 'pem' }));
+// Orgs (and tests) verify badge signatures against this. Serves the
+// KeyManager's active-key record (raw 32-byte Ed25519 public key as hex plus
+// its self-verifying key_id) instead of the old SPKI PEM — the shape
+// Recryption's canonical badge verification actually consumes.
+app.get('/verification/public-key', async (req, res) => {
+  const key = await badgeKeyManager.getActiveKey();
+  if (!key) {
+    return res.status(503).json({ error: 'No active signing key.' });
+  }
+  res.json({ key_id: key.key_id, public_key: key.public_key, status: key.status });
 });
 
 // Receives the on-device attestation (spec point 8 shape). The document hash
 // comes from this account's recent document-check staging (D6) — never from
 // the client. The device signature slot is stubbed at prototype stage — no
 // hardware key without a dev build — so transport trust is TLS only.
-app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
+app.post('/verification/attest', requireAuth, requireProfile, async (req, res) => {
   const { name_match, dob_match, doc_type_confirmed, expiry_date } = req.body ?? {};
 
   for (const [field, value] of Object.entries({ name_match, dob_match, doc_type_confirmed })) {
@@ -405,38 +423,42 @@ app.post('/verification/attest', requireAuth, requireProfile, (req, res) => {
   }
   const doc_hmac = staged.hmac;
 
-  // V4: one document, one account — re-checked at commit time in case another
-  // account verified the same document between check and attest.
-  const dupe = db.prepare('SELECT account_id FROM users WHERE doc_hmac = ? AND account_id != ?')
-    .get(doc_hmac, req.account.id);
-  if (dupe) {
+  const user = db.prepare('SELECT id, display_name FROM users WHERE account_id = ?').get(req.account.id);
+
+  // V4 commit-time integrity check. Under claim-at-check the claim was
+  // recorded at document-check, so the old "someone attested between check
+  // and attest" race can't occur — but the staged claim must still exist in
+  // document_hashes and still belong to this subject before we commit
+  // verified status against it.
+  const claim = await docHashStore.findByHmac(doc_hmac);
+  if (!claim) {
+    pendingDocChecks.delete(req.account.id);
+    return res.status(400).json({ error: 'No recent document check. Start verification again.' });
+  }
+  if (claim.subject_id !== user.id) {
     pendingDocChecks.delete(req.account.id);
     return res.status(409).json({ error: 'This document has already verified another account.' });
   }
 
-  const user = db.prepare('SELECT id, display_name FROM users WHERE account_id = ?').get(req.account.id);
-
-  // Ed25519-signed badge. status "preview" is part of the SIGNED payload:
-  // until a real scanning SDK replaces manual entry, verified means
-  // "completed the flow," not "identity confirmed" — the badge itself must
-  // never claim more than the pipeline can back.
-  const badgePayload = {
-    user_id: user.id,
-    display_name: user.display_name,
-    verified: true,
-    status: 'preview',
-    issued_at: new Date().toISOString(),
-  };
-  const payloadJson = JSON.stringify(badgePayload);
-  const signature = crypto.sign(null, Buffer.from(payloadJson), badgeKeys.privateKey).toString('base64');
-  const badge = JSON.stringify({ payload: badgePayload, signature });
+  // Badge issuance via Recryption's BadgeService (module 3): payload built
+  // and signed by the library through the Signer callback, claims digest
+  // computed from the subject's current full_name/age source values, badge
+  // + signed archive persisted to badges/signed_badges. The "preview"
+  // labeling is part of the SIGNED claims (see badgeClaims): until a real
+  // scanning SDK replaces manual entry, verified means "completed the
+  // flow," not "identity confirmed" — the badge itself must never claim
+  // more than the pipeline can back. D7: subject_id is users.id.
+  const signedBadge = await badgeService.issue(
+    { subject_id: user.id, claims: badgeClaims(user) },
+    badgeSigner
+  );
 
   db.prepare(`
     UPDATE users SET
-      verified = 1, verified_at = datetime('now'), doc_hmac = @doc_hmac,
+      verified = 1, verified_at = datetime('now'),
       verification_badge = @badge, updated_at = datetime('now')
     WHERE account_id = @account_id
-  `).run({ doc_hmac, badge, account_id: req.account.id });
+  `).run({ badge: JSON.stringify(signedBadge), account_id: req.account.id });
   pendingDocChecks.delete(req.account.id);
 
   const updated = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
@@ -627,7 +649,37 @@ app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {
   res.status(200).json(user);
 });
 
-app.listen(port, () => {
-  const ip = getLocalNetworkIp();
-  console.log(`Backend running — reachable at http://${ip}:${port}`);
-});
+// Async startup: Recryption is ESM-only (see backend/recryption/keyStore.js
+// on the module seam), so the detector loads via dynamic import before the
+// server accepts connections. Pepper validation failures (missing/weak
+// DOC_PEPPER) abort startup here — the same fail-loudly behavior as the old
+// top-of-file DOC_PEPPER check.
+(async function main() {
+  try {
+    const wired = await makeDetector(db);
+    docDetector = wired.detector;
+    docHashStore = wired.store;
+    ({ InvalidDocumentError } = await require('./recryption/keyStore').loadRecryption());
+
+    const badges = await makeBadgeService(db);
+    badgeService = badges.badgeService;
+    badgeKeyManager = badges.keyManager;
+    badgeSigner = badges.signer;
+
+    // One-time upgrade of pre-module-3 verified users from the old
+    // hand-signed badge format to real BadgeService badges (idempotent —
+    // skips anyone who already has a valid badge record).
+    const upgraded = await upgradeLegacyBadges(db, badgeService, badgeSigner);
+    if (upgraded > 0) {
+      console.log(`[verification] upgraded ${upgraded} legacy badge(s) to BadgeService issuance`);
+    }
+  } catch (err) {
+    console.error(`Verification startup failed: ${err.message}`);
+    process.exit(1);
+  }
+
+  app.listen(port, () => {
+    const ip = getLocalNetworkIp();
+    console.log(`Backend running — reachable at http://${ip}:${port}`);
+  });
+})();

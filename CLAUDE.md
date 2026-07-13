@@ -52,17 +52,19 @@ ordering was flagged before building it.
 
 ## Known bugs (fix later)
 
-- **Re-verifying with the same document number incorrectly 409s.**
-  backend/index.js's POST /verification/attest duplicate-document check
-  (`WHERE doc_hmac = ? AND account_id != ?`) is written to exclude the
-  caller's own account, so resubmitting the exact same document on an
-  already-verified account should succeed and just overwrite that
-  account's doc_hmac/badge — not conflict. The user hit a 409 doing
-  exactly this (same document number, already-verified account) and
-  confirmed it was the identical number, not a different one. Root cause
-  not yet found — the exclusion logic looks correct on inspection, so
-  something else is going on. Needs live debugging (reproduce it and trace
-  what account/doc_hmac the query actually sees), not just a code read.
+- **[RESOLVED by replacement, original root cause never diagnosed]
+  Re-verifying with the same document number incorrectly 409'd.** The user
+  hit a 409 resubmitting the identical document on their already-verified
+  account, even though the old duplicate check (`WHERE doc_hmac = ? AND
+  account_id != ?`) looked correct on inspection. That hand-rolled
+  implementation was deleted in Recryption integration module 2: duplicate
+  decisions now go through the library's DuplicateDetector, whose
+  subject-keyed claims treat a same-subject re-check as a refresh by
+  construction — the conflict path no longer exists for that scenario. The
+  exact reported flow (same account, same document, re-check then
+  re-attest) is covered by passing HTTP-level tests in
+  backend/test-recryption-duplicates.js. If a same-document 409 ever
+  reappears, it is a new bug, not this one.
 
 ## Known-unverified items (re-test during the reinforcement/testing phase)
 

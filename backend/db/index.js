@@ -25,13 +25,22 @@ if (!userColumns.some((column) => column.name === 'seeking')) {
 if (!userColumns.some((column) => column.name === 'partner_prefs_confirmed')) {
   db.exec('ALTER TABLE users ADD COLUMN partner_prefs_confirmed INTEGER NOT NULL DEFAULT 0');
 }
-if (!userColumns.some((column) => column.name === 'doc_hmac')) {
-  // See schema.sql: identity-verification columns. UNIQUE via index (SQLite
-  // ALTER TABLE can't add UNIQUE columns directly).
-  db.exec('ALTER TABLE users ADD COLUMN doc_hmac TEXT');
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_doc_hmac ON users(doc_hmac)');
+if (!userColumns.some((column) => column.name === 'verified_at')) {
   db.exec('ALTER TABLE users ADD COLUMN verified_at TEXT');
   db.exec('ALTER TABLE users ADD COLUMN verification_badge TEXT');
+}
+// Integration module 3: users.doc_hmac retired — document_hashes (module 2)
+// owns duplicate-document state and nothing reads the column anymore. Drop
+// works on databases where the column arrived via the old ALTER migration
+// (separate index); a database created fresh in the module-2 window declared
+// it inline-UNIQUE, which SQLite can't drop — warn and leave it unused there.
+if (userColumns.some((column) => column.name === 'doc_hmac')) {
+  db.exec('DROP INDEX IF EXISTS idx_users_doc_hmac');
+  try {
+    db.exec('ALTER TABLE users DROP COLUMN doc_hmac');
+  } catch (err) {
+    console.warn(`could not drop retired users.doc_hmac column (${err.message}) — leaving it unused`);
+  }
 }
 if (!userColumns.some((column) => column.name === 'deeds_balance')) {
   db.exec('ALTER TABLE users ADD COLUMN deeds_balance INTEGER NOT NULL DEFAULT 0');
