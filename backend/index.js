@@ -5,7 +5,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('./db');
 const { makeDetector } = require('./recryption/hashStore');
-const { makeBadgeService, badgeClaims, upgradeLegacyBadges } = require('./recryption/badgeStore');
+const { makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges } = require('./recryption/badgeStore');
 const { hardFiltersPass, passesShiftGate, safeParseArray } = require('./matching/engine');
 const { DEMO_SHIFTS } = require('./matching/demoShifts');
 
@@ -22,6 +22,7 @@ let docDetector = null;
 let docHashStore = null;
 let InvalidDocumentError = null;
 let badgeService = null;
+let badgeStore = null;
 let badgeKeyManager = null;
 let badgeSigner = null;
 
@@ -448,7 +449,13 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
   // scanning SDK replaces manual entry, verified means "completed the
   // flow," not "identity confirmed" — the badge itself must never claim
   // more than the pipeline can back. D7: subject_id is users.id.
-  const signedBadge = await badgeService.issue(
+  //
+  // D9: issueSuperseding, not badgeService.issue() directly — a re-attest
+  // with unchanged claims (e.g. re-verifying the same document) never trips
+  // the digest-mismatch revocation paths, so a bare issue() would leave the
+  // previous badge valid alongside the new one. See badgeStore.js.
+  const signedBadge = await issueSuperseding(
+    badgeService, badgeStore,
     { subject_id: user.id, claims: badgeClaims(user) },
     badgeSigner
   );
@@ -663,6 +670,7 @@ app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {
 
     const badges = await makeBadgeService(db);
     badgeService = badges.badgeService;
+    badgeStore = badges.badgeStore;
     badgeKeyManager = badges.keyManager;
     badgeSigner = badges.signer;
 

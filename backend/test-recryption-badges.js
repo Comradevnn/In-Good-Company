@@ -17,7 +17,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const Database = require('better-sqlite3');
 const { loadRecryption, badgePublicKeyHex } = require('./recryption/keyStore');
-const { SqliteBadgeStore, makeBadgeService, badgeClaims, upgradeLegacyBadges } = require('./recryption/badgeStore');
+const { SqliteBadgeStore, makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges } = require('./recryption/badgeStore');
 const { SqliteDocumentHashStore } = require('./recryption/hashStore');
 
 const BASE = 'http://localhost:3050';
@@ -94,6 +94,32 @@ async function part1() {
   const revoked = await badgeService.onClaimsChanged('user-2');
   check('onClaimsChanged revokes exactly the stale badge', revoked.length === 1 && revoked[0].badge_id === badge2.payload.badge_id);
   check('eagerly revoked badge fails verify with badge_revoked', (await badgeService.verify(badge2)).reason === 'badge_revoked');
+
+  // D9: re-issuing with UNCHANGED claims (the case none of the digest-based
+  // revocation paths above ever catch) must still leave exactly one valid
+  // badge — issueSuperseding revokes the old one the moment the new one
+  // issues, not lazily at next verify().
+  const user2b = insertUser(mem, 'user-2b', 'Taylor', 31);
+  const badge2bOld = await badgeService.issue({ subject_id: user2b.id, claims: badgeClaims(user2b) }, signer);
+  const badge2bNew = await issueSuperseding(badgeService, badgeStore, { subject_id: user2b.id, claims: badgeClaims(user2b) }, signer);
+  check('superseding issue mints a distinct badge_id', badge2bNew.payload.badge_id !== badge2bOld.payload.badge_id);
+  const oldRecord2b = await badgeStore.get(badge2bOld.payload.badge_id);
+  check('old badge is revoked immediately on reissue, before any verify() call (D9)',
+    oldRecord2b.status === 'revoked' && oldRecord2b.revoked_reason === 'manual', JSON.stringify(oldRecord2b));
+  check('old badge fails verify with badge_revoked, not claims_changed',
+    (await badgeService.verify(badge2bOld)).reason === 'badge_revoked');
+  check('new badge verifies ok', (await badgeService.verify(badge2bNew)).ok === true);
+  const stillValid2b = await badgeStore.listValidBySubject('user-2b');
+  check('exactly one valid badge remains for the subject',
+    stillValid2b.length === 1 && stillValid2b[0].badge_id === badge2bNew.payload.badge_id, JSON.stringify(stillValid2b));
+  // Done proving D9 — revoke so this subject's badge doesn't leak into the
+  // reissueAll block below, which asserts an exact set of still-valid badges
+  // under REGISTERED_KEY_ID. Also drop verified (mirrors what the live
+  // profile-edit route does on revocation, same as user-1/user-2 above) so
+  // this now-badgeless-but-verified=1 row doesn't get swept up by
+  // upgradeLegacyBadges' "verified with no valid badge" query next.
+  await badgeService.revokeBadge(badge2bNew.payload.badge_id);
+  mem.prepare("UPDATE users SET verified = 0 WHERE id = 'user-2b'").run();
 
   // Legacy upgrade: verified user with the old hand-signed format and no
   // badge record gets a real BadgeService badge.
@@ -220,6 +246,21 @@ async function part2() {
     check('re-verification issues a fresh valid badge',
       reattest.body?.verified === 1 && freshBadge.payload.badge_id !== signedBadge.payload.badge_id);
     check('fresh badge verifies ok', (await badgeService.verify(freshBadge)).ok === true);
+
+    // D9 on the live route: re-attest AGAIN with claims unchanged this time
+    // (no profile edit in between) — the case the claim_change path above
+    // never exercises, since that one already had a stale digest going in.
+    await api('/verification/document-check', { method: 'POST', token, body: docX });
+    const reattest2 = await api('/verification/attest', { method: 'POST', token, body: attestBody });
+    const thirdBadge = JSON.parse(reattest2.body.verification_badge);
+    check('re-attest with unchanged claims still issues a fresh badge',
+      reattest2.body?.verified === 1 && thirdBadge.payload.badge_id !== freshBadge.payload.badge_id);
+    const supersededRecord = db.prepare('SELECT status, revoked_reason FROM badges WHERE badge_id = ?').get(freshBadge.payload.badge_id);
+    check('previous badge superseded immediately (D9), reason manual — not claim_change',
+      supersededRecord?.status === 'revoked' && supersededRecord?.revoked_reason === 'manual', JSON.stringify(supersededRecord));
+    check('third badge verifies ok', (await badgeService.verify(thirdBadge)).ok === true);
+    const validForUser = db.prepare("SELECT COUNT(*) AS n FROM badges WHERE subject_id = ? AND status = 'valid'").get(userId).n;
+    check('exactly one valid badge remains for this subject after two re-attests', validForUser === 1, validForUser);
 
     // Cleanup: only this run's rows.
     const accountId = db.prepare('SELECT id FROM accounts WHERE email = ?').get(email).id;

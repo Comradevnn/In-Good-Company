@@ -142,6 +142,31 @@ function badgeClaims(user) {
   return { display_name: user.display_name, verification_level: 'preview' };
 }
 
+// D9 — re-attesting without a claim change used to leave two valid badges
+// for the same subject: BadgeService.issue() (badge.ts) is purely additive,
+// with no notion of "one badge per subject" built into the library, and the
+// lazy/eager revocation paths (verify()'s step 6, onClaimsChanged) only ever
+// fire on a claims_digest MISMATCH — an unchanged re-attest never trips
+// them, so the old badge just sits there valid forever alongside the new
+// one. Decision: this app enforces exactly one valid badge per subject, so
+// every issuance goes through issueSuperseding instead of calling
+// badgeService.issue() directly. New badge first, then revoke whatever else
+// was valid for that subject — issuing first means a signer failure (e.g.
+// no active key) leaves the old badge untouched instead of revoking it and
+// then failing to replace it. Revocation reason is "manual": the library's
+// RevokedReason type (badge.ts) is a closed enum of exactly claim_change /
+// manual / key_compromise with no "superseded" case, and extending the
+// library was out of scope for this app-only fix — "manual" is the nearest
+// fit of the three (it's neither a claims mismatch nor a key rotation).
+async function issueSuperseding(badgeService, badgeStore, params, signer) {
+  const previouslyValid = await badgeStore.listValidBySubject(params.subject_id);
+  const signedBadge = await badgeService.issue(params, signer);
+  for (const record of previouslyValid) {
+    await badgeService.revokeBadge(record.badge_id);
+  }
+  return signedBadge;
+}
+
 // One-time, idempotent upgrade of pre-module-3 verified users: rows with
 // verified=1 but no valid badge record still hold the old hand-signed
 // {payload, signature} format, which nothing can verify or revoke through
@@ -161,4 +186,4 @@ async function upgradeLegacyBadges(db, badgeService, signer) {
   return legacy.length;
 }
 
-module.exports = { SqliteBadgeStore, makeBadgeService, badgeClaims, upgradeLegacyBadges, SOURCE_FIELDS };
+module.exports = { SqliteBadgeStore, makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges, SOURCE_FIELDS };
