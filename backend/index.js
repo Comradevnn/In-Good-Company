@@ -644,6 +644,43 @@ app.post('/matching/cancel', requireAuth, requireProfile, (req, res) => {
   res.json({ status: 'cancelled', deeds_balance: newBalance });
 });
 
+// D10 (badgeStore.js) — badge-presentation-surface, master prompt §3.2/3.3:
+// "each user sees a brief profile of their partner ... and verification
+// badge." Only the caller's OWN confirmed pairing's partner is ever
+// resolved — no arbitrary user id is accepted, so this can't be used to
+// probe anyone else's badge.
+//
+// Server-side gate: badgeService.verify() is the one function call that
+// checks signature validity, key status, badge status, AND recomputes the
+// claims digest against the partner's CURRENT profile — so a badge that's
+// gone stale between eager revocation events (the lazy-revocation window)
+// is caught here too, not just at the partner's own next verify(). A badge
+// that fails ANY of those is never serialized into the response; the
+// client sees exactly the same shape as a partner with no badge at all —
+// no verify-failure reason is leaked, same posture as document-check's
+// duplicate result not naming the other account.
+app.get('/matching/partner-badge', requireAuth, requireProfile, async (req, res) => {
+  const self = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
+  const pairing = db.prepare(`
+    SELECT * FROM pairings WHERE status = 'confirmed' AND (user_a_id = ? OR user_b_id = ?)
+  `).get(self.id, self.id);
+  if (!pairing) {
+    return res.status(404).json({ error: 'No confirmed pairing.' });
+  }
+  const partnerId = pairing.user_a_id === self.id ? pairing.user_b_id : pairing.user_a_id;
+
+  // D9 already enforces at most one valid badge per subject (issueSuperseding),
+  // so the first record is the only one that can exist.
+  const [validRecord] = await badgeStore.listValidBySubject(partnerId);
+  const signed = validRecord ? await badgeStore.getSigned(validRecord.badge_id) : undefined;
+  const verifyResult = signed ? await badgeService.verify(signed) : null;
+
+  if (!verifyResult?.ok) {
+    return res.json({ verified: false, badge: null });
+  }
+  res.json({ verified: true, badge: signed });
+});
+
 // DEMO SCOPED: no real payment processing — just increments the balance by
 // whatever pack was "bought." See schema.sql's deeds_balance comment.
 app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {

@@ -5,6 +5,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import PrimaryButton from '../components/PrimaryButton';
 import { BACKEND_URL } from '../config/api';
+import { verifySignedBadge } from '../verification/badgeVerify';
 
 // Demo screen for the minimal matching engine (backend/matching/). Runs
 // Step 1a + 1b against real user rows the moment this screen opens — no
@@ -27,6 +28,10 @@ export default function MatchScreen({ sessionToken, onBack, onDeedsChange }) {
   const [cancelling, setCancelling] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const cooldownRef = useRef(null);
+  // D10: null while checking, then { verified: boolean } once both the
+  // server-side gate (GET /matching/partner-badge) and the on-device
+  // Ed25519 check (verifySignedBadge) have had their say — see below.
+  const [badgeStatus, setBadgeStatus] = useState(null);
 
   function runMatch() {
     setLoading(true);
@@ -46,6 +51,50 @@ export default function MatchScreen({ sessionToken, onBack, onDeedsChange }) {
 
   useEffect(runMatch, [sessionToken]);
   useEffect(() => () => clearInterval(cooldownRef.current), []);
+
+  // D10 — badge-presentation-surface trust model (badgeStore.js): both
+  // sides verify, independently. The server-side gate already refuses to
+  // serve a badge that fails badgeService.verify() (revoked key/badge,
+  // stale claims digest) — GET /matching/partner-badge returns
+  // { verified: false, badge: null } in that case, same shape as "no badge
+  // at all," so no failure reason leaks here either. This effect adds the
+  // second, independent check: even a badge the server did serve is
+  // re-verified on-device against the public key before this screen will
+  // call it verified, so trust doesn't rest on "the server said so" alone.
+  useEffect(() => {
+    if (result?.status !== 'confirmed') {
+      setBadgeStatus(null);
+      return;
+    }
+    let cancelled = false;
+    setBadgeStatus(null);
+    (async () => {
+      try {
+        const [badgeResponse, keyResponse] = await Promise.all([
+          fetch(`${BACKEND_URL}/matching/partner-badge`, {
+            headers: { Authorization: `Bearer ${sessionToken}` },
+          }),
+          fetch(`${BACKEND_URL}/verification/public-key`),
+        ]);
+        const badgeData = await badgeResponse.json();
+        const keyData = await keyResponse.json();
+        if (cancelled) return;
+
+        const serverVerified = badgeResponse.ok && badgeData?.verified === true && badgeData?.badge;
+        const clientVerified = serverVerified
+          ? verifySignedBadge(badgeData.badge, keyData?.public_key)
+          : false;
+        // Both checks must agree — either one failing means this screen
+        // does not claim the partner is verified.
+        setBadgeStatus({ verified: serverVerified && clientVerified });
+      } catch {
+        if (!cancelled) setBadgeStatus({ verified: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.status, result?.pairing_id, sessionToken]);
 
   function startCooldown() {
     setCooldown(BACKOUT_COOLDOWN_SECONDS);
@@ -116,6 +165,16 @@ export default function MatchScreen({ sessionToken, onBack, onDeedsChange }) {
               {result.partner.occupation ? (
                 <Text style={matchCardMeta}>{result.partner.occupation}</Text>
               ) : null}
+              {badgeStatus === null ? (
+                <View style={badgeRow}>
+                  <ActivityIndicator size="small" />
+                  <Text style={[matchCardMeta, { marginLeft: 6 }]}>Checking verification badge…</Text>
+                </View>
+              ) : badgeStatus.verified ? (
+                <Text style={badgeVerifiedText}>✓ Verification badge confirmed</Text>
+              ) : (
+                <Text style={badgeUnverifiedText}>Verification badge not confirmed</Text>
+              )}
               <Text style={[s.rationale, { marginTop: 10 }]}>
                 Shared shift: {result.shift?.cause_tags?.join(', ')} at {result.shift?.org_name}
               </Text>
@@ -186,6 +245,23 @@ const matchCardMeta = {
   fontSize: 13,
   color: colors.inkSoft,
   marginTop: 2,
+};
+const badgeRow = {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 6,
+};
+const badgeVerifiedText = {
+  fontFamily: 'Inter_600SemiBold',
+  fontSize: 12.5,
+  color: colors.mossDark,
+  marginTop: 6,
+};
+const badgeUnverifiedText = {
+  fontFamily: 'Inter_500Medium',
+  fontSize: 12.5,
+  color: colors.inkSoft,
+  marginTop: 6,
 };
 const backOutLink = {
   marginTop: 16,

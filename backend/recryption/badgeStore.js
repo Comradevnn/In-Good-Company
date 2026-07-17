@@ -186,4 +186,36 @@ async function upgradeLegacyBadges(db, badgeService, signer) {
   return legacy.length;
 }
 
+// D10 — trust model for the badge-presentation-surface (master prompt §3.2/
+// 3.3: partner's "verification badge" is shown at pairing reveal). Distinct
+// from D6: D6 was about a SECRET server-held pepper and closed specifically
+// because a client-supplied hash-like value can be fabricated. This is
+// Ed25519 SIGNATURE verification against a key that is already served openly
+// (GET /verification/public-key) — a fabricated client claim carries no risk
+// here, since a forged signature simply fails to verify.
+//
+// Resolution: BOTH sides verify, not either/or.
+//   1. Server verifies before serving. The pairing-reveal endpoint calls
+//      badgeService.verify(signedBadge) (badge.ts) — which already checks
+//      signature validity, key status, badge status, AND recomputes the
+//      claims digest against current source values — and returns 404/omits
+//      the badge rather than ever handing out one that fails. This also
+//      catches the lazy-revocation window: a badge that's stale per
+//      verify()'s digest recompute but hasn't yet been touched by
+//      onClaimsChanged is caught here too, not just at badge-holder verify
+//      time.
+//   2. Client verifies locally using the counterparty's full SignedBadge
+//      {payload, sig} plus the public key from GET /verification/public-key
+//      — a second, independent check so trust in the badge doesn't rest on
+//      "the server says so" alone. This needs an Ed25519 verify primitive on
+//      the mobile side (none exists yet — mobile/verification/localChecks.js
+//      only has the manual-entry match checks; no noble/tweetnacl dependency
+//      is in mobile/package.json), to be added when the mobile UI is built.
+//
+// A revoked or claims-stale badge is therefore never served in the first
+// place (server check), and even if it somehow were, a tampered or
+// mismatched signature would fail the client's own check — defense in
+// depth, not redundant work, since the two checks close different gaps
+// (server-side: don't leak revoked/stale state; client-side: don't trust
+// the transport/server blindly).
 module.exports = { SqliteBadgeStore, makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges, SOURCE_FIELDS };
