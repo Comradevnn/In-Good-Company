@@ -27,8 +27,13 @@ backend/
     adjacency.js           Cause-tag "close match" table
     demoShifts.js           Hardcoded stand-in for a real shifts/orgs data model
   keys/                  Ed25519 badge-signing key (gitignored, generated on first run)
+  recryption/            Recryption library integration (identity verification)
+    keyStore.js            KeyManager wiring: registers the PEM key, ESM-interop loader
+    hashStore.js            DuplicateDetector wiring: document_hashes table, pepper config
+    badgeStore.js            BadgeService wiring: badges/signed_badges tables, D7-D9
   seed-demo-users.js     Seeds demo accounts for testing matching
   clear-demo-users.js    Removes seeded demo accounts
+  test-recryption-*.js   Standalone test suites for the three Recryption modules
 
 mobile/
   App.js                 Screen router / onboarding state machine (no nav library)
@@ -61,26 +66,40 @@ port, so no manual IP configuration is needed on a given network.
 
 ## Data model
 
-Two core tables (`backend/db/schema.sql`):
+Core tables (`backend/db/schema.sql`):
 
 - **`accounts`** — login only: email, bcrypt password hash, current session
   token. Created at signup, before any profile exists.
 - **`users`** — the actual profile, one row per account (`account_id` is
   unique). Holds everything onboarding collects (name, age, gender,
   location, cause tags, partner preferences, availability, etc.) plus
-  fields that only get populated once later features exist: verification
-  status/badge, volunteer history, reliability score, Deeds balance. These
-  are pre-declared with sensible defaults rather than added later, so the
-  table shape doesn't change as features land.
+  fields that only get populated once later features exist: volunteer
+  history, reliability score, Deeds balance. `verified`/`verified_at`/
+  `verification_badge` are denormalized **display** flags only — the badge
+  lifecycle itself lives in `badges`/`signed_badges`, below. There is no
+  `doc_hmac` column; that was retired when duplicate-document state moved
+  to `document_hashes` (see Identity verification & security).
 - **`pairings`** — confirmed matches between two `users` rows, referencing
   a `shift_id` that (for now) only resolves against the hardcoded demo
   shift list, since there's no real shifts/orgs table yet.
+- **`signing_keys`** — the Ed25519 badge-signing key's lifecycle (`active` /
+  `retired` / `revoked`), owned by Recryption's `KeyManager`.
+- **`document_hashes`** — one row per claimed document identity
+  (`doc_hmac`, subject-keyed), owned by Recryption's `DuplicateDetector`.
+  This is the sole source of truth for "has this document already verified
+  someone" — nothing reads `users` for that anymore.
+- **`badges`** / **`signed_badges`** — the badge lifecycle (`badges`:
+  status, claims digest, revocation reason) and the archived signed
+  payload (`signed_badges`), both owned by Recryption's `BadgeService`.
+  `users.verification_badge` mirrors the subject's latest `SignedBadge`
+  for display; these two tables are authoritative.
 
 Arrays (cause tags, interest tags, flagged users, volunteer history) are
 stored as JSON text columns, since SQLite has no native array type.
 `backend/db/index.js` runs `CREATE TABLE IF NOT EXISTS` plus a small set of
 additive `ALTER TABLE` migrations for columns added after the table
-already existed in someone's local `app.db`.
+already existed in someone's local `app.db` — including a `DROP COLUMN`
+that retires `users.doc_hmac` from pre-existing databases.
 
 ## Auth
 
@@ -179,32 +198,73 @@ device keys for per-event ticket proof-of-possession — most of which
   hash** (decision D6): the server computes
   `HMAC-SHA256(pepper, type:country:number)` in memory over a normalized
   document identity, discards the plaintext immediately (never stored,
-  logged, or echoed), and keeps only the HMAC — stored as `users.doc_hmac`,
-  `UNIQUE` in the schema. This makes the value irreversible even if the
-  database is exposed, and lets the server catch "this exact document
-  already verified a different account" without retaining the document
-  number. The pepper lives only in `backend/.env` (`DOC_PEPPER`) and is
-  never distributed to clients; the endpoint is velocity-limited per
-  account. *Recorded trade-off:* the server briefly observes the plaintext
-  number in memory — an OPRF is the named future upgrade that would remove
-  even that, deliberately not built at this scale.
-- **Signed badges, not a raw "verified" flag.** On success, the server
-  issues an **Ed25519-signed** JSON badge (`{ user_id, display_name,
-  verified: true, status: 'preview', issued_at }`) using a key pair
-  generated on first run and persisted to `backend/keys/` (gitignored; a
-  real deployment would hold this in a KMS, noted explicitly in the code).
-  `GET /verification/public-key` exposes the public key so any party can
-  verify a badge offline. The badge's `status: 'preview'` is itself part
-  of the signed payload — since extraction is manual, not scanned, the
-  badge deliberately claims "completed the flow," not "identity
+  logged, or echoed), and keeps only the HMAC. This makes the value
+  irreversible even if the database is exposed, and lets the server catch
+  "this exact document already verified a different account" without
+  retaining the document number. The pepper lives only in `backend/.env`
+  (`DOC_PEPPER`) and is never distributed to clients; the endpoint is
+  velocity-limited per account. *Recorded trade-off:* the server briefly
+  observes the plaintext number in memory — an OPRF is the named future
+  upgrade that would remove even that, deliberately not built at this
+  scale.
+
+  The duplicate check itself runs through Recryption's `DuplicateDetector`
+  (`backend/recryption/hashStore.js`), not hand-rolled HMAC logic — Recryption
+  is a sibling library, not part of this codebase. `DuplicateDetector` owns
+  the `document_hashes` table and claims a document at **check** time
+  (`POST /verification/document-check`), not at attest time.
+  `POST /verification/attest` then re-validates the staged, server-computed
+  hash against `document_hashes` at commit — it never re-derives or trusts
+  a client-supplied hash. Claiming at check time also means a same-subject
+  re-check reads as a refresh, not a conflict, which is what makes
+  re-verifying with your own already-verified document work correctly
+  instead of 409ing.
+
+- **Signed badges, not a raw "verified" flag**, issued and verified through
+  the Recryption library's `BadgeService`/`KeyManager`
+  (`backend/recryption/badgeStore.js`, `keyStore.js`) rather than raw-PEM
+  signing. The private key is generated on first run and persisted to
+  `backend/keys/` (gitignored; a real deployment would hold this in a KMS,
+  noted explicitly in the code) — it's touched in exactly one place
+  (`keyStore.js`'s `Signer` callback), everywhere else deals only with
+  `KeyManager` key records. `GET /verification/public-key` serves the
+  active `KeyManager` record (`key_id`, `public_key`, `status`) instead of
+  a raw SPKI PEM, so a client can also see whether the signing key is
+  `active` or `retired`. The signed claims are deliberately tiny
+  (`display_name`, `verification_level: 'preview'`) — since extraction is
+  manual, not scanned, the badge claims "completed the flow," not "identity
   cryptographically confirmed," so it never asserts more than the pipeline
-  actually backs.
-- **Verification is revoked automatically if identity fields change.**
-  Because the badge specifically attests to a name + age, editing either
-  field after verification (`POST /users`) server-side clears `verified`,
-  `verified_at`, `verification_badge`, and `doc_hmac` in the same update —
-  enforced regardless of what the client sends, so it can't be bypassed by
-  a client that omits a "please revoke" flag.
+  actually backs; `'preview'` lives inside the signed payload itself, so
+  tampering it to `'full'` breaks the signature.
+
+  A few library-backed decisions, documented inline where they're made:
+  - **D7** — a badge's `subject_id` is `users.id`, not `account_id`: the
+    badge attests claims that live on the profile row, and `document_hashes`
+    and the matching engine already key by `users.id`.
+  - **D8** — the badge's claims digest is computed from source **values**
+    only (`age`, `full_name`), never from derived booleans like
+    `users.verified` or the attest request's `name_match`/`dob_match` — so
+    a badge invalidates only when the underlying claim actually changes.
+  - **D9** — re-attesting without a claim change used to leave two valid
+    badges for the same subject, since neither the library's lazy
+    (`verify()`) nor eager (`onClaimsChanged`) revocation paths fire on an
+    *unchanged* digest. Every issuance now goes through
+    `issueSuperseding()`: it issues the new badge first, then revokes every
+    other previously-valid badge for that subject (issue-then-revoke so a
+    signer failure never leaves a subject badge-less), keeping exactly one
+    valid badge per subject at all times. The revocation reason recorded is
+    `"manual"` — the library's revocation-reason enum has no "superseded"
+    case, and extending the library was out of scope for this app-level
+    fix.
+
+- **Verification is revoked automatically if identity fields change** —
+  both eagerly and lazily. Editing a claim field after verification
+  (`POST /users`) calls `BadgeService.onClaimsChanged` server-side, which
+  revokes the stale badge immediately (reason `claim_change`) and clears
+  `verified`, `verified_at`, and `verification_badge` in the same update —
+  enforced regardless of what the client sends. As a backstop, `verify()`
+  also recomputes the claims digest on every check and auto-revokes on a
+  mismatch even if the eager path was somehow missed.
 - **No image retention at all.** No ID photo, selfie, or plaintext
   document number is ever transmitted to or stored by the backend — the
   entire "encrypt and retain for 90 days" branch of the spec (points
@@ -228,9 +288,12 @@ proof-of-possession.
 
 Tracked in [`CLAUDE.md`](CLAUDE.md):
 
-- Re-verifying with the *same* already-verified document number
-  incorrectly returns `409` instead of succeeding — root cause not yet
-  found, needs live debugging.
+- Re-verifying with the *same* already-verified document number used to
+  incorrectly return `409`. Resolved as a side effect of routing
+  duplicate-document checks through Recryption's `DuplicateDetector`
+  (claim-at-check semantics treat a same-subject re-check as a refresh by
+  construction) — the original root cause in the old hand-rolled check was
+  never diagnosed, since that code path no longer exists.
 - `AvailabilityScreen`'s resume pre-fill was once observed not showing
   previously-entered values, but hasn't been reproduced — flagged for
   the dedicated testing pass in `specs/in-good-company-test-prompt.md`
