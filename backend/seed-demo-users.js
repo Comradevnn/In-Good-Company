@@ -9,21 +9,63 @@
 // All demo accounts share the password "demopassword123" if you want to log
 // in as one through the app itself.
 //
-// Cause-tag spread (see backend/matching/adjacency.js) is deliberate:
-//   demo-1 + demo-2  — same cause (Animal welfare), opposite genders,
-//                      gender_pref 'any' on both — exact-match pair
-//                      (alignment score 1.0), demonstrates a clean match.
-//   demo-3           — Environmental cleanups (adjacent to Animal welfare)
-//                      — demonstrates the close-match (0.5) scoring path if
-//                      matched against demo-1/demo-2's shift.
-//   demo-4 + demo-5  — same cause (Elder care, no adjacency, unique to this
-//                      pair), but demo-4 requires a same-gender partner and
-//                      demo-5 is the wrong gender — deliberately blocked by
-//                      the Step 1a gender_pref hard filter despite sharing
-//                      a cause exactly.
-//   demo-6           — Youth mentorship (no adjacency, no one else has it)
-//                      — deliberately incompatible via unrelated causes,
-//                      guaranteed "no_compatible_partner_found".
+// Cause-tag spread (see backend/matching/adjacency.js) is deliberate — and,
+// as of the second pass below, validated against the real matching engine
+// (backend/matching/engine.js + backend/matching/demoShifts.js), not just
+// the adjacency table. Every demo account needs >= 2 cause tags to actually
+// clear onboarding (see mobile/onboarding/resume.js's determineResumeStep()
+// and MIN_CAUSES in mobile/screens/CausesScreen.js). That matters more than
+// it looks: /matching/run doesn't compare users' cause_tags to each other
+// directly — it walks backend/matching/demoShifts.js's DEMO_SHIFTS array in
+// a FIXED order (food, animal, youth, elder, cleanup) and gives each user
+// the FIRST shift where their alignment score clears 0.5, so a shift's
+// index and its org's mission_tags matter as much as the adjacency table.
+// Notably, "Food banks & shelters" and "Community organizing" are mutually
+// adjacent AND both appear in demo-shift-food's mission_tags, so either tag
+// alone can pull a user onto the food shift (index 0) ahead of whatever
+// shift their other tag would naturally reach — the same trap applies to
+// "Animal welfare"/"Environmental cleanups" pulling toward demo-shift-
+// animal (index 1) or demo-shift-cleanup (index 4). Second tags below were
+// chosen to avoid an unintended early shift claiming the match instead:
+//   demo-1 + demo-2  — Animal welfare + Environmental cleanups, opposite
+//                      genders, gender_pref 'any' on both. Both clear
+//                      demo-shift-animal (index 1) with an exact 1.0/1.0
+//                      alignment and pair with each other first, since
+//                      they run before anyone else — a clean exact match.
+//   demo-3           — Environmental cleanups + Food banks & shelters. By
+//                      the time demo-3 runs (account order), demo-1/2 are
+//                      already paired and unavailable, so demo-3 falls
+//                      through to demo-5 and clears demo-shift-animal via
+//                      adjacency (shiftAlignment 0.5, orgAlignment 1.0 —
+//                      combined 0.7): this is the close-match (0.5 shift-
+//                      alignment sub-score) path the original comment
+//                      described, just demonstrated against demo-5 rather
+//                      than demo-1/2, because they're no longer available
+//                      by the time demo-3's turn comes up.
+//   demo-4 + demo-5  — Elder care + Environmental cleanups (same causes),
+//                      but demo-4 requires a same-gender partner and
+//                      demo-5 is the wrong gender — deliberately blocked
+//                      by the Step 1a gender_pref hard filter, which runs
+//                      before any cause/shift matching, so this holds
+//                      regardless of which causes they're given. NOTE: in
+//                      the straight account-order run, demo-5 gets claimed
+//                      by demo-3 (above) before demo-4's turn, so demo-4
+//                      ends up blocked by every remaining candidate rather
+//                      than specifically demonstrating the demo-4-vs-
+//                      demo-5 block in that same run. To see that block in
+//                      isolation, call /matching/run as demo-4 then demo-5
+//                      right after a fresh seed, before demo-1/2/3 run.
+//   demo-6           — Youth mentorship + Community organizing. Neither
+//                      tag is shared by, or adjacent to, any tag demo-4 or
+//                      demo-5 carries, so demo-6 stays fully isolated from
+//                      that pair. It's also isolated from demo-1/2/3 in
+//                      practice: by the time demo-6 runs, demo-1/2 are
+//                      already paired off and demo-3 is paired with demo-
+//                      5, so none of them are still in the candidate pool
+//                      — "no_compatible_partner_found" holds in the
+//                      documented account-order run, though (like demo-3
+//                      above) it depends on that run order rather than
+//                      being a structural guarantee independent of it.
 //
 // Real outcomes when you actually call POST /matching/run depend on which
 // account you run it as and in what order (this build has no ranking — see
@@ -56,7 +98,7 @@ const DEMO_USERS = [
     age: 26,
     gender: 'Female',
     occupation: 'Product designer',
-    cause_tags: ['Animal welfare'],
+    cause_tags: ['Animal welfare', 'Environmental cleanups'],
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-1',
     document_type: 'drivers_license',
@@ -68,7 +110,7 @@ const DEMO_USERS = [
     age: 29,
     gender: 'Male',
     occupation: 'Nurse',
-    cause_tags: ['Animal welfare'],
+    cause_tags: ['Animal welfare', 'Environmental cleanups'],
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-2',
     document_type: 'drivers_license',
@@ -80,7 +122,7 @@ const DEMO_USERS = [
     age: 24,
     gender: 'Non-binary',
     occupation: 'Grad student',
-    cause_tags: ['Environmental cleanups'],
+    cause_tags: ['Environmental cleanups', 'Food banks & shelters'],
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-3',
     document_type: 'passport',
@@ -92,7 +134,7 @@ const DEMO_USERS = [
     age: 33,
     gender: 'Female',
     occupation: 'Teacher',
-    cause_tags: ['Elder care'],
+    cause_tags: ['Elder care', 'Environmental cleanups'],
     gender_pref: 'same_gender_only', // deliberately incompatible with demo-5
     doc_number: 'DEMO-DOC-4',
     document_type: 'state_id',
@@ -104,7 +146,7 @@ const DEMO_USERS = [
     age: 30,
     gender: 'Male',
     occupation: 'Accountant',
-    cause_tags: ['Elder care'], // same cause as demo-4, blocked by gender_pref
+    cause_tags: ['Elder care', 'Environmental cleanups'], // same causes as demo-4, blocked by gender_pref
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-5',
     document_type: 'drivers_license',
@@ -116,7 +158,7 @@ const DEMO_USERS = [
     age: 40,
     gender: 'Non-binary',
     occupation: 'Freelance writer',
-    cause_tags: ['Youth mentorship'], // no adjacency, unique in this set
+    cause_tags: ['Youth mentorship', 'Community organizing'], // Youth mentorship is unique in this set; see header comment
     gender_pref: 'any',
     doc_number: 'DEMO-DOC-6',
     document_type: 'passport',
