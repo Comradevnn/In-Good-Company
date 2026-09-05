@@ -322,8 +322,25 @@ Don't delete other rows from the shared dev database — see
 
 | Spec | Covers |
 |---|---|
-| [`volunteer-pairing-app-master-prompt.md`](specs/volunteer-pairing-app-master-prompt.md) | Overall product, features, onboarding field list |
-| [`in-good-company-matching-prompt.md`](specs/in-good-company-matching-prompt.md) | Matching algorithm (hard filters, alignment scoring, ranking) |
-| [`identity-verification-encryption-spec.md`](specs/identity-verification-encryption-spec.md) | ID verification pipeline, encryption, signing, event tickets |
-| [`in-good-company-test-prompt.md`](specs/in-good-company-test-prompt.md) | What to test before calling a feature done |
 | [`plotline.html`](specs/plotline.html) | Visual reference for screens it covers (style only — see `CLAUDE.md`) |
+
+The master product spec, matching-algorithm spec, and test plan are kept in a
+private repo (not published here, to avoid publishing the matching logic and
+product spec alongside the showcase code) — see **Private repos** below.
+
+## Private repos
+
+This repo is public for showcase purposes; the following are private and
+require access to be granted by the owner:
+
+| Repo | Contents |
+|---|---|
+| [`In-Good-Company-specs`](https://github.com/Comradevnn/In-Good-Company-specs) | Master product spec, matching-algorithm spec, test plan |
+| [`In-Good-Company-history-backup`](https://github.com/Comradevnn/In-Good-Company-history-backup) | Full mirrored git history of this repo, including commits from before the specs above were moved out |
+
+If you have access, clone them the same way as this repo:
+
+```bash
+gh repo clone Comradevnn/In-Good-Company-specs
+gh repo clone Comradevnn/In-Good-Company-history-backup
+```
