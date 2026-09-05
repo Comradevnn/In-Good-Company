@@ -119,51 +119,43 @@ Email/password only, no third-party auth provider:
 ## Matching algorithm
 
 Implemented in `backend/matching/engine.js`, triggered by
-`POST /matching/run`. It's a deliberately reduced version of
-[`specs/in-good-company-matching-prompt.md`](specs/in-good-company-matching-prompt.md) —
-the engine file's header comment enumerates exactly what's skipped. In
-scope for this build:
+`POST /matching/run`. It's a deliberately reduced version of the full
+matching spec — kept in the private specs repo (see **Private repos**
+below) — with the engine file's header comment enumerating exactly what's
+skipped in this build. At a high level:
 
-**Step 1 — hard filters** (`hardFiltersPass`, pure function, no DB access):
-a candidate pair is rejected outright if either person is under 18, either
-is unverified, gender preferences aren't mutually satisfied
-(`gender_pref: 'same_gender_only' | 'any'`), or either has safety-flagged
-the other. Safety flags are included even though the prototype's stated
-scope was narrower, because the spec calls them out as overriding every
-other rule.
+**Hard filters** (`hardFiltersPass`, pure function, no DB access): a
+candidate pair is rejected outright on basic eligibility (age, verification
+status, mutual preference compatibility) or if either side has
+safety-flagged the other — safety flags override every other rule.
 
-**Step 2 — shift alignment** (`computeAlignment` / `passesShiftGate`): for
-each candidate demo shift, a 0–1 score is computed as
-`0.6 × shift_tag_alignment + 0.4 × org_mission_alignment`, where each
-sub-score is `1.0` for an exact cause-tag match, `0.5` for a "close match"
-via the hand-built `ADJACENCY_TABLE` (e.g. Animal welfare ↔ Environmental
-cleanups), or `0.0` otherwise. A shift only counts if the combined score
-clears `0.5`, the org is verified, and — if the user has saved a
-lat/lng and travel radius — the shift falls within that radius
-(Haversine distance; users who only entered a city with no lat/lng skip
-the radius check rather than being blocked).
+**Shift alignment** (`computeAlignment` / `passesShiftGate`): each
+candidate demo shift is scored for cause-tag and org-mission alignment
+against both users' profiles, with a hand-built adjacency table for
+"close enough" cause matches and an optional travel-radius check. The
+exact weighting and thresholds are part of the private spec, not
+reproduced here.
 
 **Selection:** `POST /matching/run` walks all other users with a profile,
-skips anyone already in a confirmed pairing, and returns the **first**
-candidate that passes hard filters, has the required minimum Deeds, and shares at least one
-demo shift both people clear — not the best-ranked candidate. The full
-spec's Step 3 soft ranking (interest overlap, age proximity, geographic
-proximity, reliability-weighted scoring, newcomer/veteran pairing) is not
-implemented. A match is idempotent — re-running it returns the existing
+skips anyone already in a confirmed pairing, and returns the first
+eligible candidate/shift pair rather than the best-ranked one — the full
+spec's soft-ranking step (interest overlap, proximity, reliability
+weighting, newcomer/veteran pairing) is not implemented in this
+prototype. A match is idempotent — re-running it returns the existing
 confirmed pairing rather than recomputing.
 
-**Deeds gate:** booking a shift costs Deeds (an in-app currency,
-`users.deeds_balance`); both sides of a candidate pair need ≥5 to be
-eligible. `POST /deeds/purchase` just increments the balance — there's no
-real payment processing. `POST /matching/cancel` cancels the active
-pairing and forfeits the canceling user's Deeds (no notification to the
-other party, no reliability-score consequences — see schema.sql's
-comments for the full simplifications list).
+**Deeds gate:** booking a shift costs an in-app currency
+(`users.deeds_balance`); both sides of a candidate pair need a minimum
+balance to be eligible. `POST /deeds/purchase` just increments the
+balance in this prototype — there's no real payment processing.
+`POST /matching/cancel` cancels the active pairing and forfeits the
+canceling user's spent Deeds (no notification to the other party, no
+reliability-score consequences — see schema.sql's comments for the full
+simplifications list).
 
 Because there's no real shifts/orgs data model yet, `matching/demoShifts.js`
-hardcodes five shifts across the causes selectable in `CausesScreen.js`, all
-located in the the launch market launch market so radius checks have
-realistic numbers to test against.
+hardcodes a handful of demo shifts across the causes selectable in
+`CausesScreen.js` for testing.
 
 ## Identity verification & security
 
