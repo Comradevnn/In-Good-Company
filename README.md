@@ -330,13 +330,14 @@ product spec alongside the showcase code) — see **Private repos** below.
 
 ## Private repos
 
-This repo is public for showcase purposes; the following are private and
-require access to be granted by the owner:
+This repo is public for showcase purposes. Its git history has been rewritten
+to remove the specs below from every past commit, not just the current tree.
+The following repos are private and require access to be granted by the owner:
 
 | Repo | Contents |
 |---|---|
 | [`In-Good-Company-specs`](https://github.com/Comradevnn/In-Good-Company-specs) | Master product spec, matching-algorithm spec, test plan |
-| [`In-Good-Company-history-backup`](https://github.com/Comradevnn/In-Good-Company-history-backup) | Full mirrored git history of this repo, including commits from before the specs above were moved out |
+| [`In-Good-Company-history-backup`](https://github.com/Comradevnn/In-Good-Company-history-backup) | Original, unrewritten git history of this repo (from before the history rewrite), including the specs above in their old commits |
 
 If you have access, clone them the same way as this repo:
 
