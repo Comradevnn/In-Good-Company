@@ -194,7 +194,7 @@ async function load() {
     '<button onclick="verify(\\'' + o.id + '\\',' + !o.verified + ',' + o.has_coordinates + ')">' + (o.verified ? 'Unverify' : 'Verify') + '</button></div>').join('') || esc(orgs.error);
   const reports = await (await fetch('/admin/safety-reports', { headers: h() })).json();
   document.getElementById('reports').innerHTML = (reports.reports || []).map((r) => '<div class="card"><b>' + esc(r.category) + '</b> · ' + esc(r.status) +
-    '<div class="muted">' + esc(r.reporter_name) + ' (' + esc(r.reporter_user_id) + ') reported ' + esc(r.reported_name || '—') + ' (' + esc(r.reported_user_id || '—') + ') · ' + esc(r.created_at) + '</div><p>' + esc(r.description) + '</p>' +
+    '<div class="muted">' + esc(r.reporter_name) + ' (' + esc(r.reporter_user_id) + ') reported ' + esc(r.reported_name || '—') + ' (' + esc(r.reported_user_id || '—') + ') · ' + esc(r.created_at) + (r.reported_matching_paused ? ' · <b>matching paused (' + esc(r.reported_review_reason || 'review') + ')</b>' : '') + '</div><p>' + esc(r.description) + '</p>' +
     (r.status === 'open' ? '<textarea id="note-' + r.id + '" rows="2" placeholder="Review note" style="width:100%;border:1.5px solid #D7CEBB;border-radius:10px;padding:8px;"></textarea><p><button onclick="review(\\'' + r.id + '\\')">Mark reviewed</button></p>' : '<p class="muted">Note: ' + esc(r.reviewer_note || '—') + '</p>') +
     (r.reported_user_id ? '<p><button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'suspend\\')">Pause this user\\'s matching</button> <button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'clear-review\\')">Clear review</button></p>' : '') +
     '</div>').join('') || '<p class="muted">No reports.</p>';
