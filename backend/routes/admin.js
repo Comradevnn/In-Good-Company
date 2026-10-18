@@ -11,6 +11,9 @@ const { requireAdmin, adminTokenValid, accountForRequest } = require('../lib/aut
 const { publicOrg } = require('../lib/shifts');
 const { notify } = require('../lib/notify');
 const { wrap } = require('./volunteer');
+const { previewMatching } = require('../lib/matchingRunner');
+const { compareEdges, breakdownFor, roundBreakdown } = require('../matching/assign');
+const { MATCHING_CONFIG } = require('../matching/config');
 
 const admin = express.Router();
 
@@ -76,6 +79,33 @@ admin.post('/admin/users/:id/suspend', requireAdmin, (req, res) => {
 admin.get('/admin/metrics', requireAdmin, (req, res) => {
   res.json(metrics.platformMetrics());
 });
+
+// Matching explain output (admin only, never under /dev/*): a pairing's
+// stored fit score with its breakdown, and a read-only preview of what a
+// matching run would do now. Ids only — no names, org names or ratings.
+admin.get('/admin/pairings/:id/score', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT id, score, score_breakdown FROM pairings WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'No such pairing.', code: 'not_found' });
+  let breakdown = null;
+  try { breakdown = row.score_breakdown ? JSON.parse(row.score_breakdown) : null; } catch { breakdown = null; }
+  res.json({ pairing_id: row.id, score: row.score, breakdown });
+});
+
+admin.get('/admin/matching/preview', requireAdmin, wrap((req, res) => {
+  const nowMs = clock.nowMs();
+  const { plan } = previewMatching(nowMs);
+  const planned = plan.matches.map((m) => ({
+    request_ids: [m.aRequestId, m.bRequestId], shift_id: m.shiftId, tier: m.tier, flags: m.flags, breakdown: roundBreakdown(m.breakdown),
+  }));
+  const unmatched = plan.unmatchedRequestIds.map((requestId) => ({
+    request_id: requestId,
+    top: plan.edges.filter((e) => e.a.requestId === requestId || e.b.requestId === requestId)
+      .sort(compareEdges).slice(0, 3)
+      .map((e) => ({ request_ids: [e.a.requestId, e.b.requestId], shift_id: e.options[e.idx].shift.id, breakdown: roundBreakdown(breakdownFor(e, MATCHING_CONFIG)) })),
+    excluded: plan.exclusions.get(requestId) ?? {},
+  }));
+  res.json({ now: new Date(nowMs).toISOString(), config_version: MATCHING_CONFIG.version, planned, unmatched });
+}));
 
 admin.post('/admin/settings/shift-price', requireAdmin, (req, res) => {
   const value = Number(req.body?.deeds);

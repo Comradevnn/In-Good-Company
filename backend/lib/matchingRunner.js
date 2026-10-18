@@ -207,7 +207,7 @@ function poolStats(userIds) {
   return { attended, events, ratings, pairFacts };
 }
 
-// Step 1: everything the planner needs, read once.
+// Read: everything the planner needs, once per run.
 function buildSnapshot(nowMs, cfg = MATCHING_CONFIG) {
   const requests = db.prepare(`
     SELECT * FROM availability_requests WHERE status = 'searching'
@@ -247,7 +247,7 @@ function buildSnapshot(nowMs, cfg = MATCHING_CONFIG) {
   return { nowMs, cfg, contexts, persons, shifts: [...shiftById.values()], pairFacts: stats.pairFacts };
 }
 
-// Step 2 lives in matching/assign.js (planAssignments). Step 3: write it.
+// Write the plan (planAssignments in matching/assign.js builds it).
 function commitPlan(plan, snapshot, nowMs) {
   const nowIso = new Date(nowMs).toISOString();
   const byRequest = new Map(snapshot.contexts.map((ctx) => [ctx.request.id, ctx]));

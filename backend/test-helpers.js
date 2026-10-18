@@ -99,7 +99,7 @@ async function makeVolunteer(opts = {}) {
   const token = signup.body.session_token;
   const profile = await api('/users', {
     method: 'POST', token,
-    body: { first_name: opts.name ?? `Vol${seq}`, age: opts.age ?? 27, gender: opts.gender ?? 'Female', occupation: opts.occupation ?? 'Designer', hobbies: 'hiking, board games', blurb: 'Here to help.' },
+    body: { first_name: opts.name ?? `Vol${seq}`, age: opts.age ?? 27, gender: opts.gender ?? 'Female', occupation: opts.occupation ?? 'Designer', hobbies: opts.hobbies ?? 'hiking, board games', blurb: 'Here to help.' },
   });
   if (profile.status !== 201) throw new Error(`profile failed: ${JSON.stringify(profile.body)}`);
   await api('/users/me', {
