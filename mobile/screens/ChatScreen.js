@@ -5,7 +5,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { app } from '../theme/appStyles';
 import { api } from '../api/client';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { Avatar, ErrorText } from '../components/AppParts';
+import { Avatar, ErrorText, Loading } from '../components/AppParts';
 
 // Per-pairing chat (plotline "chat"): text only, polled. Opens with each
 // side's auto-sent introduction of the other person; conversation starters
@@ -75,6 +75,7 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
         contentContainerStyle={[s.scrollContent, { paddingBottom: 6 }]}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
+        {!pairing && !error ? <Loading /> : null}
         {pairing ? (
           <TouchableOpacity style={chatHeader} onPress={() => navigate('pairing', { pairingId })}>
             <Avatar name={name} size={40} />

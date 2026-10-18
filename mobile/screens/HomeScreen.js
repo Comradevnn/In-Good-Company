@@ -156,7 +156,7 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
       {!hasOpenRequest && home.profile.verified && !home.matching_block ? (
         <View style={app.ctaInline}>
           <Text style={app.ctaInlineText}>
-            {home.bookings.length ? 'Ready for another one?' : 'Ready for your first shift?'} Tell us when you're free and we'll start looking.
+            {home.impact.shifts || home.bookings.length ? 'Ready for another one?' : 'Ready for your first shift?'} Tell us when you're free and we'll start looking.
           </Text>
           <PillButton label="Find your next shift" onPress={() => navigate('startMatching')} />
         </View>
