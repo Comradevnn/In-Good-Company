@@ -202,3 +202,280 @@ CREATE TABLE IF NOT EXISTS signed_badges (
   badge_id TEXT PRIMARY KEY,
   badge_json TEXT NOT NULL
 );
+
+-- ════════════════════════════════════════════════════════════════════════
+-- Prototype lifecycle tables: orgs/shifts, availability requests, bookings,
+-- the Deeds ledger, chat, ratings, buddies and safety. Behavior is defined
+-- in the private master spec (see README "Specs"); comments here describe
+-- the data shape only.
+--
+-- Columns added to EXISTING tables for these features (accounts.kind, the
+-- users Deeds/Premium/referral/safety columns, the pairings lifecycle
+-- columns) are applied by ensureColumns() in db/index.js, so fresh and
+-- pre-existing databases end up with the same shape.
+--
+-- Timestamps written by the lifecycle code are ISO-8601 UTC strings from
+-- lib/clock.js (which supports a dev-only time offset), not datetime('now').
+-- ════════════════════════════════════════════════════════════════════════
+
+-- Nonprofit / host organizations. account_id links to the org's login
+-- (accounts.kind = 'org'); seeded orgs have one too. Shifts of an org with
+-- verified = 0 are invisible to matching and browsing. The waiver is either
+-- an uploaded file under data/uploads/ (waiver_path) or the platform
+-- default (waiver_kind = 'platform_default').
+CREATE TABLE IF NOT EXISTS orgs (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  account_id TEXT UNIQUE REFERENCES accounts(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  website TEXT,
+  registration_number TEXT, -- EIN or equivalent, as entered
+  mission_tags TEXT NOT NULL DEFAULT '[]', -- JSON array of cause labels
+  location_label TEXT,
+  location_lat REAL,
+  location_lng REAL,
+  verified INTEGER NOT NULL DEFAULT 0,
+  verified_at TEXT,
+  waiver_kind TEXT CHECK (waiver_kind IN ('uploaded', 'platform_default')),
+  waiver_path TEXT,
+  waiver_mime TEXT,
+  waiver_uploaded_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- Shift listings. capacity_booked is the live counter: every reserved spot
+-- (proposed, confirmed or solo booking) increments it through a single
+-- conditional UPDATE, and the CHECK makes overbooking impossible even if a
+-- code path forgot to use that UPDATE.
+CREATE TABLE IF NOT EXISTS shifts (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  org_id TEXT NOT NULL REFERENCES orgs(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  cause_tags TEXT NOT NULL DEFAULT '[]', -- JSON array of cause labels
+  starts_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles',
+  location_label TEXT,
+  location_lat REAL,
+  location_lng REAL,
+  capacity_total INTEGER NOT NULL CHECK (capacity_total > 0),
+  capacity_booked INTEGER NOT NULL DEFAULT 0 CHECK (capacity_booked >= 0 AND capacity_booked <= capacity_total),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'cancelled')),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shifts_org ON shifts(org_id);
+CREATE INDEX IF NOT EXISTS idx_shifts_starts ON shifts(starts_at);
+
+-- One row per "please find me a partner" submission — this is the "slot":
+-- a user has at most one open (searching/proposed) request at a time, and
+-- at most one active pairing per request. anchor_booking_id is set when the
+-- user already holds a spot on a specific shift (solo RSVP, or a rematch
+-- after their partner backed out); matching then only looks at that shift.
+CREATE TABLE IF NOT EXISTS availability_requests (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL DEFAULT 'standard' CHECK (kind IN ('standard', 'solo_rsvp', 'rematch')),
+  window_start TEXT NOT NULL, -- YYYY-MM-DD, platform timezone
+  window_end TEXT NOT NULL,
+  travel_radius_miles REAL,
+  buddy_user_id TEXT, -- set when the user asked to go with an existing buddy
+  age_min INTEGER, -- Premium partner age-band filter (applies to this user's own request only)
+  age_max INTEGER,
+  anchor_booking_id TEXT,
+  excluded_shift_ids TEXT NOT NULL DEFAULT '[]', -- shifts the user declined for this request
+  status TEXT NOT NULL DEFAULT 'searching' CHECK (status IN ('searching', 'proposed', 'matched', 'no_match', 'cancelled')),
+  last_reason TEXT, -- latest no-match reason, for the honest waiting status
+  last_checked_at TEXT,
+  search_deadline TEXT NOT NULL,
+  matched_at TEXT,
+  ended_at TEXT,
+  dismissed_at TEXT, -- user acknowledged a no_match result
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_requests_user ON availability_requests(user_id, status);
+
+-- A user's place on a shift. kind 'paired' bookings carry a Deeds hold once
+-- confirmed; 'solo' bookings (solo RSVP, or a spot kept after a pairing
+-- ended) do not. cap_month is set when a paired booking is confirmed and
+-- cleared again if it is released at no cost — counting rows by cap_month
+-- is the monthly matched-shift cap.
+CREATE TABLE IF NOT EXISTS bookings (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  shift_id TEXT NOT NULL REFERENCES shifts(id),
+  pairing_id TEXT, -- the pairing this booking currently belongs to, if any
+  kind TEXT NOT NULL DEFAULT 'paired' CHECK (kind IN ('paired', 'solo')),
+  status TEXT NOT NULL CHECK (status IN ('proposed', 'confirmed', 'cancelled', 'attended', 'no_show', 'unverified')),
+  hold_id TEXT,
+  cap_month TEXT,
+  confirmed_at TEXT,
+  cancelled_at TEXT,
+  cancel_type TEXT, -- grace | late | free_late | declined | expired | partner_released | no_match_release | safety | solo
+  checked_in_at TEXT,
+  resolved_at TEXT,
+  org_rating_public INTEGER NOT NULL DEFAULT 0, -- user's choice: show the org's rating of this shift on their history
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_bookings_shift ON bookings(shift_id, status);
+
+-- Append-only Deeds ledger. Each row moves Deeds within one bucket
+-- ('purchased' or 'free' — Premium grants and referral credits are 'free')
+-- between the user's available balance and their held balance. Summing
+-- available_delta per bucket always equals users.deeds_purchased /
+-- users.deeds_free; summing held_delta equals the open holds.
+CREATE TABLE IF NOT EXISTS deeds_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  entry_type TEXT NOT NULL, -- opening_balance | purchase | premium_grant | referral | hold | release | return | forfeit
+  bucket TEXT NOT NULL CHECK (bucket IN ('purchased', 'free')),
+  available_delta INTEGER NOT NULL DEFAULT 0,
+  held_delta INTEGER NOT NULL DEFAULT 0,
+  hold_id TEXT,
+  booking_id TEXT,
+  meta TEXT, -- JSON
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_user ON deeds_ledger(user_id);
+
+CREATE TABLE IF NOT EXISTS deeds_holds (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  booking_id TEXT NOT NULL,
+  amount_purchased INTEGER NOT NULL DEFAULT 0,
+  amount_free INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'held' CHECK (status IN ('held', 'released', 'returned', 'forfeited')),
+  reason TEXT,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+
+-- Revenue realized from forfeited holds, in US cents (one Deed = 100 cents).
+-- recipient 'org' rows are aggregated per org per payout_month for the
+-- monthly payout view; 'platform' rows are platform revenue.
+CREATE TABLE IF NOT EXISTS forfeiture_revenue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hold_id TEXT NOT NULL,
+  org_id TEXT NOT NULL,
+  recipient TEXT NOT NULL CHECK (recipient IN ('org', 'platform')),
+  source_bucket TEXT NOT NULL CHECK (source_bucket IN ('purchased', 'free')),
+  amount_cents INTEGER NOT NULL,
+  payout_month TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- Mock Premium subscription purchases. No payment processor, no card data.
+CREATE TABLE IF NOT EXISTS premium_subscriptions (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  plan TEXT NOT NULL CHECK (plan IN ('monthly', 'annual')),
+  price_cents INTEGER NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- Chat. visible_to_user_id restricts a row to one participant (each side's
+-- own warm introduction of the other person); NULL means both see it.
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pairing_id TEXT NOT NULL,
+  sender_user_id TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('intro', 'text', 'starter', 'system')),
+  body TEXT NOT NULL,
+  visible_to_user_id TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_pairing ON messages(pairing_id, id);
+
+-- In-app notification inbox (no push infrastructure).
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  ref_type TEXT,
+  ref_id TEXT,
+  read_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, id);
+
+-- Reliability signal inputs. Never exposed to other users.
+CREATE TABLE IF NOT EXISTS reliability_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('attended', 'grace_cancel', 'free_late_cancel', 'late_cancel', 'no_show')),
+  booking_id TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reliability_user ON reliability_events(user_id);
+
+-- Org's rating of one volunteer's booking: attendance and contribution,
+-- separately, on a 1 (bad) .. 5 (good) scale.
+CREATE TABLE IF NOT EXISTS org_volunteer_ratings (
+  booking_id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  attendance INTEGER NOT NULL CHECK (attendance BETWEEN 1 AND 5),
+  contribution INTEGER NOT NULL CHECK (contribution BETWEEN 1 AND 5),
+  created_at TEXT NOT NULL
+);
+
+-- Volunteer's rating of the org for one booking, on two separate axes:
+-- operational (public, aggregated on the org's profile) and personal_fit
+-- (private to the volunteer; only their own matching reads it).
+CREATE TABLE IF NOT EXISTS volunteer_org_ratings (
+  booking_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  org_id TEXT NOT NULL,
+  shift_id TEXT NOT NULL,
+  operational INTEGER NOT NULL CHECK (operational BETWEEN 1 AND 5),
+  personal_fit INTEGER NOT NULL CHECK (personal_fit BETWEEN 1 AND 5),
+  created_at TEXT NOT NULL
+);
+
+-- Volunteer's rating of their partner. volunteer_again doubles as the
+-- private buddy answer; it is never shown to the person being rated.
+CREATE TABLE IF NOT EXISTS partner_ratings (
+  pairing_id TEXT NOT NULL,
+  rater_user_id TEXT NOT NULL,
+  ratee_user_id TEXT NOT NULL,
+  showed_up INTEGER NOT NULL,
+  volunteer_again INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (pairing_id, rater_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS buddies (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  user_low_id TEXT NOT NULL, -- the lexically smaller users.id of the pair
+  user_high_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended')),
+  source_pairing_id TEXT,
+  created_at TEXT NOT NULL,
+  ended_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_buddies_pair ON buddies(user_low_id, user_high_id);
+
+-- In-app safety reports, stored for human review.
+CREATE TABLE IF NOT EXISTS safety_reports (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  reporter_user_id TEXT NOT NULL,
+  reported_user_id TEXT,
+  pairing_id TEXT,
+  category TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'reviewed')),
+  reviewer_note TEXT,
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+-- Platform-controlled settings (e.g. the current shift price in Deeds).
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

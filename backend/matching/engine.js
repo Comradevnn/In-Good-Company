@@ -1,27 +1,15 @@
 const { ADJACENCY_TABLE } = require('./adjacency');
 
-// Minimal matching engine — Step 1a (hard filters) and Step 1b (alignment
-// scoring) from specs/in-good-company-matching-prompt.md, scoped for a demo.
+// Matching engine — the pure, DB-free checks: Step 1a user-to-user hard
+// filters and Step 1b user-to-shift alignment from the private matching spec
+// (see README "Specs"). lib/matchingRunner.js applies these to real
+// users/orgs/shifts and adds everything that needs the database: the monthly
+// matched-shift cap, reliability pauses, one open request ("slot") per user,
+// the live shift capacity counter, buddy requests and prior-pairing history.
 //
-// DELIBERATELY SKIPPED vs. the full spec (see backend/index.js's route for
-// where each of these would plug in):
-//   - Step 1a: monthly matched-shift cap (free/Premium tier limits) — no
-//     Deeds/shift-booking system exists yet to count against.
-//   - Step 1a: "one active pairing per slot" is simplified to "one active
-//     pairing at all" — there's no real multi-slot booking system, just a
-//     single demo pairing concept (see backend/db/schema.sql's pairings
-//     table comment).
-//   - Step 2: capacity bookkeeping (shift capacity_remaining, decrementing
-//     within a batch) — demo shifts have no capacity concept.
-//   - Step 3: full soft ranking (interest overlap, age-band proximity,
-//     geographic proximity, reliability reweighting, newcomer-veteran
-//     override) — this build takes the first hard-filter-and-alignment-
-//     passing candidate, not the best-ranked one.
-//   - Step 4: tie-break, buddy handling — no ranking means no ties to
-//     break, and buddy status isn't modeled at all yet.
-//   - "verified profile data, not stated age alone" (spec's exact M1
-//     nuance) — there's only one age field in this schema, so this build
-//     just uses it directly.
+// NOT implemented (see README "Not built yet"): the weighted Step 3 soft
+// ranking and its newcomer/veteran and first-timer adjustments. The runner
+// orders candidates by fairness (longest wait first) instead.
 
 const HARD_FILTER_REASONS = {
   UNDERAGE: 'underage',
@@ -100,9 +88,9 @@ function haversineMiles(a, b) {
   return R * 2 * Math.asin(Math.sqrt(h));
 }
 
-// A user clears a given demo shift if: alignment score >= 0.5, the org is
-// verified (trivially true for all demo shifts), and — if the user has a
-// saved lat/lng and a travel radius — the shift falls within it. Users who
+// A user clears a given shift if: alignment score >= 0.5, the org is
+// verified, and — if the user has a saved lat/lng and a travel radius — the
+// shift falls within it. Users who
 // only entered a city (no lat/lng, see LocationScreen.js) skip the radius
 // check rather than being blocked, since there's no geocoding to place them
 // on a map at all — flagged as a real simplification, not a silent gap.
@@ -113,6 +101,7 @@ function passesShiftGate(user, shift) {
   if (!shift.org.verified) return { pass: false, alignment };
 
   if (user.location_lat != null && user.location_lng != null && user.travel_radius_miles != null) {
+    if (!shift.location) return { pass: true, alignment };
     const distance = haversineMiles({ lat: user.location_lat, lng: user.location_lng }, shift.location);
     if (distance > user.travel_radius_miles) return { pass: false, alignment, distance };
   }

@@ -9,76 +9,26 @@
 // All demo accounts share the password "demopassword123" if you want to log
 // in as one through the app itself.
 //
-// Cause-tag spread (see backend/matching/adjacency.js) is deliberate — and,
-// as of the second pass below, validated against the real matching engine
-// (backend/matching/engine.js + backend/matching/demoShifts.js), not just
-// the adjacency table. Every demo account needs >= 2 cause tags to actually
-// clear onboarding (see mobile/onboarding/resume.js's determineResumeStep()
-// and MIN_CAUSES in mobile/screens/CausesScreen.js). That matters more than
-// it looks: /matching/run doesn't compare users' cause_tags to each other
-// directly — it walks backend/matching/demoShifts.js's DEMO_SHIFTS array in
-// a FIXED order (food, animal, youth, elder, cleanup) and gives each user
-// the FIRST shift where their alignment score clears 0.5, so a shift's
-// index and its org's mission_tags matter as much as the adjacency table.
-// Notably, "Food banks & shelters" and "Community organizing" are mutually
-// adjacent AND both appear in demo-shift-food's mission_tags, so either tag
-// alone can pull a user onto the food shift (index 0) ahead of whatever
-// shift their other tag would naturally reach — the same trap applies to
-// "Animal welfare"/"Environmental cleanups" pulling toward demo-shift-
-// animal (index 1) or demo-shift-cleanup (index 4). Second tags below were
-// chosen to avoid an unintended early shift claiming the match instead:
-//   demo-1 + demo-2  — Animal welfare + Environmental cleanups, opposite
-//                      genders, gender_pref 'any' on both. Both clear
-//                      demo-shift-animal (index 1) with an exact 1.0/1.0
-//                      alignment and pair with each other first, since
-//                      they run before anyone else — a clean exact match.
-//   demo-3           — Environmental cleanups + Food banks & shelters. By
-//                      the time demo-3 runs (account order), demo-1/2 are
-//                      already paired and unavailable, so demo-3 falls
-//                      through to demo-5 and clears demo-shift-animal via
-//                      adjacency (shiftAlignment 0.5, orgAlignment 1.0 —
-//                      combined 0.7): this is the close-match (0.5 shift-
-//                      alignment sub-score) path the original comment
-//                      described, just demonstrated against demo-5 rather
-//                      than demo-1/2, because they're no longer available
-//                      by the time demo-3's turn comes up.
-//   demo-4 + demo-5  — Elder care + Environmental cleanups (same causes),
-//                      but demo-4 requires a same-gender partner and
-//                      demo-5 is the wrong gender — deliberately blocked
-//                      by the Step 1a gender_pref hard filter, which runs
-//                      before any cause/shift matching, so this holds
-//                      regardless of which causes they're given. NOTE: in
-//                      the straight account-order run, demo-5 gets claimed
-//                      by demo-3 (above) before demo-4's turn, so demo-4
-//                      ends up blocked by every remaining candidate rather
-//                      than specifically demonstrating the demo-4-vs-
-//                      demo-5 block in that same run. To see that block in
-//                      isolation, call /matching/run as demo-4 then demo-5
-//                      right after a fresh seed, before demo-1/2/3 run.
-//   demo-6           — Youth mentorship + Community organizing. Neither
-//                      tag is shared by, or adjacent to, any tag demo-4 or
-//                      demo-5 carries, so demo-6 stays fully isolated from
-//                      that pair. It's also isolated from demo-1/2/3 in
-//                      practice: by the time demo-6 runs, demo-1/2 are
-//                      already paired off and demo-3 is paired with demo-
-//                      5, so none of them are still in the candidate pool
-//                      — "no_compatible_partner_found" holds in the
-//                      documented account-order run, though (like demo-3
-//                      above) it depends on that run order rather than
-//                      being a structural guarantee independent of it.
+// Matching now runs against the real shifts seeded by seed-demo-orgs.js
+// (run that first). Demo users carry a range of causes and partner
+// preferences so the hard filters have something to do — demo-4 only
+// accepts a same-gender partner, so they can't pair with demo-5 despite
+// sharing causes.
 //
-// Real outcomes when you actually call POST /matching/run depend on which
-// account you run it as and in what order (this build has no ranking — see
-// engine.js — so the first valid candidate wins). The groupings above are
-// what SHOULD pair off if you run them in account order; running out of
-// order is still a legitimate demo of that exact "first-candidate-wins"
-// simplification.
+// By default demo users are NOT searching for a match, so they don't pair
+// off with each other before you get a chance to match with one. Pass
+// --searching to also open a search for each of them (today+1 .. today+10);
+// compatible demo users then pair with each other on the next matching pass,
+// and the rest stay available as partners for a real account.
 
 const crypto = require('node:crypto');
 const bcrypt = require('bcrypt');
 const db = require('./db');
+const deeds = require('./lib/deeds');
+const { localDate, addDays } = require('./lib/time');
 
 const BCRYPT_ROUNDS = 10;
+const SEARCHING = process.argv.includes('--searching');
 const DEMO_PASSWORD = 'demopassword123';
 
 require('./env'); // loads backend/.env, same as index.js
@@ -205,13 +155,10 @@ async function seed() {
       seeking: 'open',
       partner_prefs_confirmed: 1,
       volunteering_frequency: 'Twice a month',
-      availability_window_start: '2026-07-11',
-      availability_window_end: '2026-07-18',
+      availability_window_start: addDays(localDate(new Date()), 1),
+      availability_window_end: addDays(localDate(new Date()), 10),
       travel_radius_miles: 15,
       verified: 1,
-      // At least 5 (the /matching/run gate) plus headroom to demo a back-out
-      // (which forfeits 5) followed by a fresh match without re-seeding.
-      deeds_balance: 10,
     };
 
     db.prepare(`
@@ -220,13 +167,13 @@ async function seed() {
         location_city, cause_tags, interest_tags, personal_values, bio,
         gender_pref, seeking, partner_prefs_confirmed, volunteering_frequency,
         availability_window_start, availability_window_end, travel_radius_miles,
-        verified, verified_at, deeds_balance
+        verified, verified_at
       ) VALUES (
         @account_id, @full_name, @display_name, @age, @gender, @occupation,
         @location_city, @cause_tags, @interest_tags, @personal_values, @bio,
         @gender_pref, @seeking, @partner_prefs_confirmed, @volunteering_frequency,
         @availability_window_start, @availability_window_end, @travel_radius_miles,
-        @verified, datetime('now'), @deeds_balance
+        @verified, datetime('now')
       )
     `).run(userFields);
     const user = db.prepare('SELECT id, display_name FROM users WHERE account_id = ?').get(account.id);
@@ -253,7 +200,27 @@ async function seed() {
     );
     db.prepare('UPDATE users SET verification_badge = ? WHERE id = ?').run(JSON.stringify(signedBadge), user.id);
 
+    // Deeds through the ledger (a mock purchase), enough to confirm a shift
+    // and still demo a forfeiting back-out without re-seeding.
+    deeds.credit(user.id, 'purchased', 10, 'purchase', { mock_payment: true, seed: true });
+
     console.log(`added ${demo.email} — ${demo.first_name}, ${demo.age}, ${demo.gender}, gender_pref=${demo.gender_pref}, causes=${demo.cause_tags.join('/')}`);
+  }
+
+  if (SEARCHING) {
+    for (const demo of DEMO_USERS) {
+      const user = db.prepare('SELECT u.* FROM users u JOIN accounts a ON a.id = u.account_id WHERE a.email = ?').get(demo.email);
+      const open = db.prepare("SELECT 1 FROM availability_requests WHERE user_id = ? AND status IN ('searching', 'proposed')").get(user.id);
+      if (open) continue;
+      const now = new Date();
+      db.prepare(`
+        INSERT INTO availability_requests (id, user_id, kind, window_start, window_end, travel_radius_miles, status, search_deadline, created_at)
+        VALUES (?, ?, 'standard', ?, ?, ?, 'searching', ?, ?)
+      `).run(crypto.randomBytes(16).toString('hex'), user.id, user.availability_window_start, user.availability_window_end,
+        user.travel_radius_miles, new Date(now.getTime() + 5 * 24 * 3600 * 1000).toISOString(), now.toISOString());
+      console.log(`search opened for ${demo.email}`);
+    }
+    console.log('Demo searches are matched on the backend\'s next matching pass (within ~15s while it runs).');
   }
 }
 

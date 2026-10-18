@@ -6,8 +6,14 @@ const bcrypt = require('bcrypt');
 const db = require('./db');
 const { makeDetector } = require('./recryption/hashStore');
 const { makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges } = require('./recryption/badgeStore');
-const { hardFiltersPass, passesShiftGate, safeParseArray } = require('./matching/engine');
-const { DEMO_SHIFTS } = require('./matching/demoShifts');
+const { requireAuth, requireProfile } = require('./lib/auth');
+const services = require('./lib/services');
+const clock = require('./lib/clock');
+const referrals = require('./lib/referrals');
+const lifecycle = require('./lib/lifecycle');
+const volunteerRoutes = require('./routes/volunteer');
+const orgRoutes = require('./routes/org');
+const { admin: adminRoutes, dev: devRoutes } = require('./routes/admin');
 
 const BCRYPT_ROUNDS = 10;
 
@@ -29,7 +35,8 @@ let badgeSigner = null;
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(express.json());
+// Waiver uploads arrive as base64 JSON (see routes/org.js), so allow a few MB.
+app.use(express.json({ limit: '8mb' }));
 
 function getLocalNetworkIp() {
   const interfaces = os.networkInterfaces();
@@ -55,9 +62,12 @@ app.get('/hello', (req, res) => {
 // The profile row comes later, from the quickProfile step. Returns a session
 // token the app stores on-device to stay logged in.
 app.post('/auth/signup', async (req, res) => {
-  const { email, password } = req.body ?? {};
+  const { email, password, kind = 'individual', referral_code } = req.body ?? {};
 
   const emailTrimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!['individual', 'org'].includes(kind)) {
+    return res.status(400).json({ error: "kind must be 'individual' or 'org'." });
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
     return res.status(400).json({ error: 'Enter a valid email address.' });
   }
@@ -73,13 +83,16 @@ app.post('/auth/signup', async (req, res) => {
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const sessionToken = crypto.randomBytes(32).toString('hex');
 
+  // created_at comes from the app clock (lib/clock.js), not SQLite's, so the
+  // signup trial lines up with the dev clock when it has been fast-forwarded.
   db.prepare(`
-    INSERT INTO accounts (email, password_hash, session_token)
-    VALUES (?, ?, ?)
-  `).run(emailTrimmed, passwordHash, sessionToken);
+    INSERT INTO accounts (email, password_hash, session_token, kind, referral_code_used, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(emailTrimmed, passwordHash, sessionToken, kind,
+    typeof referral_code === 'string' ? referral_code.trim().toUpperCase() : null, clock.isoNow());
 
-  const account = db.prepare('SELECT id, email FROM accounts WHERE email = ?').get(emailTrimmed);
-  res.status(201).json({ account_id: account.id, email: account.email, session_token: sessionToken });
+  const account = db.prepare('SELECT id, email, kind FROM accounts WHERE email = ?').get(emailTrimmed);
+  res.status(201).json({ account_id: account.id, email: account.email, kind: account.kind, session_token: sessionToken });
 });
 
 // Login for an existing account — checks the password against the stored
@@ -88,7 +101,7 @@ app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body ?? {};
 
   const emailTrimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
-  const account = db.prepare('SELECT id, email, password_hash FROM accounts WHERE email = ?').get(emailTrimmed);
+  const account = db.prepare('SELECT id, email, kind, password_hash FROM accounts WHERE email = ?').get(emailTrimmed);
   if (!account) {
     return res.status(404).json({ error: 'No account with that email.' });
   }
@@ -101,22 +114,14 @@ app.post('/auth/login', async (req, res) => {
   const sessionToken = crypto.randomBytes(32).toString('hex');
   db.prepare('UPDATE accounts SET session_token = ? WHERE id = ?').run(sessionToken, account.id);
 
-  res.status(200).json({ account_id: account.id, email: account.email, session_token: sessionToken });
+  res.status(200).json({ account_id: account.id, email: account.email, kind: account.kind, session_token: sessionToken });
 });
 
-// Resolves "Authorization: Bearer <token>" to an account, or rejects with 401.
-function requireAuth(req, res, next) {
-  const header = req.headers.authorization ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
-  const account = token
-    ? db.prepare('SELECT id, email FROM accounts WHERE session_token = ?').get(token)
-    : null;
-  if (!account) {
-    return res.status(401).json({ error: 'Not signed in.' });
-  }
-  req.account = account;
-  next();
-}
+// Which kind of account the stored session belongs to, so the app can route
+// org logins to the org screens instead of volunteer onboarding.
+app.get('/auth/me', requireAuth, (req, res) => {
+  res.json({ account_id: req.account.id, email: req.account.email, kind: req.account.kind });
+});
 
 // Onboarding step 1 ("quickProfile" in specs/plotline.html): first name, age,
 // occupation/school, gender, hobbies, personal values, and the intro blurb,
@@ -125,6 +130,9 @@ function requireAuth(req, res, next) {
 // schema's own defaults (see backend/db/schema.sql).
 app.post('/users', requireAuth, async (req, res) => {
   const { first_name, age, occupation, gender, hobbies, blurb, personal_values } = req.body ?? {};
+  if (req.account.kind === 'org') {
+    return res.status(403).json({ error: 'Organization accounts do not have a volunteer profile.' });
+  }
 
   if (!first_name || typeof first_name !== 'string' || !first_name.trim()) {
     return res.status(400).json({ error: 'first_name is required' });
@@ -132,6 +140,11 @@ app.post('/users', requireAuth, async (req, res) => {
   const ageNumber = Number(age);
   if (!Number.isInteger(ageNumber) || ageNumber <= 0) {
     return res.status(400).json({ error: 'age must be a positive integer' });
+  }
+  // Individual matching is adults-only (master spec); the matching engine
+  // also enforces this as a hard filter.
+  if (ageNumber < 18) {
+    return res.status(400).json({ error: 'In Good Company is for volunteers 18 and over.' });
   }
   if (!gender || typeof gender !== 'string' || !gender.trim()) {
     return res.status(400).json({ error: 'gender is required' });
@@ -182,6 +195,9 @@ app.post('/users', requireAuth, async (req, res) => {
       INSERT INTO users (account_id, full_name, display_name, age, gender, occupation, interest_tags, bio, personal_values)
       VALUES (@account_id, @full_name, @display_name, @age, @gender, @occupation, @interest_tags, @bio, @personal_values)
     `).run(profile);
+    const created = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
+    const { referral_code_used: code } = db.prepare('SELECT referral_code_used FROM accounts WHERE id = ?').get(req.account.id);
+    referrals.linkReferrer(created.id, code);
   }
 
   const user = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
@@ -198,16 +214,6 @@ app.get('/users/me', requireAuth, (req, res) => {
   }
   res.status(200).json(user);
 });
-
-// Requires the account to already have a profile row (created by POST /users)
-// before any of the later onboarding steps can save against it.
-function requireProfile(req, res, next) {
-  const user = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
-  if (!user) {
-    return res.status(404).json({ error: 'Complete your profile before continuing.' });
-  }
-  next();
-}
 
 // Onboarding steps 2-5+ (location, org-or-cause, causes, partner preferences,
 // availability) all save through here — each screen sends only the fields it
@@ -467,230 +473,28 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
     WHERE account_id = @account_id
   `).run({ badge: JSON.stringify(signedBadge), account_id: req.account.id });
   pendingDocChecks.delete(req.account.id);
+  // Referral credit is earned at verification, so a duplicate-document
+  // account (blocked above) can never earn a self-referral.
+  referrals.creditOnVerification(user.id);
 
   const updated = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
   res.status(200).json(updated);
 });
 
-// ── Matching engine ──
-// Minimal Step 1a + 1b implementation (see backend/matching/engine.js for
-// exactly what's included vs. skipped relative to the full spec). Runs
-// against real user rows and a hardcoded list of demo shifts
-// (backend/matching/demoShifts.js) — there's no real shifts/orgs data model
-// yet, so this is what a "shift" means in this build.
+// ── Prototype lifecycle routes ──
+// Orgs/shifts, availability requests and matching, the pairing lifecycle,
+// chat, shift day, ratings, buddies, Deeds/Premium, safety and metrics live
+// in routes/ (backed by lib/). The org router is mounted first so
+// /orgs/mine isn't captured by the public /orgs/:id route.
+app.use(orgRoutes.router);
+app.use(volunteerRoutes.router);
+app.use(adminRoutes);
+app.use(devRoutes);
 
-// Plain-text console narration of each matching run, for demo purposes —
-// deliberately readable prose, not JSON dumps, so this terminal can be
-// shown on screen during a live walkthrough.
-function logMatch(line) {
-  console.log(`[matching] ${line}`);
-}
-
-// Turns a raw 0-1 alignment score into a plain-language read, so the log
-// says what the number actually means instead of just printing it.
-function describeScore(score) {
-  if (score >= 0.95) return 'excellent alignment — exact cause match on both sides';
-  if (score >= 0.75) return 'strong alignment';
-  return 'workable alignment — clears the 0.5 minimum threshold, but only barely';
-}
-
-function describeAlignment(gate) {
-  const { shiftAlignment, orgAlignment, closeMatchUsed } = gate.alignment;
-  return `shift=${shiftAlignment.toFixed(1)} org=${orgAlignment.toFixed(1)}${closeMatchUsed ? ' (via close-match adjacency, not an exact cause match)' : ''}`;
-}
-
-function buildMatchResponse(pairing, selfId) {
-  const partnerId = pairing.user_a_id === selfId ? pairing.user_b_id : pairing.user_a_id;
-  const partner = db.prepare('SELECT id, display_name, age, occupation FROM users WHERE id = ?').get(partnerId);
-  const shift = DEMO_SHIFTS.find((s) => s.id === pairing.shift_id);
-  return {
-    status: 'confirmed',
-    pairing_id: pairing.id,
-    partner,
-    // Minimal shift/org display info only — matches the spec's "brief
-    // profile" minimization principle, not a wholesale dump of demo data.
-    shift: shift
-      ? {
-          cause_tags: shift.cause_tags,
-          org_name: shift.org.name,
-          location_label: shift.location_label,
-          date: shift.date,
-          time: shift.time,
-        }
-      : null,
-    score: pairing.score,
-  };
-}
-
-app.post('/matching/run', requireAuth, requireProfile, (req, res) => {
-  const self = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
-  logMatch(`${self.display_name} (${self.id}) requested a match.`);
-
-  // Idempotent: an existing confirmed pairing is returned as-is rather than
-  // recomputed, so re-opening the match screen doesn't risk finding (or
-  // "un-finding") a different partner than before.
-  const existingPairing = db.prepare(`
-    SELECT * FROM pairings WHERE status = 'confirmed' AND (user_a_id = ? OR user_b_id = ?)
-  `).get(self.id, self.id);
-  if (existingPairing) {
-    const response = buildMatchResponse(existingPairing, self.id);
-    logMatch(`${self.display_name} already has a confirmed pairing with ${response.partner.display_name} — returning it unchanged.`);
-    return res.json(response);
-  }
-
-  // Simplified guardrail check (full spec: missing verified/cause_tags/
-  // location/gender_pref all route to 'ineligible_data_incomplete' as a
-  // single reason; gender_pref always has a schema default so it's never
-  // "missing," and a missing location is handled inside passesShiftGate by
-  // skipping the radius check rather than blocking outright — so this only
-  // checks the two fields that can actually be absent in a blocking way).
-  if (!self.verified) {
-    logMatch(`${self.display_name} is not verified — stopping before candidates are even checked.`);
-    return res.json({ status: 'no_match', reason: 'verification_incomplete' });
-  }
-  if (safeParseArray(self.cause_tags).length === 0) {
-    logMatch(`${self.display_name} has no cause tags set — stopping before candidates are even checked.`);
-    return res.json({ status: 'no_match', reason: 'ineligible_data_incomplete' });
-  }
-
-  // DEMO SCOPED: booking a shift needs Deeds, checked here rather than the
-  // real hold-on-confirm/forfeit-on-no-show lifecycle in master prompt 1.6.
-  // Checked for both sides (booking is a two-person commitment) — a
-  // candidate short on Deeds is skipped like a failed hard filter, not
-  // matched and left unable to actually attend.
-  if (self.deeds_balance < 5) {
-    logMatch(`${self.display_name} has ${self.deeds_balance} Deed(s) — below the 5 needed to book a shift.`);
-    return res.json({ status: 'no_match', reason: 'insufficient_deeds' });
-  }
-
-  // Candidates: everyone else with a profile, minus anyone already in a
-  // confirmed pairing (their "slot" is taken).
-  const pairedUserIds = new Set();
-  for (const p of db.prepare(`SELECT user_a_id, user_b_id FROM pairings WHERE status = 'confirmed'`).all()) {
-    pairedUserIds.add(p.user_a_id);
-    pairedUserIds.add(p.user_b_id);
-  }
-  const candidates = db.prepare('SELECT * FROM users WHERE account_id != ?').all(req.account.id)
-    .filter((candidate) => !pairedUserIds.has(candidate.id));
-  logMatch(`Checking ${candidates.length} candidate(s): ${candidates.map((c) => c.display_name).join(', ') || '(none available)'}`);
-
-  // First hard-filter-and-alignment-passing candidate wins — the full
-  // spec's Step 3 soft ranking (which candidate scores highest) is skipped
-  // entirely, see backend/matching/engine.js's header comment.
-  for (const candidate of candidates) {
-    const hardFilters = hardFiltersPass(self, candidate);
-    if (!hardFilters.pass) {
-      logMatch(`  ${candidate.display_name}: rejected at hard filters (${hardFilters.reasons.join(', ')})`);
-      continue;
-    }
-    if (candidate.deeds_balance < 5) {
-      logMatch(`  ${candidate.display_name}: rejected — only has ${candidate.deeds_balance} Deed(s), needs 5 to book`);
-      continue;
-    }
-
-    let matchedShift = null;
-    for (const shift of DEMO_SHIFTS) {
-      const selfGate = passesShiftGate(self, shift);
-      const candidateGate = passesShiftGate(candidate, shift);
-      if (selfGate.pass && candidateGate.pass) {
-        matchedShift = { shift, selfGate, candidateGate };
-        break;
-      }
-    }
-
-    if (!matchedShift) {
-      logMatch(`  ${candidate.display_name}: passed hard filters, but no shift cleared alignment for both of you`);
-      continue;
-    }
-
-    const { shift, selfGate, candidateGate } = matchedShift;
-    const score = (selfGate.alignment.score + candidateGate.alignment.score) / 2;
-    const inserted = db.prepare(`
-      INSERT INTO pairings (user_a_id, user_b_id, shift_id, status, score)
-      VALUES (?, ?, ?, 'confirmed', ?)
-    `).run(self.id, candidate.id, shift.id, score);
-    const pairing = db.prepare('SELECT * FROM pairings WHERE rowid = ?').get(inserted.lastInsertRowid);
-    logMatch(`  ${candidate.display_name}: cleared "${shift.org.name}" (${shift.cause_tags.join(', ')}) on ${shift.date}, ${shift.time} at ${shift.location_label} — CONFIRMED`);
-    logMatch(`    your alignment: ${describeAlignment(selfGate)} | their alignment: ${describeAlignment(candidateGate)}`);
-    logMatch(`Result: ${self.display_name} paired with ${candidate.display_name} — combined score ${score.toFixed(2)} (${describeScore(score)}).`);
-    return res.json(buildMatchResponse(pairing, self.id));
-  }
-
-  logMatch(`Result: no compatible partner found for ${self.display_name}.`);
-  return res.json({ status: 'no_match', reason: 'no_compatible_partner_found' });
-});
-
-// DEMO SCOPED: cancels the user's active pairing so the match screen can
-// reset and matching can be re-run, and forfeits the caller's 5-Deed
-// booking cost. No notification to the other party, no reliability-
-// tracking consequences (§3.4/§5.3's real backout rules) — this is just
-// "make cancel-and-return-to-unmatched work with a Deeds cost," not the
-// real hold/forfeit lifecycle. Only the person backing out loses Deeds,
-// matching the real spec's "the person backed out on never eats the cost."
-app.post('/matching/cancel', requireAuth, requireProfile, (req, res) => {
-  const self = db.prepare('SELECT id, display_name, deeds_balance FROM users WHERE account_id = ?').get(req.account.id);
-  const pairing = db.prepare(`
-    SELECT * FROM pairings WHERE status = 'confirmed' AND (user_a_id = ? OR user_b_id = ?)
-  `).get(self.id, self.id);
-
-  if (!pairing) {
-    return res.status(404).json({ error: 'No active pairing to cancel.' });
-  }
-
-  db.prepare(`UPDATE pairings SET status = 'cancelled' WHERE id = ?`).run(pairing.id);
-  db.prepare('UPDATE users SET deeds_balance = deeds_balance - 5 WHERE id = ?').run(self.id);
-  const newBalance = self.deeds_balance - 5;
-  logMatch(`${self.display_name} backed out of their pairing (pairing ${pairing.id} cancelled, forfeited Deeds, balance now ${newBalance}).`);
-  res.json({ status: 'cancelled', deeds_balance: newBalance });
-});
-
-// D10 (badgeStore.js) — badge-presentation-surface, master prompt §3.2/3.3:
-// "each user sees a brief profile of their partner ... and verification
-// badge." Only the caller's OWN confirmed pairing's partner is ever
-// resolved — no arbitrary user id is accepted, so this can't be used to
-// probe anyone else's badge.
-//
-// Server-side gate: badgeService.verify() is the one function call that
-// checks signature validity, key status, badge status, AND recomputes the
-// claims digest against the partner's CURRENT profile — so a badge that's
-// gone stale between eager revocation events (the lazy-revocation window)
-// is caught here too, not just at the partner's own next verify(). A badge
-// that fails ANY of those is never serialized into the response; the
-// client sees exactly the same shape as a partner with no badge at all —
-// no verify-failure reason is leaked, same posture as document-check's
-// duplicate result not naming the other account.
-app.get('/matching/partner-badge', requireAuth, requireProfile, async (req, res) => {
-  const self = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
-  const pairing = db.prepare(`
-    SELECT * FROM pairings WHERE status = 'confirmed' AND (user_a_id = ? OR user_b_id = ?)
-  `).get(self.id, self.id);
-  if (!pairing) {
-    return res.status(404).json({ error: 'No confirmed pairing.' });
-  }
-  const partnerId = pairing.user_a_id === self.id ? pairing.user_b_id : pairing.user_a_id;
-
-  // D9 already enforces at most one valid badge per subject (issueSuperseding),
-  // so the first record is the only one that can exist.
-  const [validRecord] = await badgeStore.listValidBySubject(partnerId);
-  const signed = validRecord ? await badgeStore.getSigned(validRecord.badge_id) : undefined;
-  const verifyResult = signed ? await badgeService.verify(signed) : null;
-
-  if (!verifyResult?.ok) {
-    return res.json({ verified: false, badge: null });
-  }
-  res.json({ verified: true, badge: signed });
-});
-
-// DEMO SCOPED: no real payment processing — just increments the balance by
-// whatever pack was "bought." See schema.sql's deeds_balance comment.
-app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {
-  const amount = Number(req.body?.deeds);
-  if (!Number.isInteger(amount) || amount <= 0) {
-    return res.status(400).json({ error: 'deeds must be a positive integer.' });
-  }
-  db.prepare('UPDATE users SET deeds_balance = deeds_balance + ? WHERE account_id = ?').run(amount, req.account.id);
-  const user = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
-  res.status(200).json(user);
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Something went wrong on our side.' });
 });
 
 // Async startup: Recryption is ESM-only (see backend/recryption/keyStore.js
@@ -710,6 +514,7 @@ app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {
     badgeStore = badges.badgeStore;
     badgeKeyManager = badges.keyManager;
     badgeSigner = badges.signer;
+    services.set({ badgeService, badgeStore });
 
     // One-time upgrade of pre-module-3 verified users from the old
     // hand-signed badge format to real BadgeService badges (idempotent —
@@ -727,4 +532,19 @@ app.post('/deeds/purchase', requireAuth, requireProfile, (req, res) => {
     const ip = getLocalNetworkIp();
     console.log(`Backend running — reachable at http://${ip}:${port}`);
   });
+
+  // Time-based lifecycle transitions (proposal expiry, decision windows,
+  // waiting caps, starters, attendance) plus a matching pass. Routes that
+  // read lifecycle state also tick on demand; TICK_INTERVAL_MS=0 disables
+  // the background timer (the test suites drive time explicitly).
+  const tickMs = Number(process.env.TICK_INTERVAL_MS ?? 15000);
+  if (tickMs > 0) {
+    setInterval(() => {
+      try {
+        lifecycle.tick();
+      } catch (err) {
+        console.error('[lifecycle] tick failed:', err);
+      }
+    }, tickMs).unref();
+  }
 })();
