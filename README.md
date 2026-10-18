@@ -18,31 +18,53 @@ prototype cuts scope relative to the full design.
 
 ```
 backend/
-  index.js              Express app: all routes
+  index.js              Express app: auth, profile, verification routes; mounts routes/
   db/
-    schema.sql           Table definitions + inline design rationale
-    index.js              DB bootstrap + additive migrations
+    schema.sql           Table definitions + inline design notes
+    index.js              DB bootstrap + additive migrations (ensureColumns)
+  lib/                   Lifecycle logic behind the routes
+    lifecycle.js           Availability requests, proposals, confirm/decline, cancel/back-out,
+                           the backed-out-on partner's choice, shift day, tick()
+    matchingRunner.js      Runs matching over real requests/shifts (eligibility, cap, capacity, buddies)
+    deeds.js               Deeds ledger: mock purchases, holds, release/return/forfeit, revenue rows
+    premium.js             Trial, mock subscription, weekly grant, monthly cap, free late cancel
+    shifts.js              Orgs/shifts queries + the atomic capacity counter
+    chat.js / social.js    Chat intro + contact guard + starters; partner card, ratings, buddies, safety
+    reliability.js         Reliability signal and no-show escalation
+    metrics.js             User / org / platform aggregates
+    referrals.js           Referral codes, credit at ID verification
+    clock.js / time.js     App clock (dev offset) and platform-timezone helpers
+    rules.js               Product rule values (see the private spec for their rationale)
+  routes/
+    volunteer.js           Home, requests/waiting, pairings, chat, bookings, ratings, buddies,
+                           Deeds, Premium, referrals, safety, notifications, metrics
+    org.js                 Org profile, waiver upload, shift listings, roster/check-in, org metrics
+    admin.js               Admin page + routes (ADMIN_TOKEN) and dev-only clock routes
   matching/
     engine.js             Hard filters + alignment scoring (pure functions)
     adjacency.js           Cause-tag "close match" table
-    demoShifts.js           Hardcoded stand-in for a real shifts/orgs data model
   keys/                  Ed25519 badge-signing key (gitignored, generated on first run)
   recryption/            Recryption library integration (identity verification)
     keyStore.js            KeyManager wiring: registers the PEM key, ESM-interop loader
     hashStore.js            DuplicateDetector wiring: document_hashes table, pepper config
     badgeStore.js            BadgeService wiring: badges/signed_badges tables, D7-D9
     INTEGRATION.md           This app's own account of the Recryption API it relies on
-  seed-demo-users.js     Seeds demo accounts for testing matching
-  clear-demo-users.js    Removes seeded demo accounts
+  seed-demo-orgs.js      Seeds demo orgs + two weeks of shifts (clear-demo-orgs.js removes them)
+  seed-demo-users.js     Seeds demo volunteers (clear-demo-users.js removes them)
   test-recryption-*.js   Standalone test suites for the three Recryption modules
+  test-*.js              Lifecycle suites (journey, capacity, filters, Deeds, pairing flows,
+                         ratings/buddies) + test-helpers.js
 
 mobile/
-  App.js                 Screen router / onboarding state machine (no nav library)
-  screens/                One file per screen (onboarding, verification, settings, match, deeds)
+  App.js                 Screen router: onboarding state machine, then a small view stack (no nav library)
+  screens/                One file per screen (onboarding, verification, home, matching, pairing,
+                          chat, rating, buddies, Deeds/Premium, safety, metrics, org screens)
+  components/             Shared pieces (top bar, buttons, cards, partner card, dev clock bar)
+  api/client.js           fetch wrapper that surfaces the backend's error codes
   auth/                    Session token storage (Expo SecureStore) + API calls
-  verification/localChecks.js  On-device name/DOB/expiry checks before attestation
+  verification/            On-device checks before attestation; on-device badge verification
   onboarding/resume.js    Figures out which onboarding step to resume on
-  theme/                  Shared colors/styles
+  theme/                  Colors/styles lifted from plotline.html
 
 specs/                   plotline.html style reference (other specs are private — see Specs)
 ```
@@ -56,33 +78,71 @@ There are two onboarding flows (`CAUSE_FLOW` vs `ORG_FLOW`), chosen based on
 whether the user names a specific org or browses by cause. On every app
 launch, `GET /users/me` is used to compute which step to resume at
 (`onboarding/resume.js`), so users don't restart onboarding from scratch.
+After onboarding, `App.js` keeps a small stack of `{ name, params }`
+entries for the rest of the app (home, waiting, pairing, chat, …), still
+with no navigation library. Org logins (`GET /auth/me` → `kind: 'org'`) get
+the org screens instead of volunteer onboarding.
 
-The backend is a single `index.js` Express app talking to one SQLite file
-via `better-sqlite3` (synchronous, no ORM). There's no queue, cache, or
-external service — everything is a direct DB read/write per request.
+The home dashboard always shows the most urgent next step (a decision only
+the user can make comes first), and screens poll the backend — there is no
+push or websocket infrastructure. In-app notifications live in a
+`notifications` table the app reads.
+
+The backend is one Express app (`index.js` plus `routes/`) talking to one
+SQLite file via `better-sqlite3` (synchronous, no ORM). There's no queue,
+cache, or external service. Time-based transitions — proposal expiry,
+decision windows, waiting caps, conversation starters, attendance
+auto-resolution — plus a matching pass run in `lifecycle.tick()`, which
+fires on a timer and whenever a route reads lifecycle state. All lifecycle
+time goes through `lib/clock.js`, which supports a **dev-only** in-memory
+offset (`POST /dev/clock/advance`, and the "DEV CLOCK" bar in dev builds),
+so days-long waits and shift day can be walked through in minutes.
 
 The mobile app discovers the backend automatically: `config/api.js` reads
-the LAN IP Expo/Metro is already using and swaps in the backend's fixed
-port, so no manual IP configuration is needed on a given network.
+the LAN IP Expo/Metro is already using and swaps in the backend's port
+(3000, or `EXPO_PUBLIC_BACKEND_PORT`), so no manual IP configuration is
+needed on a given network.
 
 ## Data model
 
 Core tables (`backend/db/schema.sql`):
 
 - **`accounts`** — login only: email, bcrypt password hash, current session
-  token. Created at signup, before any profile exists.
-- **`users`** — the actual profile, one row per account (`account_id` is
-  unique). Holds everything onboarding collects (name, age, gender,
-  location, cause tags, partner preferences, availability, etc.) plus
-  fields that only get populated once later features exist: volunteer
-  history, reliability score, Deeds balance. `verified`/`verified_at`/
-  `verification_badge` are denormalized **display** flags only — the badge
-  lifecycle itself lives in `badges`/`signed_badges`, below. There is no
-  `doc_hmac` column; that was retired when duplicate-document state moved
-  to `document_hashes` (see Identity verification & security).
-- **`pairings`** — confirmed matches between two `users` rows, referencing
-  a `shift_id` that (for now) only resolves against the hardcoded demo
-  shift list, since there's no real shifts/orgs table yet.
+  token, and `kind` (`individual` or `org`). Created at signup, before any
+  profile exists.
+- **`users`** — the volunteer profile, one row per individual account.
+  Holds everything onboarding collects (name, age, gender, location, cause
+  tags, partner preferences, availability, etc.), volunteer history and
+  hours (updated at check-in), the reliability signal (never shown to other
+  users), Deeds bucket balances, Premium/referral/safety fields.
+  `verified`/`verified_at`/`verification_badge` are denormalized
+  **display** flags only — the badge lifecycle itself lives in
+  `badges`/`signed_badges`, below.
+- **`orgs`** / **`shifts`** — host organizations (verification flag,
+  waiver: uploaded file or platform default) and their shift listings.
+  `shifts.capacity_booked` is the live capacity counter: spots are only
+  ever taken by a single conditional `UPDATE`, and a `CHECK` constraint
+  makes overbooking impossible at the database level. Shifts of unverified
+  orgs are invisible to volunteers and to matching.
+- **`availability_requests`** — one "find me a partner" search (the
+  matching "slot"): window, distance, optional buddy request, status and
+  the latest honest no-match reason. A user has at most one open search.
+- **`bookings`** — a person's place on a shift (`paired` or `solo`), its
+  status through confirm → attended / no-show, and the Deeds hold.
+- **`pairings`** — two people proposed for, then confirmed on, one shift:
+  proposal expiry, who backed out, the backed-out-on partner's decision,
+  contact-sharing opt-ins.
+- **`deeds_ledger`** / **`deeds_holds`** / **`forfeiture_revenue`** — an
+  append-only ledger (every balance change is a row, in a `purchased` or
+  `free` bucket), the holds placed on confirm, and the org/platform revenue
+  realized when a hold is forfeited (aggregated per month for org
+  payouts). `premium_subscriptions` records mock subscriptions.
+- **`messages`**, **`notifications`**, **`reliability_events`**,
+  **`org_volunteer_ratings`**, **`volunteer_org_ratings`**,
+  **`partner_ratings`**, **`buddies`**, **`safety_reports`**,
+  **`platform_settings`** — chat, the in-app inbox, the reliability signal
+  inputs, the three kinds of rating, buddy pairs, reports for human review,
+  and the platform-controlled shift price.
 - **`signing_keys`** — the Ed25519 badge-signing key's lifecycle (`active` /
   `retired` / `revoked`), owned by Recryption's `KeyManager`.
 - **`document_hashes`** — one row per claimed document identity
@@ -97,10 +157,11 @@ Core tables (`backend/db/schema.sql`):
 
 Arrays (cause tags, interest tags, flagged users, volunteer history) are
 stored as JSON text columns, since SQLite has no native array type.
-`backend/db/index.js` runs `CREATE TABLE IF NOT EXISTS` plus a small set of
-additive `ALTER TABLE` migrations for columns added after the table
-already existed in someone's local `app.db` — including a `DROP COLUMN`
-that retires `users.doc_hmac` from pre-existing databases.
+`backend/db/index.js` runs `CREATE TABLE IF NOT EXISTS` plus additive
+migrations for columns added after a table already existed in someone's
+local `app.db` (`ensureColumns`), including retiring `users.doc_hmac`,
+relabeling pairings left over from the old hardcoded demo shifts, and
+turning any pre-ledger Deeds balance into an opening ledger entry.
 
 ## Auth
 
@@ -119,44 +180,52 @@ Email/password only, no third-party auth provider:
 
 ## Matching algorithm
 
-Implemented in `backend/matching/engine.js`, triggered by
-`POST /matching/run`. It's a deliberately reduced version of the full
-matching spec — kept in the private specs repo (see **Private repos**
-below) — with the engine file's header comment enumerating exactly what's
-skipped in this build. At a high level:
+The pure checks are in `backend/matching/engine.js`; `lib/matchingRunner.js`
+applies them to every open search against the real `orgs`/`shifts` tables.
+It's a reduced version of the full matching spec — kept in the private
+specs repo (see **Private repos** below). At a high level:
 
-**Hard filters** (`hardFiltersPass`, pure function, no DB access): a
-candidate pair is rejected outright on basic eligibility (age, verification
-status, mutual preference compatibility) or if either side has
-safety-flagged the other — safety flags override every other rule.
+**Hard filters:** a pair is never formed if it fails basic eligibility —
+adults only, ID-verified, mutual gender-preference compatibility — or if
+either person has filed a safety report about the other (this overrides
+everything, buddy status included), or either said after a past shift
+that they wouldn't volunteer together again. People who have hit their
+plan's monthly matched-shift cap, or whose matching is paused after repeat
+no-shows, are left out of the pool, with a distinct reason so the app can
+show the right next step.
 
-**Shift alignment** (`computeAlignment` / `passesShiftGate`): each
-candidate demo shift is scored for cause-tag and org-mission alignment
-against both users' profiles, with a hand-built adjacency table for
-"close enough" cause matches and an optional travel-radius check. The
-exact weighting and thresholds are part of the private spec, not
-reproduced here.
+**Shift alignment:** each candidate shift (verified orgs only) is scored for
+cause-tag and org-mission alignment against both people, with a
+hand-built adjacency table for "close enough" causes, plus the travel
+radius and the person's chosen dates. The exact weighting and thresholds
+are part of the private spec, not reproduced here.
 
-**Selection:** `POST /matching/run` walks all other users with a profile,
-skips anyone already in a confirmed pairing, and returns the first
-eligible candidate/shift pair rather than the best-ranked one — the full
-spec's soft-ranking step (interest overlap, proximity, reliability
-weighting, newcomer/veteran pairing) is not implemented in this
-prototype. A match is idempotent — re-running it returns the existing
-confirmed pairing rather than recomputing.
+**Capacity:** a proposal reserves its spots on the shift through the atomic
+capacity counter as it is created, so concurrent searches, solo RSVPs and
+matching runs in different processes can't overbook (each matching run is
+one `IMMEDIATE` SQLite transaction).
 
-**Deeds gate:** booking a shift costs an in-app currency
-(`users.deeds_balance`); both sides of a candidate pair need a minimum
-balance to be eligible. `POST /deeds/purchase` just increments the
-balance in this prototype — there's no real payment processing.
-`POST /matching/cancel` cancels the active pairing and forfeits the
-canceling user's spent Deeds (no notification to the other party, no
-reliability-score consequences — see schema.sql's comments for the full
-simplifications list).
+**Ordering:** fairness rather than score — the longest-waiting search is
+served first (rematches after a partner backed out come before everything
+else), and candidates are preferred in this order: a mutual buddy request,
+someone never paired with before, the longest waiter. Shifts are tried
+earliest first, except that a person's own private "not for me" rating of
+an org pushes that org's shifts to the back for them only. Plan tier is
+used only for the monthly cap check, never for ordering. The spec's
+weighted soft ranking is **not built** (see below).
 
-Because there's no real shifts/orgs data model yet, `matching/demoShifts.js`
-hardcodes a handful of demo shifts across the causes selectable in
-`CausesScreen.js` for testing.
+**Lifecycle:** a match is a *proposal*. Each person sees the exact shift
+and partner and confirms — Deeds are held only at that point — or
+declines. Back-outs, the backed-out-on partner's choice (new partner for
+the same shift, or Deeds back) and its decision window, rematching, solo
+RSVPs and the waiting-period cap with alternatives are in
+`lib/lifecycle.js`; the rules behind each come from the private spec.
+
+**Deeds and Premium:** `lib/deeds.js` and `lib/premium.js`. Purchases are
+mock (no payment processor, no card data). Holds draw free Deeds (Premium
+grants, referral credits) before purchased ones; forfeiture splits revenue
+between the org and the platform differently for purchased and free
+Deeds, per the spec.
 
 ## Identity verification & security
 
@@ -290,9 +359,44 @@ Tracked in [`CLAUDE.md`](CLAUDE.md):
   construction) — the original root cause in the old hand-rolled check was
   never diagnosed, since that code path no longer exists.
 - `AvailabilityScreen`'s resume pre-fill was once observed not showing
-  previously-entered values, but hasn't been reproduced — flagged for
-  the dedicated testing pass in the test plan (private specs repo)
-  rather than being chased ad hoc.
+  previously-entered values. Re-tested during the prototype build: the
+  resume routing and pre-fill logic were fine, but the screen saved and
+  displayed dates in UTC, so outside UTC a saved date could come back a day
+  off (or the calendar highlighted the day before). Fixed by handling dates
+  as local calendar days; not yet re-checked on a device.
+
+## Prototype scope: built vs not built
+
+Built (the individual journey end to end, plus minimal org accounts):
+signup → onboarding → ID verification → Deeds → availability → waiting
+period (honest status, alternatives, a capped wait) → proposal → confirm
+with Deeds hold → partner card with verified badge → chat (warm intro,
+contact sharing by mutual opt-in) → shift day (org check-in, no-shows,
+conversation starters) → ratings (org on two axes, org rates volunteer,
+partner) → buddies → next availability. Also back-outs and the
+backed-out-on partner's choice, solo RSVP, Premium (trial, mock
+subscription, weekly Deeds, monthly cap, buddy slots, a penalty-free late
+cancel), referrals, the reliability signal with escalation, safety
+reports, share my plans, and user/org/platform metrics.
+
+**Not built yet:**
+
+- The matching spec's weighted soft ranking (interest overlap, age band,
+  proximity, reliability weighting, newcomer/veteran and first-timer
+  adjustments) and its score-based tie-break — ordering is fairness-based.
+- Premium's advanced filters beyond a partner age range (hobbies/values,
+  badge tier).
+- Paid org tiers, billing, corporate CSR packages, org payouts as real
+  money movement, and the minors / institutional partnership line (all out
+  of the first prototype's scope).
+- Real payments of any kind — Deeds purchases and Premium are mock.
+- Push notifications (the app polls), real-time chat (polling), and an
+  org-side shift cancellation flow.
+- A real admin/staff tool: org verification and safety-report review are a
+  minimal page behind a shared `ADMIN_TOKEN`.
+- Everything listed under *Identity verification & security → Not built
+  at all*, including per-shift signed event tickets for check-in (org
+  check-in is a button on the roster).
 
 ## Running locally
 
@@ -304,9 +408,27 @@ verification, use:
 # Backend (from backend/)
 PORT=3050 node index.js
 
-# Metro (from mobile/)
-npx expo start --port 8090
+# Metro (from mobile/), pointing the app at that backend
+EXPO_PUBLIC_BACKEND_PORT=3050 npx expo start --port 8090
 ```
+
+Optional `backend/.env` settings: `ADMIN_TOKEN` enables the admin page at
+`/admin?admin_token=…` (org verification, safety reports, platform
+metrics); `TICK_INTERVAL_MS` changes the lifecycle timer (0 turns it off);
+`DEV_TOOLS=off` disables the dev clock routes (they are always off when
+`NODE_ENV=production`).
+
+Tests (from `backend/`, each starts its own server on port 3050):
+
+```bash
+node test-recryption-keymanager.js   # also: duplicates, badges, badge-reveal
+node test-journey.js                 # also: capacity, matching-filters, deeds,
+                                     #       pairing-flows, ratings-buddies
+```
+
+The lifecycle suites (`test-*.js` other than `test-recryption-*`) each use
+their own throwaway database file (`DB_PATH`), so matching runs never touch
+or pair with accounts in the shared dev database.
 
 ### Running on macOS
 
@@ -318,11 +440,15 @@ terminal). Each one loads Node via nvm (`nvm install 24`):
 | `setup-mac.command` | Clones + builds `../Recryption`, installs backend/mobile deps, creates `backend/data/` and `backend/.env` (fresh `DOC_PEPPER`) if missing. Re-runnable. |
 | `start-backend.command` | Backend on port 3000 (`PORT=3050 ...` to override) |
 | `start-mobile.command` | Metro for Expo Go on port 8081 (`METRO_PORT=8090 ...` to override) |
-| `seed-demo.command` | Runs `seed-demo-users.js` |
-| `clear-demo.command` | Runs `clear-demo-users.js` |
+| `seed-demo.command` | Runs `seed-demo-orgs.js` then `seed-demo-users.js` (pass `--searching` to open a search for each demo volunteer) |
+| `clear-demo.command` | Runs `clear-demo-users.js` then `clear-demo-orgs.js` |
 
-Demo data: `backend/seed-demo-users.js` seeds test accounts for exercising
-the matching engine end-to-end; `backend/clear-demo-users.js` removes them.
+Demo data: `seed-demo-orgs.js` adds demo orgs (`demo-org-N@example.com`,
+one deliberately unverified) with about two weeks of upcoming shifts;
+`seed-demo-users.js` adds verified demo volunteers (`demo-N@example.com`).
+All demo passwords are `demopassword123`. The clear scripts remove only
+those accounts and their rows, and refuse to run if a non-demo account is
+involved (e.g. has a booking on a demo shift).
 Don't delete other rows from the shared dev database — see
 [`CLAUDE.md`](CLAUDE.md)'s data-deletion policy.
 
