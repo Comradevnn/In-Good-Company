@@ -37,4 +37,15 @@ function tooMany(res, retryAfterSec) {
   return res.status(429).json({ code: 'rate_limited', error: 'Too many attempts. Please wait a few minutes and try again.' });
 }
 
-module.exports = { enabled, hit, exceeded, record, tooMany };
+// Per-account limit for a named action (e.g. 'chat_message'). `rule` is
+// { limit, windowMs } from rules.ABUSE_LIMITS. Counts every attempt, sends the
+// 429 itself and returns true when the caller should stop.
+function limitedFor(res, action, userId, rule) {
+  if (!enabled()) return false;
+  const result = hit(`${action}:${userId}`, rule.limit, rule.windowMs);
+  if (result.ok) return false;
+  tooMany(res, result.retryAfterSec);
+  return true;
+}
+
+module.exports = { enabled, hit, exceeded, record, tooMany, limitedFor };

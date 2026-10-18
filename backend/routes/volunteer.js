@@ -14,6 +14,7 @@ const chat = require('../lib/chat');
 const metrics = require('../lib/metrics');
 const reliability = require('../lib/reliability');
 const referrals = require('../lib/referrals');
+const rateLimit = require('../lib/rateLimit');
 const services = require('../lib/services');
 const { isBlockedPair } = require('../lib/blocks');
 const { requireAuth, requireProfile } = require('../lib/auth');
@@ -323,6 +324,7 @@ router.get('/pairings/:id/messages', volunteer, wrap((req, res) => {
 }));
 
 router.post('/pairings/:id/messages', volunteer, wrap((req, res) => {
+  if (rateLimit.limitedFor(res, 'chat_message', req.user.id, rules.ABUSE_LIMITS.chat_message)) return;
   const { pairing, side } = lifecycle.requirePairingMember(req.params.id, req.user.id);
   if (isBlockedPair(pairing.user_a_id, pairing.user_b_id)) {
     return res.status(403).json({ error: 'This chat is closed.', code: 'chat_blocked' });
@@ -331,7 +333,10 @@ router.post('/pairings/:id/messages', volunteer, wrap((req, res) => {
     return res.status(409).json({ error: 'Chat opens once you are both confirmed, and closes if the pairing is cancelled.', code: 'chat_closed' });
   }
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
-  if (!body || body.length > 1000) return res.status(400).json({ error: 'Messages must be 1-1000 characters.' });
+  if (!body) return res.status(400).json({ error: `Messages must be 1-${rules.CHAT_MESSAGE_MAX_CHARS} characters.`, code: 'message_empty' });
+  if (body.length > rules.CHAT_MESSAGE_MAX_CHARS) {
+    return res.status(400).json({ error: `Messages must be 1-${rules.CHAT_MESSAGE_MAX_CHARS} characters.`, code: 'message_too_long' });
+  }
   const bothOptedIn = pairing[`contact_share_${side.me}`] && pairing[`contact_share_${side.other}`];
   if (!bothOptedIn && chat.containsContactInfo(body)) {
     return res.status(422).json({
@@ -397,6 +402,7 @@ router.get('/deeds', volunteer, wrap((req, res) => {
 
 // Mock purchase — no payment processor, no card data.
 router.post('/deeds/purchase', volunteer, wrap((req, res) => {
+  if (rateLimit.limitedFor(res, 'deeds_purchase', req.user.id, rules.ABUSE_LIMITS.deeds_purchase)) return;
   deeds.purchase(req.user.id, Number(req.body?.deeds));
   const balances = deeds.balances(req.user.id);
   res.status(200).json({ deeds_balance: balances.available, balances });
@@ -415,6 +421,16 @@ router.get('/premium', volunteer, wrap((req, res) => {
 }));
 
 router.post('/premium/subscribe', volunteer, wrap((req, res) => {
+  if (rateLimit.limitedFor(res, 'premium_subscribe', req.user.id, rules.ABUSE_LIMITS.premium_subscribe)) return;
+  // A repeat subscribe (double tap, replayed request) must not stack another
+  // paid period: while a paid period is running or already booked, refuse.
+  // Subscribing again once it has ended is a normal renewal.
+  if (rules.PREMIUM_PLANS[req.body?.plan]) {
+    const booked = db.prepare('SELECT MAX(period_end) AS e FROM premium_subscriptions WHERE user_id = ?').get(req.user.id).e;
+    if (booked && clock.parseTime(booked) > clock.nowMs()) {
+      return res.status(409).json({ error: 'You already have a Premium subscription.', code: 'already_subscribed', period_end: booked });
+    }
+  }
   const result = premium.subscribe(req.user, req.body?.plan);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   premium.applyGrants(user);
@@ -437,6 +453,7 @@ router.post('/safety/notice/ack', volunteer, (req, res) => {
 });
 
 router.post('/safety/reports', volunteer, wrap((req, res) => {
+  if (rateLimit.limitedFor(res, 'safety_report', req.user.id, rules.ABUSE_LIMITS.safety_report)) return;
   res.status(201).json(social.submitReport(req.user, req.body ?? {}));
 }));
 

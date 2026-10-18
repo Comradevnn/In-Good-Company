@@ -78,4 +78,16 @@ module.exports = {
   // Proposed default, owner to confirm: how far ahead the nudge looks for
   // shifts that fit.
   RESURFACE_HORIZON_MS: 14 * DAY,
+
+  // Abuse-resistance limits, per account, sliding window (lib/rateLimit.js).
+  // Proposed default, owner to confirm: set well above normal use so ordinary
+  // people never see them; they only cap scripted bursts. Off when
+  // RATE_LIMIT=off (the test harness default).
+  CHAT_MESSAGE_MAX_CHARS: 1000,
+  ABUSE_LIMITS: {
+    chat_message: { limit: 60, windowMs: 60 * 1000 },
+    safety_report: { limit: 10, windowMs: HOUR },
+    deeds_purchase: { limit: 10, windowMs: HOUR },
+    premium_subscribe: { limit: 5, windowMs: HOUR },
+  },
 };
