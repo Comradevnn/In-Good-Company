@@ -17,6 +17,8 @@ prototype cuts scope relative to the full design.
 ## Repo layout
 
 ```
+docs/
+  DECISIONS.md           Owner product decisions not (yet) in the private specs
 backend/
   index.js              Express app: auth, profile, verification routes; mounts routes/
   db/
@@ -197,7 +199,8 @@ either person has filed a safety report about the other (this overrides
 everything, buddy status included), or either said after a past shift
 that they wouldn't volunteer together again. People who have hit their
 plan's monthly matched-shift cap, or whose matching is paused after repeat
-no-shows, are left out of the pool, with a distinct reason so the app can
+no-shows or open safety reports from two different past partners (until
+staff review it), are left out of the pool, with a distinct reason so the app can
 show the right next step.
 
 **Shift alignment:** each candidate shift (verified orgs only) is checked for
@@ -217,9 +220,12 @@ one `IMMEDIATE` SQLite transaction).
 can create a pairing. Each candidate (two people on one shift) gets a fit
 score from shared interests, how close their ages are, an experience mix
 that pairs someone new to a cause with someone experienced in it, how well
-the shift suits each person's causes and travel distance, and each
-person's own private "personal fit" ratings of past orgs and causes (these
-only tune that person's own matches). Reliability can only lower a score,
+the shift suits each person's causes and travel distance and how well run
+volunteers rate the org, each person's own private "personal fit" ratings
+of past orgs and causes (these only tune that person's own matches), and
+how orgs have rated each person's attendance and contribution, so highly
+rated volunteers tend to be paired together (nobody unrated counts as
+low). Reliability can only lower a score,
 and only on a record of late cancels or no-shows; someone with no history
 is not penalised. A volunteer with a habit of late cancels is ranked lower
 next to someone with no attended shifts, never blocked. Previous partners
@@ -235,6 +241,14 @@ weights in `backend/matching/config.js` are this prototype's own, untuned
 starting values; the private spec is the source of truth for the required
 behaviour. Each pairing stores its score and a breakdown that only the
 admin can see.
+
+**Match bar:** matching doesn't pair people the moment they search. A
+pairing forms only once its fit score reaches a bar that is high while the
+shift is far off and falls as it nears (and as the search uses up its
+time), so booking early gets a better match. People can choose "match me
+with anyone" instead — offered only when someone compatible is already
+searching on overlapping dates — which skips the bar. Owner decisions like
+this one are logged in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 **Lifecycle:** a match is a *proposal*. Each person sees the exact shift
 and partner and confirms — Deeds are held only at that point — or
@@ -406,9 +420,11 @@ reports, share my plans, and user/org/platform metrics.
 
 **Not built yet:**
 
-- Calibrated ranking weights: the soft ranking is built, but its weights
-  are untuned starting values. Matching also runs as soon as a search
-  starts (no batching window to gather a bigger pool).
+- Calibrated ranking weights: the soft ranking and match bar are built,
+  but the weights are untuned starting values.
+- Account deletion (a "close, don't erase" design is proposed in
+  `docs/DECISIONS.md`), and matching guarantees on planned dates beyond the
+  "anyone" option.
 - Premium's advanced filters beyond a partner age range (hobbies/values,
   badge tier).
 - Paid org tiers, billing, corporate CSR packages, org payouts as real
