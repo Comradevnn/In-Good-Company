@@ -16,6 +16,7 @@ const HARD_FILTER_REASONS = {
   UNVERIFIED: 'unverified',
   GENDER_PREF_MISMATCH: 'gender_pref_mismatch',
   SAFETY_FLAG: 'safety_flag',
+  SAME_USER: 'same_user',
 };
 
 // Step 1a. Named filters per this build's scope: age 18+, both verified,
@@ -29,7 +30,9 @@ const HARD_FILTER_REASONS = {
 function hardFiltersPass(userA, userB) {
   const reasons = [];
 
-  if (userA.age < 18 || userB.age < 18) reasons.push(HARD_FILTER_REASONS.UNDERAGE);
+  // Malformed input (the same person on both sides) is never a valid pair.
+  if (userA.id != null && userA.id === userB.id) reasons.push(HARD_FILTER_REASONS.SAME_USER);
+  if (userA.age == null || userB.age == null || userA.age < 18 || userB.age < 18) reasons.push(HARD_FILTER_REASONS.UNDERAGE);
   if (!userA.verified || !userB.verified) reasons.push(HARD_FILTER_REASONS.UNVERIFIED);
 
   const genderPrefOk =

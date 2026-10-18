@@ -428,9 +428,17 @@ Tests (from `backend/`, each starts its own server on port 3050):
 
 ```bash
 node test-recryption-keymanager.js   # also: duplicates, badges, badge-reveal
-node test-journey.js                 # also: capacity, matching-filters, deeds,
-                                     #       pairing-flows, ratings-buddies
+node test-journey.js                 # also: capacity, matching-filters, deeds, pairing-flows,
+                                     #       ratings-buddies, safety, authz, engine
 ```
+
+Or run every suite in sequence with a one-line result each:
+
+```bash
+npm test
+```
+
+From `mobile/`, the resume logic has a small `node --test onboarding/resume.test.mjs`.
 
 The lifecycle suites (`test-*.js` other than `test-recryption-*`) each use
 their own throwaway database file (`DB_PATH`), so matching runs never touch
