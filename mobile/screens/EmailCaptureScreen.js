@@ -24,6 +24,11 @@ export default function EmailCaptureScreen({ onSignedUp }) {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Org staff sign up through the same form; the account kind decides
+  // whether they land on volunteer onboarding or the org screens.
+  const [isOrg, setIsOrg] = useState(false);
+  const [showReferral, setShowReferral] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
 
   const emailValid = EMAIL_RE.test(email.trim());
   const isGmail = /@gmail\.com$/i.test(email.trim());
@@ -46,7 +51,12 @@ export default function EmailCaptureScreen({ onSignedUp }) {
         const signupResponse = await fetch(`${BACKEND_URL}/auth/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim(), password }),
+          body: JSON.stringify({
+            email: email.trim(),
+            password,
+            kind: isOrg ? 'org' : 'individual',
+            referral_code: !isOrg && referralCode.trim() ? referralCode.trim() : undefined,
+          }),
         });
         data = await signupResponse.json();
         if (!signupResponse.ok) {
@@ -113,6 +123,27 @@ export default function EmailCaptureScreen({ onSignedUp }) {
           />
         </View>
 
+        {!isOrg ? (
+          showReferral ? (
+            <View style={styles.field}>
+              <Text style={styles.label}>Referral code (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="From a friend"
+                placeholderTextColor={colors.inkSoft}
+                value={referralCode}
+                onChangeText={setReferralCode}
+                autoCapitalize="characters"
+              />
+            </View>
+          ) : (
+            <Text style={styles.altLink} onPress={() => setShowReferral(true)}>Have a referral code?</Text>
+          )
+        ) : null}
+        <Text style={styles.altLink} onPress={() => setIsOrg((v) => !v)}>
+          {isOrg ? '← Signing up to volunteer instead' : 'Signing up an organization? Tap here'}
+        </Text>
+
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </ScrollView>
 
@@ -134,6 +165,12 @@ export default function EmailCaptureScreen({ onSignedUp }) {
 }
 
 const styles = StyleSheet.create({
+  altLink: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: colors.mossDark,
+    marginTop: 18,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.surface,

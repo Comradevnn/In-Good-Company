@@ -1,7 +1,9 @@
 import Constants from 'expo-constants';
 
-// Matches backend/index.js's `process.env.PORT || 3000`.
-const BACKEND_PORT = 3000;
+// Matches backend/index.js's `process.env.PORT || 3000`. For a verification
+// run against a second backend (e.g. port 3050), start Metro with
+// EXPO_PUBLIC_BACKEND_PORT=3050 — Expo inlines EXPO_PUBLIC_* at bundle time.
+const BACKEND_PORT = Number(process.env.EXPO_PUBLIC_BACKEND_PORT) || 3000;
 
 // Expo Go/dev-client report the address they connected through as
 // `hostUri` (e.g. "192.168.1.42:8081", Metro's port). We reuse the IP

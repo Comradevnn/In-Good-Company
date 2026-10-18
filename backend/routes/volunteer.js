@@ -220,6 +220,7 @@ function pairingDetail(user, pairingId) {
   const hold = mine.hold_id ? db.prepare('SELECT * FROM deeds_holds WHERE id = ?').get(mine.hold_id) : null;
   const confirmedMine = mine.status === 'confirmed' && mine.kind === 'paired' && Boolean(mine.hold_id) && hold?.status === 'held';
   return {
+    now: clock.isoNow(),
     id: pairing.id,
     status: pairing.status,
     origin: pairing.origin,

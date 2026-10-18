@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFonts, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
@@ -20,9 +20,26 @@ import PartnerPrefsScreen from './screens/PartnerPrefsScreen';
 import AvailabilityScreen from './screens/AvailabilityScreen';
 import VerifyIdScreen from './screens/VerifyIdScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import MatchScreen from './screens/MatchScreen';
 import DeedsScreen from './screens/DeedsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import HomeScreen from './screens/HomeScreen';
+import StartMatchingScreen from './screens/StartMatchingScreen';
+import WaitingScreen from './screens/WaitingScreen';
+import PairingScreen from './screens/PairingScreen';
+import ChatScreen from './screens/ChatScreen';
+import CancelScreen from './screens/CancelScreen';
+import BailDecisionScreen from './screens/BailDecisionScreen';
+import BookingScreen from './screens/BookingScreen';
+import RatingScreen from './screens/RatingScreen';
+import BuddiesScreen from './screens/BuddiesScreen';
+import PremiumScreen from './screens/PremiumScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
+import MetricsScreen from './screens/MetricsScreen';
+import SafetyScreen from './screens/SafetyScreen';
+import OrgOnboardScreen from './screens/OrgOnboardScreen';
+import OrgHomeScreen from './screens/OrgHomeScreen';
+import OrgShiftFormScreen from './screens/OrgShiftFormScreen';
+import OrgRosterScreen from './screens/OrgRosterScreen';
 
 const EDIT_SECTION_TITLES = {
   quickProfile: 'Edit basic profile',
@@ -50,8 +67,15 @@ export default function App() {
   // the settings list itself, not editing anything).
   const [showSettings, setShowSettings] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
-  const [showMatch, setShowMatch] = useState(false);
   const [showDeeds, setShowDeeds] = useState(false);
+
+  // 'individual' | 'org', from GET /auth/me once a token exists.
+  const [accountKind, setAccountKind] = useState(undefined);
+  // Post-onboarding screens: a small stack of { name, params } instead of a
+  // navigation library — the same manual screen-swapping idea as onboarding.
+  const [stack, setStack] = useState([{ name: 'home', params: {} }]);
+  // Org side: null = still checking, false = no org row yet, true = set up.
+  const [orgReady, setOrgReady] = useState(null);
 
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
@@ -78,7 +102,26 @@ export default function App() {
   function loadResumeState() {
     if (!sessionToken) return;
     setResumeState(undefined);
-    fetch(`${BACKEND_URL}/users/me`, {
+    fetch(`${BACKEND_URL}/auth/me`, { headers: { Authorization: `Bearer ${sessionToken}` } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((me) => {
+        if (me?.kind === 'org') {
+          setAccountKind('org');
+          return loadOrgState().then(() => setResumeState('ready'));
+        }
+        setAccountKind('individual');
+        return loadVolunteerProfile();
+      })
+      .catch(() => setResumeState('error'));
+  }
+
+  function loadOrgState() {
+    return fetch(`${BACKEND_URL}/orgs/mine`, { headers: { Authorization: `Bearer ${sessionToken}` } })
+      .then((response) => setOrgReady(response.ok));
+  }
+
+  function loadVolunteerProfile() {
+    return fetch(`${BACKEND_URL}/users/me`, {
       headers: { Authorization: `Bearer ${sessionToken}` },
     })
       .then(async (response) => {
@@ -93,9 +136,43 @@ export default function App() {
         setFlow(resolvedFlow);
         setStepIndex(resolvedStep);
         setResumeState('ready');
-      })
-      .catch(() => setResumeState('error'));
+      });
   }
+
+  // Re-reads the profile row (e.g. after a search updated the saved
+  // availability) without resetting where the user is in the app.
+  const refreshProfile = useCallback(() => {
+    if (!sessionToken) return;
+    fetch(`${BACKEND_URL}/users/me`, { headers: { Authorization: `Bearer ${sessionToken}` } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => data && setProfile(data))
+      .catch(() => {});
+  }, [sessionToken]);
+
+  const handleHomeLoaded = useCallback((home) => {
+    setProfile((prev) => (prev && prev.deeds_balance !== home.deeds.available ? { ...prev, deeds_balance: home.deeds.available } : prev));
+  }, []);
+
+  // navigate(name, params, { replace, reset }). A few names map onto the
+  // existing full-screen flags (verification, Deeds, settings).
+  const navigate = useCallback((name, params = {}, options = {}) => {
+    if (name === 'verify') return setShowVerify(true);
+    if (name === 'deeds') return setShowDeeds(true);
+    if (name === 'settings') return setShowSettings(true);
+    if (name === 'startMatching') refreshProfile();
+    setShowVerify(false);
+    setShowDeeds(false);
+    setStack((prev) => {
+      const entry = { name, params };
+      if (options.reset || name === 'home') return [{ name: 'home', params: {} }];
+      if (options.replace) return [...prev.slice(0, -1), entry];
+      return [...prev, entry];
+    });
+  }, [refreshProfile]);
+
+  const goBack = useCallback(() => {
+    setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+  }, []);
 
   useEffect(() => {
     if (sessionToken) loadResumeState();
@@ -173,8 +250,10 @@ export default function App() {
     setShowSettings(false);
     setEditingSection(null);
     setShowVerify(false);
-    setShowMatch(false);
     setShowDeeds(false);
+    setStack([{ name: 'home', params: {} }]);
+    setAccountKind(undefined);
+    setOrgReady(null);
     setSessionToken(null);
   }
 
@@ -278,10 +357,9 @@ export default function App() {
         );
       case 'done':
       default:
-        // Placeholder — the real home screen doesn't exist yet. Verification
-        // hangs off here per the flow-placement decision: optional, never
-        // blocking onboarding ("required before first pairing, not before
-        // browsing" — enforcement wired when pairing exists).
+        // Verification hangs off here per the flow-placement decision:
+        // optional, never blocking onboarding ("required before first
+        // pairing, not before browsing" — matching enforces it).
         if (showVerify) {
           return (
             <VerifyIdScreen
@@ -295,15 +373,6 @@ export default function App() {
             />
           );
         }
-        if (showMatch) {
-          return (
-            <MatchScreen
-              sessionToken={sessionToken}
-              onBack={() => setShowMatch(false)}
-              onDeedsChange={handleDeedsChange}
-            />
-          );
-        }
         if (showDeeds) {
           return (
             <DeedsScreen
@@ -311,23 +380,101 @@ export default function App() {
               balance={profile?.deeds_balance}
               onBalanceChange={handleDeedsChange}
               onBack={() => setShowDeeds(false)}
+              onPremium={() => navigate('premium')}
             />
           );
         }
+        return renderAppView();
+    }
+  }
+
+  // The post-onboarding app: home dashboard plus everything reachable from it.
+  function renderAppView() {
+    const { name, params } = stack[stack.length - 1];
+    const common = { sessionToken, navigate, onBack: goBack };
+    switch (name) {
+      case 'startMatching':
+        return <StartMatchingScreen {...common} profile={profile} buddy={params.buddy} />;
+      case 'editAvailability':
+        return (
+          <AvailabilityScreen
+            sessionToken={sessionToken}
+            initialValues={profile}
+            title="When are you free next?"
+            onBack={goBack}
+            onNext={(updated) => {
+              if (updated) setProfile(updated);
+              goBack();
+            }}
+          />
+        );
+      case 'waiting':
+        return <WaitingScreen {...common} onProfileChanged={refreshProfile} />;
+      case 'pairing':
+        return <PairingScreen key={params.pairingId} {...common} pairingId={params.pairingId} />;
+      case 'chat':
+        return <ChatScreen {...common} pairingId={params.pairingId} />;
+      case 'cancel':
+        return <CancelScreen {...common} bookingId={params.bookingId} />;
+      case 'bail':
+        return <BailDecisionScreen {...common} pairingId={params.pairingId} />;
+      case 'booking':
+        return <BookingScreen key={params.bookingId} {...common} bookingId={params.bookingId} />;
+      case 'rating':
+        return <RatingScreen {...common} bookingId={params.bookingId} />;
+      case 'buddies':
+        return <BuddiesScreen {...common} />;
+      case 'premium':
+        return <PremiumScreen {...common} />;
+      case 'notifications':
+        return <NotificationsScreen {...common} />;
+      case 'metrics':
+        return <MetricsScreen {...common} />;
+      case 'safety':
+        return <SafetyScreen {...common} pairingId={params.pairingId} partnerName={params.partnerName} />;
+      case 'profile':
         return (
           <ProfileScreen
             profile={profile}
+            onBack={goBack}
             onVerify={() => setShowVerify(true)}
-            onFindMatch={() => setShowMatch(true)}
+            onFindMatch={() => navigate('startMatching')}
             onDeeds={() => setShowDeeds(true)}
             onSettings={() => setShowSettings(true)}
           />
         );
+      case 'home':
+      default:
+        return <HomeScreen sessionToken={sessionToken} navigate={navigate} onHomeLoaded={handleHomeLoaded} />;
+    }
+  }
+
+  // Org accounts get the org-side screens instead of volunteer onboarding.
+  function renderOrgApp() {
+    if (orgReady === null) {
+      return (
+        <View style={styles.loading}>
+          <ActivityIndicator />
+        </View>
+      );
+    }
+    if (!orgReady) {
+      return <OrgOnboardScreen sessionToken={sessionToken} onDone={() => setOrgReady(true)} onLogOut={handleLogOut} />;
+    }
+    const { name, params } = stack[stack.length - 1];
+    switch (name) {
+      case 'orgShiftForm':
+        return <OrgShiftFormScreen sessionToken={sessionToken} onBack={goBack} onDone={goBack} />;
+      case 'orgRoster':
+        return <OrgRosterScreen sessionToken={sessionToken} shiftId={params.shiftId} onBack={goBack} />;
+      default:
+        return <OrgHomeScreen sessionToken={sessionToken} navigate={navigate} onLogOut={handleLogOut} />;
     }
   }
 
   function renderApp() {
     if (!sessionToken) return <EmailCaptureScreen onSignedUp={setSessionToken} />;
+    if (accountKind === 'org') return renderOrgApp();
     if (showSettings) {
       if (editingSection) return renderEditingScreen();
       return (
@@ -349,7 +496,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text style={styles.debugBar}>{backendStatus}</Text>
-      {sessionToken && profile ? (
+      {sessionToken && profile && accountKind !== 'org' ? (
         <View style={styles.deedsBadge}>
           <Text style={styles.deedsBadgeText}>🪙 {profile.deeds_balance ?? 0}</Text>
         </View>

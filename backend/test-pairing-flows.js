@@ -126,6 +126,18 @@ async function main() {
     check('…and the spot is kept as solo (they can still go)', b3Booking.status === 'confirmed' && b3Booking.kind === 'solo');
     check('…and they are told', (await api('/notifications', { token: b3.token })).body.notifications.some((n) => n.kind === 'rematch_failed'));
 
+    // ── Rematch, then the user stops looking → same as "give it back" ──
+    const a3b = await h.makeVolunteer({ deeds: 5 });
+    const b3b = await h.makeVolunteer({ deeds: 5 });
+    const p3b = await pairOn(a3b, b3b);
+    await api(`/bookings/${bookingOf(p3b.pid, a3b.id).id}/cancel`, { method: 'POST', token: a3b.token, body: {} });
+    await api(`/pairings/${p3b.pid}/bail-decision`, { method: 'POST', token: b3b.token, body: { choice: 'rematch' } });
+    const waitingRematch = await requestOf(b3b);
+    check('a rematch search offers no solo-RSVP alternatives (they already have a spot)', waitingRematch.kind === 'rematch' && waitingRematch.alternatives.length === 0);
+    await api('/requests/current/cancel', { method: 'POST', token: b3b.token });
+    const b3bBooking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingOf(p3b.pid, b3b.id).id);
+    check('stopping a rematch search releases the Deeds and keeps the spot solo', (await balances(b3b)).held === 0 && b3bBooking.kind === 'solo' && b3bBooking.status === 'confirmed');
+
     // ── No answer within the decision window → safe default ──
     const a4 = await h.makeVolunteer({ deeds: 5 });
     const b4 = await h.makeVolunteer({ deeds: 5 });

@@ -1,10 +1,10 @@
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
+import OnboardingTopBar from '../components/OnboardingTopBar';
 
-// Home screen shown after onboarding/login, replacing the old "You're all
-// set" placeholder. Just displays what GET /users/me already returns — no
-// new backend logic, no dashboard widgets.
+// Profile summary, reachable from the home dashboard (HomeScreen). Just
+// displays what GET /users/me already returns.
 function parseJsonArray(json) {
   try {
     const parsed = JSON.parse(json);
@@ -23,12 +23,13 @@ function Field({ label, value }) {
   );
 }
 
-export default function ProfileScreen({ profile, onVerify, onFindMatch, onDeeds, onSettings }) {
+export default function ProfileScreen({ profile, onVerify, onFindMatch, onDeeds, onSettings, onBack }) {
   const causeTags = profile?.cause_tags ? parseJsonArray(profile.cause_tags) : [];
   const interestTags = profile?.interest_tags ? parseJsonArray(profile.interest_tags) : [];
 
   return (
     <View style={s.container}>
+      {onBack ? <OnboardingTopBar title="Your profile" onBack={onBack} /> : null}
       <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingTop: 30 }]}>
         <Text style={s.h2}>Hi, {profile?.display_name ?? 'there'}</Text>
         <Text style={[s.rationale, { marginBottom: 8 }]}>Your profile so far.</Text>
@@ -51,10 +52,10 @@ export default function ProfileScreen({ profile, onVerify, onFindMatch, onDeeds,
           <Text style={actionBtnText}>{profile?.verified ? 'Verification' : 'Verify your ID'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={actionBtn} onPress={onFindMatch}>
-          <Text style={actionBtnText}>Find a match (demo)</Text>
+          <Text style={actionBtnText}>Find a shift</Text>
         </TouchableOpacity>
         <TouchableOpacity style={actionBtn} onPress={onDeeds}>
-          <Text style={actionBtnText}>Deeds (demo)</Text>
+          <Text style={actionBtnText}>Deeds</Text>
         </TouchableOpacity>
         <Text style={settingsLink} onPress={onSettings}>
           Account settings

@@ -155,14 +155,20 @@ function submitRequest(user, body) {
   return requestId;
 }
 
-function cancelRequest(user) {
+const cancelRequest = db.transaction((user) => {
   const request = openRequest(user.id);
   if (!request) throw new LifecycleError('no_request', 'You are not being matched right now.', 404);
   if (request.status === 'proposed') {
     throw new LifecycleError('proposal_pending', 'You have a shift proposal waiting — decline it to stop looking.');
   }
   db.prepare("UPDATE availability_requests SET status = 'cancelled', ended_at = ? WHERE id = ?").run(nowIso(), request.id);
-}
+  // Stopping a rematch search (after a partner backed out) is the same as
+  // choosing "give me my Deeds back": released in full, spot kept solo.
+  if (request.kind === 'rematch' && request.anchor_booking_id) {
+    const booking = getBooking(request.anchor_booking_id);
+    if (booking?.status === 'confirmed') keepSpotSoloAfterRelease(booking, getShift(booking.shift_id), 'rematch_stopped');
+  }
+});
 
 // Adjusting a search (one of the waiting-period alternatives): widen the
 // radius, add a cause, or move the dates. Re-opens a search that already
@@ -857,12 +863,15 @@ function requestStatus(user) {
     reason: request.last_reason,
     headline: request.status === 'no_match'
       ? "We couldn't find a match this time"
-      : 'Looking for your volunteer partner and a spot nearby…',
+      : request.kind === 'rematch' ? 'Finding you a new partner for the same shift…'
+        : request.kind === 'solo_rsvp' ? "You're booked — still looking for a partner to join you…"
+          : 'Looking for your volunteer partner and a spot nearby…',
     detail: request.status === 'no_match'
       ? "We'd rather tell you honestly than rush a pairing that doesn't fit. Here are a few ways to make the next search faster."
       : STATUS_COPY[request.last_reason] ?? STATUS_COPY.searching,
     proposal_pairing_id: proposal?.id ?? null,
-    alternatives: request.status === 'proposed' ? [] : alternatives(user, request),
+    // Anchored searches (solo RSVP, rematch) already have their shift.
+    alternatives: request.status === 'proposed' || request.anchor_booking_id ? [] : alternatives(user, request),
   };
 }
 

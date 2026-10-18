@@ -1,26 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import { BACKEND_URL } from '../config/api';
+import { api } from '../api/client';
 
 // DEMO ONLY — no real payment processing (no Apple/Google Pay, no card
 // entry per plotline.html's payment screen). "Buy" calls POST
-// /deeds/purchase, which just increments backend/db/schema.sql's
-// deeds_balance column directly — a real balance now (needed since
-// /matching/run gates on it and back-out spends it), just not a real
-// purchase. Nothing here charges any money.
+// /deeds/purchase, a mock purchase recorded in the backend's Deeds ledger.
+// Nothing here charges any money. The screen also shows Deeds held for
+// upcoming shifts and the recent ledger history.
+const ENTRY_LABELS = {
+  purchase: 'Bought',
+  opening_balance: 'Starting balance',
+  premium_grant: 'Weekly Premium Deeds',
+  referral: 'Friend joined',
+  hold: 'Held for a shift',
+  release: 'Released back',
+  return: 'Returned — you showed up',
+  forfeit: 'Went to the org',
+};
 const PACKS = [
   { deeds: 5, price: 5 },
   { deeds: 25, price: 25 },
   { deeds: 50, price: 50 },
 ];
 
-export default function DeedsScreen({ sessionToken, balance, onBalanceChange, onBack }) {
+export default function DeedsScreen({ sessionToken, balance, onBalanceChange, onBack, onPremium }) {
   const [justPurchased, setJustPurchased] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState(null);
+  const [ledger, setLedger] = useState(null);
+
+  function loadLedger() {
+    api(sessionToken, '/deeds').then((data) => {
+      setLedger(data);
+      onBalanceChange?.(data.available);
+    }).catch(() => {});
+  }
+  useEffect(loadLedger, [sessionToken]);
 
   async function handlePurchase(pack) {
     setPurchasing(true);
@@ -34,6 +53,7 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not complete purchase.');
       onBalanceChange?.(data.deeds_balance);
+      loadLedger();
       setJustPurchased(pack);
       setTimeout(() => setJustPurchased(null), 1500);
     } catch (err) {
@@ -50,8 +70,8 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
         <Text style={s.eyebrow}>Demo only — no real payment</Text>
         <Text style={s.h2}>Your Deeds balance</Text>
         <Text style={s.rationale}>
-          Deeds books one matched shift. Tapping "Buy" adds to your real balance (used by
-          Find a match and Back out) — no money changes hands, nothing is actually charged.
+          Confirming a matched shift holds Deeds; show up and they come back. Tapping "Buy" adds
+          to your balance — no money changes hands, nothing is actually charged.
         </Text>
 
         <View style={balanceCard}>
@@ -60,6 +80,7 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
           {justPurchased ? (
             <Text style={purchasedNote}>+{justPurchased.deeds} added ✓</Text>
           ) : null}
+          {ledger?.held ? <Text style={heldNote}>{ledger.held} more held for upcoming shifts</Text> : null}
         </View>
 
         {error ? <Text style={s.errorText}>{error}</Text> : null}
@@ -81,6 +102,29 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
             </View>
           </TouchableOpacity>
         ))}
+
+        {onPremium ? (
+          <Text style={[s.label, { marginTop: 18, color: colors.mossDark }]} onPress={onPremium}>
+            Premium includes free Deeds every week ›
+          </Text>
+        ) : null}
+
+        {ledger?.history?.length ? (
+          <>
+            <Text style={[s.label, { marginTop: 22 }]}>Recent activity</Text>
+            {ledger.history.slice(0, 15).map((entry, i) => {
+              const delta = entry.available_delta;
+              return (
+                <View key={i} style={historyRow}>
+                  <Text style={historyLabel}>{ENTRY_LABELS[entry.entry_type] ?? entry.entry_type}</Text>
+                  <Text style={historyValue}>
+                    {entry.entry_type === 'forfeit' ? `−${-entry.held_delta}` : delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : '±0'}
+                  </Text>
+                </View>
+              );
+            })}
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -111,6 +155,29 @@ const purchasedNote = {
   fontSize: 12.5,
   color: '#7ECB9B',
   marginTop: 8,
+};
+const heldNote = {
+  fontFamily: 'Inter_500Medium',
+  fontSize: 12,
+  color: '#C9C6B8',
+  marginTop: 6,
+};
+const historyRow = {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingVertical: 8,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.line,
+};
+const historyLabel = {
+  fontFamily: 'Inter_400Regular',
+  fontSize: 13,
+  color: colors.ink,
+};
+const historyValue = {
+  fontFamily: 'IBMPlexMono_500Medium',
+  fontSize: 13,
+  color: colors.inkSoft,
 };
 const packRow = {
   flexDirection: 'row',

@@ -28,14 +28,13 @@ function introFor(partner, shift) {
   const occupation = partner.occupation?.trim();
   const experienced = safeParseArray(partner.cause_tags_experienced);
   const interests = safeParseArray(partner.interest_tags).slice(0, 2);
-  let sentence = occupation ? `${name} is ${article(occupation)} ${occupation.toLowerCase()}` : `${name}`;
-  sentence += experienced.length
-    ? ` who has volunteered in ${experienced.slice(0, 2).join(' and ').toLowerCase()} before`
-    : ' and this is one of their first shifts with us';
-  if (interests.length) sentence += `, and is into ${interests.join(' and ').toLowerCase()}`;
-  pieces.push(`${sentence}.`);
+  pieces.push(occupation ? `${name} is ${article(occupation)} ${occupation.toLowerCase()}.` : '');
+  pieces.push(experienced.length
+    ? `They've volunteered in ${experienced.slice(0, 2).join(' and ').toLowerCase()} before.`
+    : 'This is one of their first shifts with us.');
+  if (interests.length) pieces.push(`Outside of volunteering they're into ${interests.join(' and ').toLowerCase()}.`);
   if (partner.bio) pieces.push(`In their words: "${partner.bio}"`);
-  return pieces.join(' ');
+  return pieces.filter(Boolean).join(' ');
 }
 
 function sendIntros(pairing, shift, userA, userB) {
