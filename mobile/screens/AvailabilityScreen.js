@@ -15,19 +15,32 @@ import { patchProfile } from '../auth/api';
 // not plotline's recurring day-of-week/time-slot chip picker.
 const FREQUENCY_OPTIONS = ['Once a month', 'Twice a month', 'Three times a month', 'Weekly'];
 
+// Dates are calendar days in the user's own timezone. toISOString() (UTC)
+// shifted them by a day east of UTC on save, and new Date('YYYY-MM-DD')
+// (also UTC) made the picker highlight the previous day west of UTC — so a
+// returning user didn't see the dates they had entered.
 function formatDate(date) {
-  return date.toISOString().slice(0, 10);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDate(value) {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 export default function AvailabilityScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const today = new Date();
-  const inFiveDays = new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000);
+  // With only a start date saved (a partially-completed step), default the
+  // end relative to that start rather than to today, so it can't land before it.
+  const savedStart = initialValues?.availability_window_start ? parseDate(initialValues.availability_window_start) : null;
+  const inFiveDays = new Date((savedStart ?? today).getTime() + 5 * 24 * 60 * 60 * 1000);
 
   const [startDate, setStartDate] = useState(
-    initialValues?.availability_window_start ? new Date(initialValues.availability_window_start) : today
+    savedStart ?? today
   );
   const [endDate, setEndDate] = useState(
-    initialValues?.availability_window_end ? new Date(initialValues.availability_window_end) : inFiveDays
+    initialValues?.availability_window_end ? parseDate(initialValues.availability_window_end) : inFiveDays
   );
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
