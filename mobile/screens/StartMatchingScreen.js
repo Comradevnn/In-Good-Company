@@ -31,7 +31,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
 
   const start = profile?.availability_window_start;
   const end = profile?.availability_window_end;
-  const today = home ? home.now.slice(0, 10) : null;
+  const today = home ? home.today : null; // platform-local calendar day
   const datesStale = !start || !end || (today && end <= today);
 
   async function handleStart() {

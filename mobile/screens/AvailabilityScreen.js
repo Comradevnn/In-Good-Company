@@ -31,17 +31,20 @@ function parseDate(value) {
 
 export default function AvailabilityScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const DAY_MS = 24 * 60 * 60 * 1000;
   // With only a start date saved (a partially-completed step), default the
   // end relative to that start rather than to today, so it can't land before it.
   const savedStart = initialValues?.availability_window_start ? parseDate(initialValues.availability_window_start) : null;
-  const inFiveDays = new Date((savedStart ?? today).getTime() + 5 * 24 * 60 * 60 * 1000);
+  const savedEnd = initialValues?.availability_window_end ? parseDate(initialValues.availability_window_end) : null;
+  // Saved dates that have already passed aren't useful defaults: start from
+  // today instead, and say so.
+  const savedPassed = Boolean((savedStart && savedStart < today) || (savedEnd && savedEnd < today));
+  const startDefault = savedPassed ? today : savedStart ?? today;
+  const endDefault = savedPassed ? new Date(today.getTime() + 5 * DAY_MS) : savedEnd ?? new Date(startDefault.getTime() + 5 * DAY_MS);
 
-  const [startDate, setStartDate] = useState(
-    savedStart ?? today
-  );
-  const [endDate, setEndDate] = useState(
-    initialValues?.availability_window_end ? parseDate(initialValues.availability_window_end) : inFiveDays
-  );
+  const [startDate, setStartDate] = useState(startDefault);
+  const [endDate, setEndDate] = useState(endDefault);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [radius, setRadius] = useState(initialValues?.travel_radius_miles ?? 8);
@@ -56,6 +59,10 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
   async function handleContinue() {
     if (endDate < startDate) {
       setError('End date must be on or after the start date.');
+      return;
+    }
+    if (endDate < today) {
+      setError('Those dates have passed — pick new ones.');
       return;
     }
     setError(null);
@@ -82,8 +89,12 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
         {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>When can you go?</Text>
         <Text style={s.rationale}>
-          Pick the window you're free for your first shift — we'll do the matching from there.
+          Pick the window you're free for your {title ? 'next' : 'first'} shift — we'll do the matching from there.
         </Text>
+
+        {savedPassed ? (
+          <Text style={[s.rationale, { marginTop: 10, color: colors.mossDark }]}>Your saved dates have passed, so we've started from today.</Text>
+        ) : null}
 
         <View style={s.row}>
           <View style={[s.field, { flex: 1 }]}>
@@ -136,7 +147,7 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
           </View>
           <Slider
             minimumValue={1}
-            maximumValue={20}
+            maximumValue={Math.max(20, radius)}
             step={1}
             value={radius}
             onValueChange={setRadius}
@@ -146,7 +157,7 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
           />
           <View style={s.fitLabels}>
             <Text style={s.fitLabelText}>1 mi</Text>
-            <Text style={s.fitLabelText}>20 mi</Text>
+            <Text style={s.fitLabelText}>{Math.max(20, radius)} mi</Text>
           </View>
         </View>
 
@@ -170,7 +181,7 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
 
         {error ? <Text style={s.errorText}>{error}</Text> : null}
       </ScrollView>
-      <PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting} loading={submitting} />
+      <PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting || endDate < today} loading={submitting} />
     </View>
   );
 }

@@ -131,6 +131,9 @@ router.get('/me/home', volunteer, wrap((req, res) => {
   const m = metrics.userMetrics(user);
   res.json({
     now: clock.isoNow(),
+    // Calendar "today" in the platform timezone — dates the user picks are
+    // compared against this, never against the UTC date.
+    today: localDate(clock.now()),
     profile: { display_name: user.display_name, verified: Boolean(user.verified), referral_code: referrals.ensureCode(user) },
     deeds: { ...deeds.balances(user.id), shift_price: deeds.shiftPriceDeeds() },
     premium: { ...premium.state(user), cap: premium.capStatus(user), free_late_cancel_available: premium.freeLateCancelAvailable(user) },
