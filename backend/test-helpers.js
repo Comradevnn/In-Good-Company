@@ -11,7 +11,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const BASE = 'http://localhost:3050';
-const ADMIN_TOKEN = 'test-admin-token';
+const ADMIN_TOKEN = 'test-admin-token-1234';
 let dbFile = null;
 
 function useTempDb(name) {
@@ -34,10 +34,10 @@ function check(label, condition, detail) {
   }
 }
 
-async function startServer() {
+async function startServer(extraEnv = {}) {
   const server = spawn(process.execPath, ['index.js'], {
     cwd: __dirname,
-    env: { ...process.env, PORT: '3050', DB_PATH: dbFile, TICK_INTERVAL_MS: '0', ADMIN_TOKEN, MATCHING_LOG: 'off' },
+    env: { ...process.env, PORT: '3050', DB_PATH: dbFile, TICK_INTERVAL_MS: '0', ADMIN_TOKEN, MATCHING_LOG: 'off', RATE_LIMIT: 'off', ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -70,15 +70,15 @@ async function api(pathname, { method = 'GET', token, body, admin } = {}) {
 }
 
 async function serverNow() {
-  return Date.parse((await api('/dev/clock')).body.now);
+  return Date.parse((await api('/dev/clock', { admin: true })).body.now);
 }
 
 async function advance({ hours = 0, days = 0, minutes = 0, to } = {}) {
-  return (await api('/dev/clock/advance', { method: 'POST', body: to ? { to } : { hours, days, minutes } })).body;
+  return (await api('/dev/clock/advance', { method: 'POST', admin: true, body: to ? { to } : { hours, days, minutes } })).body;
 }
 
 async function tick() {
-  return (await api('/dev/tick', { method: 'POST' })).body;
+  return (await api('/dev/tick', { method: 'POST', admin: true })).body;
 }
 
 // YYYY-MM-DD in the platform timezone, offset from the server's "now".

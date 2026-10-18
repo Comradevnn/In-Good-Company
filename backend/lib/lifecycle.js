@@ -18,8 +18,10 @@ const chat = require('./chat');
 const { notify } = require('./notify');
 const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shifts');
 const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
-const { localDate, monthKey, endOfLocalDayMs, addDays } = require('./time');
+const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate } = require('./time');
+const { CAUSES } = require('./causes');
 const { haversineMiles, computeAlignment, safeParseArray } = require('../matching/engine');
+const { isBlockedPair } = require('./blocks');
 
 class LifecycleError extends Error {
   constructor(code, message, status = 409, extra = {}) {
@@ -64,12 +66,30 @@ const BLOCK_MESSAGES = {
   ineligible_data_incomplete: 'Finish your profile (at least two causes) before matching.',
   ineligible_age: 'In Good Company matches adults 18 and over.',
   matching_paused: 'Matching is paused on your account for now.',
-  account_review: 'Your account is under review, so matching is paused.',
+  account_review: 'A person on our team is reviewing your account, so matching is paused.',
   monthly_cap_reached: "You've reached this month's matched-shift limit for your plan.",
 };
 
 function validDate(value) {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+  return isRealDate(value);
+}
+
+// Shared by creating and adjusting a search: real, ordered dates, not in the
+// past, and far enough out that a shift can still meet the minimum lead
+// time. Returns when the search should stop.
+function validateWindow(windowStart, windowEnd, nowMs) {
+  if (!validDate(windowStart) || !validDate(windowEnd)) {
+    throw new LifecycleError('invalid_window', 'Pick the dates you are free (YYYY-MM-DD).', 400);
+  }
+  if (windowEnd < windowStart) throw new LifecycleError('invalid_window', 'End date must be on or after the start date.', 400);
+  if (windowEnd < localDate(new Date(nowMs))) throw new LifecycleError('window_in_past', 'Those dates have passed — pick new ones.', 400);
+  // The search stops at the waiting cap, or once no shift in the window can
+  // still meet the minimum lead time, whichever comes first.
+  const deadlineMs = Math.min(nowMs + rules.WAIT_CAP_MS, endOfLocalDayMs(windowEnd) - rules.MIN_LEAD_MS);
+  if (deadlineMs <= nowMs) {
+    throw new LifecycleError('window_too_soon', "We need at least a day's notice to set up a shift — pick dates a little further out.", 400);
+  }
+  return deadlineMs;
 }
 
 function activeBuddyIds(userId) {
@@ -93,14 +113,10 @@ const createRequest = db.transaction((user, body) => {
       { needed: price, available: balance.available });
   }
 
-  const today = localDate(clock.now());
+  const nowMs = clock.nowMs();
   const windowStart = body.window_start ?? user.availability_window_start;
   const windowEnd = body.window_end ?? user.availability_window_end;
-  if (!validDate(windowStart) || !validDate(windowEnd)) {
-    throw new LifecycleError('invalid_window', 'Pick the dates you are free (YYYY-MM-DD).', 400);
-  }
-  if (windowEnd < windowStart) throw new LifecycleError('invalid_window', 'End date must be on or after the start date.', 400);
-  if (windowEnd < today) throw new LifecycleError('window_in_past', 'Those dates have passed — pick new ones.', 400);
+  const deadlineMs = validateWindow(windowStart, windowEnd, nowMs);
 
   const radius = body.travel_radius_miles != null ? Number(body.travel_radius_miles) : (user.travel_radius_miles ?? 10);
   if (!Number.isFinite(radius) || radius <= 0 || radius > 100) {
@@ -121,16 +137,13 @@ const createRequest = db.transaction((user, body) => {
     if (premium.state(user).tier !== 'premium') {
       throw new LifecycleError('premium_required', 'Partner age filters are a Premium feature.', 403);
     }
-    ageMin = body.age_min != null ? Number(body.age_min) : null;
-    ageMax = body.age_max != null ? Number(body.age_max) : null;
-  }
-
-  // The search stops at the waiting cap, or once no shift in the window can
-  // still meet the minimum lead time, whichever comes first.
-  const nowMs = clock.nowMs();
-  const deadlineMs = Math.min(nowMs + rules.WAIT_CAP_MS, endOfLocalDayMs(windowEnd) - rules.MIN_LEAD_MS);
-  if (deadlineMs <= nowMs) {
-    throw new LifecycleError('window_too_soon', "We need at least a day's notice to set up a shift — pick dates a little further out.", 400);
+    const parseAge = (v) => (v == null || v === '' ? null : Number(v));
+    ageMin = parseAge(body.age_min);
+    ageMax = parseAge(body.age_max);
+    const okAge = (v) => v == null || (Number.isInteger(v) && v >= rules.MIN_AGE && v <= 99);
+    if (!okAge(ageMin) || !okAge(ageMax) || (ageMin != null && ageMax != null && ageMin > ageMax)) {
+      throw new LifecycleError('invalid_age_range', `Pick a partner age range between ${rules.MIN_AGE} and 99, lowest first.`, 400);
+    }
   }
 
   const requestId = id();
@@ -182,6 +195,8 @@ const adjustRequest = db.transaction((user, body) => {
     `).get(user.id);
   }
   if (!request || request.status === 'proposed') throw new LifecycleError('no_request', 'There is no search to adjust.', 404);
+  // Solo-RSVP and rematch searches are tied to one specific shift.
+  if (request.kind !== 'standard') throw new LifecycleError('not_adjustable', 'This search is for one specific shift and can’t be changed.', 409);
 
   const updates = {};
   if (body.travel_radius_miles != null) {
@@ -193,12 +208,13 @@ const adjustRequest = db.transaction((user, body) => {
   if (body.window_start || body.window_end) {
     const start = body.window_start ?? request.window_start;
     const end = body.window_end ?? request.window_end;
-    if (!validDate(start) || !validDate(end) || end < start) throw new LifecycleError('invalid_window', 'Pick a valid date range.', 400);
+    validateWindow(start, end, clock.nowMs());
     updates.window_start = start;
     updates.window_end = end;
     db.prepare('UPDATE users SET availability_window_start = ?, availability_window_end = ? WHERE id = ?').run(start, end, user.id);
   }
   if (body.add_cause) {
+    if (!CAUSES.includes(body.add_cause)) throw new LifecycleError('invalid_cause', 'That is not one of the causes we match on.', 400);
     const causes = safeParseArray(user.cause_tags);
     if (!causes.includes(body.add_cause)) {
       causes.push(body.add_cause);
@@ -208,10 +224,8 @@ const adjustRequest = db.transaction((user, body) => {
   if (body.drop_buddy) updates.buddy_user_id = null;
 
   const nowMs = clock.nowMs();
-  const windowEnd = updates.window_end ?? request.window_end;
-  const deadlineMs = Math.min(nowMs + rules.WAIT_CAP_MS, endOfLocalDayMs(windowEnd) - rules.MIN_LEAD_MS);
-  if (deadlineMs <= nowMs) throw new LifecycleError('window_too_soon', 'Pick dates a little further out.', 400);
-  updates.search_deadline = new Date(Math.max(deadlineMs, clock.parseTime(request.search_deadline))).toISOString();
+  const deadlineMs = validateWindow(updates.window_start ?? request.window_start, updates.window_end ?? request.window_end, nowMs);
+  updates.search_deadline = new Date(deadlineMs).toISOString();
   updates.status = 'searching';
   updates.last_reason = null;
   updates.ended_at = null;
@@ -415,21 +429,29 @@ function hoursUntil(iso) {
 }
 
 // What cancelling would cost, without doing it — shown to the user first.
-function cancelPreview(user, bookingId) {
+function cancelPreview(user, bookingId, { allowStarted = false } = {}) {
   const booking = getBooking(bookingId);
   if (!booking || booking.user_id !== user.id) throw new LifecycleError('not_found', 'Booking not found.', 404);
   if (booking.status !== 'confirmed') throw new LifecycleError('not_cancellable', 'This booking can no longer be cancelled.');
   const shift = getShift(booking.shift_id);
-  if (Date.parse(shift.starts_at) <= clock.nowMs()) throw new LifecycleError('shift_started', 'This shift has already started.');
+  // A safety cancellation (from a report) is allowed even mid-shift.
+  if (!allowStarted && Date.parse(shift.starts_at) <= clock.nowMs()) throw new LifecycleError('shift_started', 'This shift has already started.');
   const hours = hoursUntil(shift.starts_at);
   const price = booking.hold_id ? db.prepare('SELECT amount_purchased + amount_free AS n FROM deeds_holds WHERE id = ?').get(booking.hold_id).n : 0;
   const pairing = booking.pairing_id ? getPairing(booking.pairing_id) : null;
   const partnerName = pairing && ['confirmed', 'proposed'].includes(pairing.status)
     ? getUser(pairing.user_a_id === user.id ? pairing.user_b_id : pairing.user_a_id)?.display_name : null;
 
+  // Their partner backed out and they haven't been re-paired yet: cancelling
+  // is the same as choosing "give me my Deeds back" — never a cost to them.
+  const backedOutOn = pairing?.status === 'cancelled' && pairing.bail_user_id === user.id && booking.kind === 'paired' && Boolean(booking.hold_id);
+
   let type;
   let outcome;
-  if (booking.kind === 'solo' || !booking.hold_id) {
+  if (backedOutOn) {
+    type = 'partner_cancelled';
+    outcome = 'released';
+  } else if (booking.kind === 'solo' || !booking.hold_id) {
     type = 'solo';
     outcome = 'none';
   } else if (clock.nowMs() - clock.parseTime(booking.confirmed_at) <= rules.GRACE_WINDOW_MS) {
@@ -449,6 +471,7 @@ function cancelPreview(user, bookingId) {
     grace: `You're inside the grace window, so your ${price} Deeds go straight back to your balance.`,
     free_late: `This uses your one penalty-free late cancellation this month (Premium), so your ${price} Deeds are released.`,
     late: `You're past the grace window, so your ${price} Deeds held for this shift go to ${shift.org.name} and won't come back.`,
+    partner_cancelled: `Your partner already cancelled, so your ${price} Deeds go straight back to your balance — you never pay for their cancellation.`,
   };
   return {
     booking_id: booking.id,
@@ -463,15 +486,29 @@ function cancelPreview(user, bookingId) {
     partner_message: partnerName
       ? `${partnerName} will be told you can't make it and asked whether they'd like a new partner or their Deeds back — they never pay for your cancellation.`
       : null,
-    can_keep_spot_solo: booking.kind === 'paired' && Boolean(partnerName),
+    can_keep_spot_solo: booking.kind === 'paired' && (Boolean(partnerName) || backedOutOn),
   };
 }
 
 const cancelBooking = db.transaction((user, bookingId, { keepSpotSolo = false, reason = null } = {}) => {
-  const preview = cancelPreview(user, bookingId);
+  const preview = cancelPreview(user, bookingId, { allowStarted: reason === 'safety' });
   const booking = getBooking(bookingId);
   const shift = getShift(booking.shift_id);
   const now = nowIso();
+  if (preview.type === 'partner_cancelled' && reason !== 'safety') {
+    const pairing = getPairing(booking.pairing_id);
+    if (keepSpotSolo) keepSpotSoloAfterRelease(booking, shift, 'partner_backed_out');
+    else releaseAndCancel(booking, shift, 'partner_released', 'partner_backed_out');
+    if (!pairing.bail_choice) db.prepare("UPDATE pairings SET bail_choice = 'release' WHERE id = ?").run(pairing.id);
+    db.prepare(`
+      UPDATE availability_requests SET status = 'cancelled', ended_at = ? WHERE anchor_booking_id = ? AND status IN ('searching', 'proposed')
+    `).run(now, booking.id);
+    const open = db.prepare(`
+      SELECT * FROM pairings WHERE status = 'proposed' AND (booking_a_id = ? OR booking_b_id = ?)
+    `).get(booking.id, booking.id);
+    if (open) endProposal(open, 'declined', user.id, { keepLooking: false, skipBookingId: booking.id });
+    return preview;
+  }
   // Safety cancellations (from a report) never cost Deeds or reliability.
   const type = reason === 'safety' ? 'safety' : preview.type;
 
@@ -720,6 +757,7 @@ function tick() {
     SELECT p.* FROM pairings p JOIN shifts s ON s.id = p.shift_id
     WHERE p.status = 'confirmed' AND p.starters_sent < ? AND s.starts_at <= ? AND s.ends_at > ?
   `).all(rules.STARTERS_PER_SHIFT, now, now)) {
+    if (isBlockedPair(pairing.user_a_id, pairing.user_b_id)) continue;
     const shift = getShift(pairing.shift_id);
     const start = Date.parse(shift.starts_at);
     const step = (Date.parse(shift.ends_at) - start) / rules.STARTERS_PER_SHIFT;

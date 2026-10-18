@@ -15,6 +15,7 @@ const { notify } = require('./notify');
 const { getShift } = require('./shifts');
 const { safeParseArray } = require('../matching/engine');
 const { LifecycleError, getBooking, getPairing, getUser, cancelBooking } = require('./lifecycle');
+const { isBlockedPair } = require('./blocks');
 
 const RATING_LABELS = { 1: 'bad', 2: 'leaning bad', 3: 'neutral', 4: 'leaning good', 5: 'good' };
 
@@ -144,6 +145,7 @@ function maybeFormBuddy(pairingId) {
   const answers = db.prepare('SELECT * FROM partner_ratings WHERE pairing_id = ?').all(pairingId);
   if (answers.length < 2 || !answers.every((a) => a.volunteer_again === 1)) return null;
   const pairing = getPairing(pairingId);
+  if (isBlockedPair(pairing.user_a_id, pairing.user_b_id)) return null;
   const [low, high] = [pairing.user_a_id, pairing.user_b_id].sort();
   if (db.prepare("SELECT 1 FROM buddies WHERE status = 'active' AND user_low_id = ? AND user_high_id = ?").get(low, high)) return null;
   const userA = getUser(low);
@@ -211,6 +213,14 @@ const fileReport = db.transaction((user, body) => {
     reportedId = pairing.user_a_id === user.id ? pairing.user_b_id : pairing.user_a_id;
   }
   if (reportedId && !getUser(reportedId)) throw new LifecycleError('not_found', 'User not found.', 404);
+  // Without a pairing, a report about someone is only accepted if the two
+  // have been paired (or proposed) at some point — no flagging strangers by id.
+  if (reportedId && !pairing) {
+    const shared = db.prepare(`
+      SELECT 1 FROM pairings WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
+    `).get(user.id, reportedId, reportedId, user.id);
+    if (!shared) throw new LifecycleError('not_found', 'User not found.', 404);
+  }
   const reportId = require('node:crypto').randomBytes(16).toString('hex');
   db.prepare(`
     INSERT INTO safety_reports (id, reporter_user_id, reported_user_id, pairing_id, category, description, created_at)
@@ -232,6 +242,11 @@ const fileReport = db.transaction((user, body) => {
       UPDATE buddies SET status = 'ended', ended_at = ? WHERE status = 'active'
         AND ((user_low_id = ? AND user_high_id = ?) OR (user_low_id = ? AND user_high_id = ?))
     `).run(clock.isoNow(), user.id, reportedId, reportedId, user.id);
+    // Any contact-sharing opt-ins between them are withdrawn.
+    db.prepare(`
+      UPDATE pairings SET contact_share_a = 0, contact_share_b = 0
+      WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
+    `).run(user.id, reportedId, reportedId, user.id);
   }
   notify(user.id, 'report_received', 'We got your report', 'A person on our team will review it. Thank you for telling us.');
   return { report_id: reportId, reported_user_id: reportedId, pairing };
@@ -239,21 +254,30 @@ const fileReport = db.transaction((user, body) => {
 
 // Reporting a partner can also take the reporter out of the pairing, at no
 // Deeds or reliability cost. The partner is told only that they can't make it.
+// The report itself is always stored first; if taking the reporter out of
+// the pairing then fails, that is returned alongside the stored report
+// rather than as an error (a retry would file a duplicate report).
 function submitReport(user, body) {
   const { report_id, pairing } = fileReport(user, body);
   let cancelled = false;
+  let cancelError;
   if (body.cancel_pairing && pairing && ['confirmed', 'proposed'].includes(pairing.status)) {
-    const side = pairing.user_a_id === user.id ? 'a' : 'b';
-    const booking = getBooking(pairing[`booking_${side}_id`]);
-    if (booking?.status === 'confirmed') {
-      cancelSafely(user, booking);
-      cancelled = true;
-    } else if (pairing.status === 'proposed') {
-      require('./lifecycle').submitDecline(user, pairing.id, { keepLooking: true });
-      cancelled = true;
+    try {
+      const side = pairing.user_a_id === user.id ? 'a' : 'b';
+      const booking = getBooking(pairing[`booking_${side}_id`]);
+      if (booking?.status === 'confirmed') {
+        cancelSafely(user, booking);
+        cancelled = true;
+      } else if (pairing.status === 'proposed') {
+        require('./lifecycle').submitDecline(user, pairing.id, { keepLooking: true });
+        cancelled = true;
+      }
+    } catch (err) {
+      if (!(err instanceof LifecycleError)) throw err;
+      cancelError = err.message;
     }
   }
-  return { report_id, cancelled };
+  return { report_id, cancelled, ...(cancelError ? { cancel_error: cancelError } : {}) };
 }
 
 function cancelSafely(user, booking) {
@@ -283,6 +307,7 @@ function sharePlan(user, pairingId) {
 }
 
 module.exports = {
+  isBlockedPair,
   RATING_LABELS,
   partnerCard,
   ratingForm,

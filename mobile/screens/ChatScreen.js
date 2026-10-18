@@ -104,7 +104,7 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
           })}
         </View>
 
-        {share ? (
+        {share && writable ? (
           <TouchableOpacity style={[s.toggleRow, { marginTop: 18 }]} onPress={toggleContactShare}>
             <View style={{ flex: 1 }}>
               <Text style={s.toggleLabel}>Share contact details</Text>
@@ -136,7 +136,9 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
           </TouchableOpacity>
         </View>
       ) : pairing ? (
-        <Text style={[s.rationale, { textAlign: 'center', padding: 18 }]}>This chat is closed because the pairing was cancelled.</Text>
+        <Text style={[s.rationale, { textAlign: 'center', padding: 18 }]}>
+          {pairing.chat_closed_reason === 'pairing_ended' ? 'This chat is closed because the pairing was cancelled.' : 'This chat is closed.'}
+        </Text>
       ) : null}
     </KeyboardAvoidingView>
   );

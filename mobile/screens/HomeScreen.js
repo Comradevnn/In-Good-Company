@@ -146,7 +146,7 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
           tone="warn"
           title={home.matching_block.code === 'account_review' ? 'Your account is under review' : 'Matching is paused for now'}
           body={home.matching_block.code === 'account_review'
-            ? 'A person on our team is reviewing recent missed shifts. We will be in touch.'
+            ? 'A person on our team is reviewing your account, so matching is paused. We will be in touch.'
             : `You can look for new shifts again ${new Date(home.matching_block.until).toLocaleDateString()}.`}
         />
       ) : null}

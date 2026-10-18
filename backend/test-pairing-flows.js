@@ -173,6 +173,27 @@ async function main() {
     check('…and the partner still gets their choice', (await h.home(b6)).actions.some((a) => a.type === 'bail_decision'));
     check('…capacity unchanged (the solo spot is still used)', capacity(p6.shift.id) === 2);
 
+    // ── The backed-out-on person cancelling through the API never pays ──
+    for (const afterRematch of [false, true]) {
+      const a7 = await h.makeVolunteer({ deeds: 5 });
+      const b7 = await h.makeVolunteer({ deeds: 5 });
+      const p7 = await pairOn(a7, b7);
+      await h.advance({ hours: 2 });
+      await api(`/bookings/${bookingOf(p7.pid, a7.id).id}/cancel`, { method: 'POST', token: a7.token, body: {} });
+      if (afterRematch) await api(`/pairings/${p7.pid}/bail-decision`, { method: 'POST', token: b7.token, body: { choice: 'rematch' } });
+      const capBefore = capacity(p7.shift.id);
+      const capUsedBefore = (await api('/premium', { token: b7.token })).body.cap.used;
+      const b7Booking = bookingOf(p7.pid, b7.id).id;
+      const prev7 = await api(`/bookings/${b7Booking}/cancel-preview`, { token: b7.token });
+      const label = afterRematch ? 'after choosing rematch' : 'while deciding';
+      check(`backed-out-on partner cancelling ${label}: preview says released`, prev7.body.type === 'partner_cancelled' && prev7.body.deeds_outcome === 'released', prev7.body);
+      await api(`/bookings/${b7Booking}/cancel`, { method: 'POST', token: b7.token, body: {} });
+      check(`…their Deeds are released in full (${label})`, (await balances(b7)).held === 0 && (await balances(b7)).available >= 5);
+      check(`…no reliability mark (${label})`, db.prepare('SELECT COUNT(*) AS n FROM reliability_events WHERE user_id = ?').get(b7.id).n === 0);
+      check(`…the cap count does not go up (${label})`, (await api('/premium', { token: b7.token })).body.cap.used <= capUsedBefore);
+      check(`…and the spot is freed (${label})`, capacity(p7.shift.id) === capBefore - 1);
+    }
+
     // ── Solo RSVP, then paired onto that shift later ──
     isolate();
     const soloShift = await h.makeShift(org, { daysAhead: 4, capacity: 4 });

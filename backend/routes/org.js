@@ -16,7 +16,8 @@ const { zonedToUtc } = require('../lib/time');
 const { wrap } = require('./volunteer');
 
 const router = express.Router();
-const CAUSES = ['Food banks & shelters', 'Animal welfare', 'Environmental cleanups', 'Youth mentorship', 'Elder care', 'Community organizing'];
+const { CAUSES } = require('../lib/causes');
+const { isRealDate } = require('../lib/time');
 const UPLOAD_DIR = path.join(path.dirname(db.name), 'uploads', 'waivers');
 const WAIVER_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
 const MAX_WAIVER_BYTES = 5 * 1024 * 1024;
@@ -42,6 +43,26 @@ function cleanTags(tags) {
   return Array.isArray(tags) ? tags.filter((t) => CAUSES.includes(t)) : [];
 }
 
+// Optional text field: absent/null is fine; otherwise a string within max.
+function optionalText(body, field, max) {
+  const value = body[field];
+  if (value == null || value === '') return { value: null };
+  if (typeof value !== 'string' || value.trim().length > max) return { error: `${field} must be text of ${max} characters or fewer.` };
+  return { value: value.trim() };
+}
+
+function optionalCoordinate(body, field, min, max) {
+  const value = body[field];
+  if (value == null || value === '') return { value: null };
+  const num = Number(value);
+  if (typeof value === 'boolean' || !Number.isFinite(num) || num < min || num > max) return { error: `${field} must be a number between ${min} and ${max}.` };
+  return { value: num };
+}
+
+function firstError(...results) {
+  return results.find((r) => r.error)?.error ?? null;
+}
+
 // Creates the org row for an org-kind account (one org per account).
 router.post('/orgs', requireAuth, wrap((req, res) => {
   if (req.account.kind !== 'org') return res.status(403).json({ error: 'Sign up as an organization to create one.' });
@@ -51,15 +72,25 @@ router.post('/orgs', requireAuth, wrap((req, res) => {
   const body = req.body ?? {};
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) return res.status(400).json({ error: 'Organization name is required.' });
+  if (name.length > 100) return res.status(400).json({ error: 'Organization name must be 100 characters or fewer.' });
   const missionTags = cleanTags(body.mission_tags);
   if (missionTags.length === 0) return res.status(400).json({ error: 'Pick at least one cause your organization works on.' });
+  const description = optionalText(body, 'description', 500);
+  const website = optionalText(body, 'website', 200);
+  const registration = optionalText(body, 'registration_number', 40);
+  const locationLabel = optionalText(body, 'location_label', 100);
+  const lat = optionalCoordinate(body, 'location_lat', -90, 90);
+  const lng = optionalCoordinate(body, 'location_lng', -180, 180);
+  const invalid = firstError(description, website, registration, locationLabel, lat, lng);
+  if (invalid) return res.status(400).json({ error: invalid });
+  if (website.value && !/^https?:\/\/\S+$/i.test(website.value)) return res.status(400).json({ error: 'Website must start with http:// or https://.' });
   const id = crypto.randomBytes(16).toString('hex');
   db.prepare(`
     INSERT INTO orgs (id, account_id, name, description, website, registration_number, mission_tags, location_label,
       location_lat, location_lng, verified, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-  `).run(id, req.account.id, name, body.description ?? null, body.website ?? null, body.registration_number ?? null,
-    JSON.stringify(missionTags), body.location_label ?? null, body.location_lat ?? null, body.location_lng ?? null, clock.isoNow());
+  `).run(id, req.account.id, name, description.value, website.value, registration.value,
+    JSON.stringify(missionTags), locationLabel.value, lat.value, lng.value, clock.isoNow());
   res.status(201).json(orgView(db.prepare('SELECT * FROM orgs WHERE id = ?').get(id)));
 }));
 
@@ -103,9 +134,16 @@ router.post('/orgs/mine/shifts', orgAccount, wrap((req, res) => {
   const capacity = Number(body.capacity);
   const timeRe = /^([01]?\d|2[0-3]):([0-5]\d)$/;
   if (!title) return res.status(400).json({ error: 'Give the shift a title.' });
+  if (title.length > 100) return res.status(400).json({ error: 'Shift title must be 100 characters or fewer.' });
+  const description = optionalText(body, 'description', 1000);
+  const locationLabel = optionalText(body, 'location_label', 100);
+  const lat = optionalCoordinate(body, 'location_lat', -90, 90);
+  const lng = optionalCoordinate(body, 'location_lng', -180, 180);
+  const invalid = firstError(description, locationLabel, lat, lng);
+  if (invalid) return res.status(400).json({ error: invalid });
   if (causeTags.length === 0) return res.status(400).json({ error: 'Pick the cause area this shift maps to.' });
   if (!Number.isInteger(capacity) || capacity < 1 || capacity > 500) return res.status(400).json({ error: 'Capacity must be a whole number of volunteers.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') || !timeRe.test(body.start_time ?? '') || !timeRe.test(body.end_time ?? '')) {
+  if (!isRealDate(body.date) || !timeRe.test(body.start_time ?? '') || !timeRe.test(body.end_time ?? '')) {
     return res.status(400).json({ error: 'Date (YYYY-MM-DD) and start/end times (HH:MM) are required.' });
   }
   const [sh, sm] = body.start_time.split(':').map(Number);
@@ -119,8 +157,8 @@ router.post('/orgs/mine/shifts', orgAccount, wrap((req, res) => {
     INSERT INTO shifts (id, org_id, title, description, cause_tags, starts_at, ends_at, location_label, location_lat, location_lng,
       capacity_total, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.org.id, title, body.description ?? null, JSON.stringify(causeTags), startsAt.toISOString(), endsAt.toISOString(),
-    body.location_label ?? req.org.location_label, body.location_lat ?? req.org.location_lat, body.location_lng ?? req.org.location_lng,
+  `).run(id, req.org.id, title, description.value, JSON.stringify(causeTags), startsAt.toISOString(), endsAt.toISOString(),
+    locationLabel.value ?? req.org.location_label, lat.value ?? req.org.location_lat, lng.value ?? req.org.location_lng,
     capacity, clock.isoNow());
   lifecycle.tick();
   res.status(201).json(orgShifts(req.org.id).find((s) => s.id === id));
@@ -191,4 +229,4 @@ router.get('/orgs/mine/metrics', orgAccount, (req, res) => {
   res.json(metrics.orgMetrics(req.org.id));
 });
 
-module.exports = { router, CAUSES, parseArray };
+module.exports = { router, parseArray };

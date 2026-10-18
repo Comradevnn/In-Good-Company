@@ -7,13 +7,18 @@ const db = require('./db');
 const { makeDetector } = require('./recryption/hashStore');
 const { makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges } = require('./recryption/badgeStore');
 const { requireAuth, requireProfile } = require('./lib/auth');
+const rateLimit = require('./lib/rateLimit');
 const services = require('./lib/services');
 const clock = require('./lib/clock');
+const { ownProfile } = require('./lib/serialize');
+const { CAUSES } = require('./lib/causes');
+const { isRealDate } = require('./lib/time');
+const { containsContactInfo } = require('./lib/chat');
 const referrals = require('./lib/referrals');
 const lifecycle = require('./lib/lifecycle');
 const volunteerRoutes = require('./routes/volunteer');
 const orgRoutes = require('./routes/org');
-const { admin: adminRoutes, dev: devRoutes } = require('./routes/admin');
+const { admin: adminRoutes, dev: devRoutes, devToolsOn } = require('./routes/admin');
 
 const BCRYPT_ROUNDS = 10;
 
@@ -35,8 +40,10 @@ let badgeSigner = null;
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Waiver uploads arrive as base64 JSON (see routes/org.js), so allow a few MB.
-app.use(express.json({ limit: '8mb' }));
+// Waiver uploads arrive as base64 JSON (see routes/org.js), so that one
+// route accepts a few MB; everything else is capped small.
+app.use('/orgs/mine/waiver', express.json({ limit: '8mb' }));
+app.use(express.json({ limit: '100kb' }));
 
 function getLocalNetworkIp() {
   const interfaces = os.networkInterfaces();
@@ -62,6 +69,10 @@ app.get('/hello', (req, res) => {
 // The profile row comes later, from the quickProfile step. Returns a session
 // token the app stores on-device to stay logged in.
 app.post('/auth/signup', async (req, res) => {
+  if (rateLimit.enabled()) {
+    const limited = rateLimit.hit(`signup:${req.ip}`, 30, 60 * 60 * 1000);
+    if (!limited.ok) return rateLimit.tooMany(res, limited.retryAfterSec);
+  }
   const { email, password, kind = 'individual', referral_code } = req.body ?? {};
 
   const emailTrimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -101,13 +112,25 @@ app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body ?? {};
 
   const emailTrimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  // Failed attempts are limited per IP + email; all attempts, more loosely,
+  // per IP — enough to stop bcrypt brute force without bothering real users.
+  const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+  const failKey = `login-fail:${req.ip}:${emailTrimmed}`;
+  if (rateLimit.enabled()) {
+    const perIp = rateLimit.hit(`login:${req.ip}`, 100, LOGIN_WINDOW_MS);
+    if (!perIp.ok) return rateLimit.tooMany(res, perIp.retryAfterSec);
+    const retry = rateLimit.exceeded(failKey, 10, LOGIN_WINDOW_MS);
+    if (retry != null) return rateLimit.tooMany(res, retry);
+  }
   const account = db.prepare('SELECT id, email, kind, password_hash FROM accounts WHERE email = ?').get(emailTrimmed);
   if (!account) {
+    if (rateLimit.enabled()) rateLimit.record(failKey);
     return res.status(404).json({ error: 'No account with that email.' });
   }
 
   const passwordOk = typeof password === 'string' && await bcrypt.compare(password, account.password_hash);
   if (!passwordOk) {
+    if (rateLimit.enabled()) rateLimit.record(failKey);
     return res.status(401).json({ error: 'Incorrect password.' });
   }
 
@@ -115,6 +138,12 @@ app.post('/auth/login', async (req, res) => {
   db.prepare('UPDATE accounts SET session_token = ? WHERE id = ?').run(sessionToken, account.id);
 
   res.status(200).json({ account_id: account.id, email: account.email, kind: account.kind, session_token: sessionToken });
+});
+
+// Ends this session server-side (the app also forgets the token locally).
+app.post('/auth/logout', requireAuth, (req, res) => {
+  db.prepare('UPDATE accounts SET session_token = NULL WHERE id = ?').run(req.account.id);
+  res.json({ ok: true });
 });
 
 // Which kind of account the stored session belongs to, so the app can route
@@ -148,6 +177,30 @@ app.post('/users', requireAuth, async (req, res) => {
   }
   if (!gender || typeof gender !== 'string' || !gender.trim()) {
     return res.status(400).json({ error: 'gender is required' });
+  }
+  // Length limits keep partner cards and the chat intro readable.
+  const tooLong = (value, max) => value != null && (typeof value !== 'string' || value.trim().length > max);
+  if (first_name.trim().length > 40) return res.status(400).json({ error: 'First name must be 40 characters or fewer.' });
+  if (gender.trim().length > 40) return res.status(400).json({ error: 'Gender must be 40 characters or fewer.' });
+  if (tooLong(occupation, 80)) return res.status(400).json({ error: 'Occupation or school must be 80 characters or fewer.' });
+  if (tooLong(blurb, 300)) return res.status(400).json({ error: 'Your intro must be 300 characters or fewer.' });
+  if (tooLong(personal_values, 300)) return res.status(400).json({ error: 'Your values must be 300 characters or fewer.' });
+  if (hobbies != null) {
+    const tags = typeof hobbies === 'string' ? hobbies.split(',').map((t) => t.trim()).filter(Boolean) : null;
+    if (!tags || hobbies.length > 200 || tags.length > 5 || tags.some((t) => t.length > 30)) {
+      return res.status(400).json({ error: 'List up to 5 interests, each 30 characters or fewer.' });
+    }
+  }
+  // Occupation, interests and the intro are shown to proposed partners and
+  // pasted into the chat intro, so they can't carry contact details (the
+  // same rule chat enforces until both people opt in).
+  for (const value of [occupation, hobbies, blurb]) {
+    if (typeof value === 'string' && containsContactInfo(value)) {
+      return res.status(422).json({
+        error: "Please leave out phone numbers, emails and social handles — you can share them in chat once you've both opted in.",
+        code: 'contact_info_blocked',
+      });
+    }
   }
 
   const interestTags = typeof hobbies === 'string'
@@ -201,7 +254,7 @@ app.post('/users', requireAuth, async (req, res) => {
   }
 
   const user = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
-  res.status(existing ? 200 : 201).json(user);
+  res.status(existing ? 200 : 201).json(ownProfile(user));
 });
 
 // Returns the full current profile for the logged-in account, so the app can
@@ -212,13 +265,16 @@ app.get('/users/me', requireAuth, (req, res) => {
   if (!user) {
     return res.status(404).json({ error: 'No profile yet.' });
   }
-  res.status(200).json(user);
+  res.status(200).json(ownProfile(user));
 });
 
 // Onboarding steps 2-5+ (location, org-or-cause, causes, partner preferences,
 // availability) all save through here — each screen sends only the fields it
 // collects, and only those columns are updated. See specs/
 // volunteer-pairing-app-master-prompt.md section 3.1 for the full field list.
+// The options offered on mobile/screens/AvailabilityScreen.js.
+const VOLUNTEERING_FREQUENCIES = ['Once a month', 'Twice a month', 'Three times a month', 'Weekly'];
+
 const PATCHABLE_FIELDS = [
   'location_city',
   'location_lat',
@@ -241,10 +297,10 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
     if (!(field in body)) continue;
 
     if (field === 'cause_tags') {
-      if (!Array.isArray(body.cause_tags) || !body.cause_tags.every((tag) => typeof tag === 'string')) {
-        return res.status(400).json({ error: 'cause_tags must be an array of strings' });
+      if (!Array.isArray(body.cause_tags) || body.cause_tags.length > 12 || !body.cause_tags.every((tag) => CAUSES.includes(tag))) {
+        return res.status(400).json({ error: `cause_tags must be a list of causes from: ${CAUSES.join(', ')}` });
       }
-      updates.cause_tags = JSON.stringify(body.cause_tags);
+      updates.cause_tags = JSON.stringify([...new Set(body.cause_tags)]);
     } else if (field === 'gender_pref') {
       if (!['same_gender_only', 'any'].includes(body.gender_pref)) {
         return res.status(400).json({ error: "gender_pref must be 'same_gender_only' or 'any'" });
@@ -257,13 +313,37 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
       updates.seeking = body.seeking;
     } else if (field === 'location_lat' || field === 'location_lng' || field === 'travel_radius_miles') {
       const num = Number(body[field]);
-      if (body[field] !== null && Number.isNaN(num)) {
-        return res.status(400).json({ error: `${field} must be a number or null` });
+      const [min, max] = { location_lat: [-90, 90], location_lng: [-180, 180], travel_radius_miles: [1, 100] }[field];
+      if (body[field] !== null && (body[field] === '' || typeof body[field] === 'boolean' || !Number.isFinite(num) || num < min || num > max)) {
+        return res.status(400).json({ error: `${field} must be a number between ${min} and ${max}, or null` });
       }
       updates[field] = body[field] === null ? null : num;
+    } else if (field === 'volunteering_frequency') {
+      if (!VOLUNTEERING_FREQUENCIES.includes(body[field])) {
+        return res.status(400).json({ error: `volunteering_frequency must be one of: ${VOLUNTEERING_FREQUENCIES.join(', ')}` });
+      }
+      updates[field] = body[field];
+    } else if (field === 'availability_window_start' || field === 'availability_window_end') {
+      if (body[field] !== null && !isRealDate(body[field])) {
+        return res.status(400).json({ error: `${field} must be a real date (YYYY-MM-DD)` });
+      }
+      updates[field] = body[field];
+    } else if (field === 'location_city' || field === 'prospective_org_name') {
+      if (body[field] !== null && (typeof body[field] !== 'string' || body[field].trim().length > 80)) {
+        return res.status(400).json({ error: `${field} must be text of 80 characters or fewer` });
+      }
+      updates[field] = body[field] === null ? null : body[field].trim();
     } else {
       updates[field] = typeof body[field] === 'string' ? body[field].trim() : body[field];
     }
+  }
+
+  // A window, whether saved now or partly before, must run start → end.
+  const current = db.prepare('SELECT availability_window_start, availability_window_end FROM users WHERE account_id = ?').get(req.account.id);
+  const start = 'availability_window_start' in updates ? updates.availability_window_start : current.availability_window_start;
+  const end = 'availability_window_end' in updates ? updates.availability_window_end : current.availability_window_end;
+  if (('availability_window_start' in updates || 'availability_window_end' in updates) && start && end && end < start) {
+    return res.status(400).json({ error: 'The end date must be on or after the start date.' });
   }
 
   if (Object.keys(updates).length === 0) {
@@ -282,7 +362,7 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
     .run({ ...updates, account_id: req.account.id });
 
   const user = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
-  res.status(200).json(user);
+  res.status(200).json(ownProfile(user));
 });
 
 // ── Identity verification routes ──
@@ -478,7 +558,7 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
   referrals.creditOnVerification(user.id);
 
   const updated = db.prepare('SELECT * FROM users WHERE account_id = ?').get(req.account.id);
-  res.status(200).json(updated);
+  res.status(200).json(ownProfile(updated));
 });
 
 // ── Prototype lifecycle routes ──
@@ -492,6 +572,8 @@ app.use(adminRoutes);
 app.use(devRoutes);
 
 app.use((err, req, res, next) => {
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'The request body is not valid JSON.' });
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'That request is too large.' });
   console.error(err);
   if (res.headersSent) return next(err);
   res.status(500).json({ error: 'Something went wrong on our side.' });
@@ -531,6 +613,9 @@ app.use((err, req, res, next) => {
   app.listen(port, () => {
     const ip = getLocalNetworkIp();
     console.log(`Backend running — reachable at http://${ip}:${port}`);
+    if (devToolsOn()) {
+      console.warn('[dev] Dev clock routes (/dev/*) are enabled for signed-in users and the admin token. Set DEV_TOOLS=off or NODE_ENV=production to disable.');
+    }
   });
 
   // Time-based lifecycle transitions (proposal expiry, decision windows,

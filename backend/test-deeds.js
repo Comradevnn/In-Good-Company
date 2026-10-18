@@ -263,6 +263,22 @@ async function main() {
     await h.advance({ to: zonedToUtc(firstOfNext, 12).toISOString() });
     check('the penalty-free late cancel resets the next month', (await api('/premium', { token: pc.token })).body.free_late_cancel_available === true);
 
+    // ── Keeping the spot solo still uses up the penalty-free late cancel ──
+    const ks = await vol({ deeds: 25 });
+    await api('/premium/subscribe', { method: 'POST', token: ks.token, body: { plan: 'annual' } });
+    const k1 = await pairOn(ks, await vol({ deeds: 5 }), 3);
+    await h.advance({ hours: 2 });
+    const kp1 = await api(`/bookings/${myBooking(k1.pid, ks.id).id}/cancel-preview`, { token: ks.token });
+    await api(`/bookings/${myBooking(k1.pid, ks.id).id}/cancel`, { method: 'POST', token: ks.token, body: { keep_spot_solo: true } });
+    check('a Premium late cancel that keeps the spot solo is penalty-free', kp1.body.type === 'free_late');
+    const k2 = await pairOn(ks, await vol({ deeds: 5 }), 4);
+    await h.advance({ hours: 2 });
+    const kp2 = await api(`/bookings/${myBooking(k2.pid, ks.id).id}/cancel-preview`, { token: ks.token });
+    check('…and counts: the next late cancel that month forfeits', kp2.body.type === 'late' && kp2.body.deeds_outcome === 'forfeited', kp2.body);
+    // Month buckets use the platform's local calendar, not the UTC date.
+    check('an event at 01:00 UTC on the 1st belongs to the previous local month',
+      monthKey(new Date('2026-11-01T01:00:00Z')) === '2026-10' && monthKey(new Date('2026-11-01T09:00:00Z')) === '2026-11');
+
     // ── Ledger consistency for every user touched ──
     const bad2 = allUsers.map((u) => ({ email: u.email, audit: deedsLib.auditUser(u.id) })).filter((r) => !r.audit.ok);
     check(`ledger sums equal the balance columns for all ${allUsers.length} users`, bad2.length === 0, bad2);

@@ -66,13 +66,14 @@ function capStatus(user, atMs = clock.nowMs()) {
   return { cap: s.monthly_cap, used, pending: capPending(user.id), reached: used >= s.monthly_cap };
 }
 
+// Uses are counted from the reliability log (written for every penalty-free
+// late cancel, including ones where the user kept their spot to go solo),
+// bucketed by platform-local calendar month.
 function freeLateCancelAvailable(user, atMs = clock.nowMs()) {
   if (state(user, atMs).tier !== 'premium') return false;
-  const used = db.prepare(`
-    SELECT COUNT(*) AS n FROM bookings WHERE user_id = ? AND cancel_type = 'free_late' AND substr(cancelled_at, 1, 7) = ?
-  `).get(user.id, monthKey(new Date(atMs))).n;
-  // cancelled_at is stored UTC; month boundaries in the platform timezone can
-  // differ by a few hours from the UTC prefix — acceptable for a prototype.
+  const month = monthKey(new Date(atMs));
+  const used = db.prepare("SELECT created_at FROM reliability_events WHERE user_id = ? AND kind = 'free_late_cancel'")
+    .all(user.id).filter((row) => monthKey(new Date(clock.parseTime(row.created_at))) === month).length;
   return used < rules.PREMIUM_FREE_LATE_CANCELS_PER_MONTH;
 }
 

@@ -15,6 +15,7 @@ const metrics = require('../lib/metrics');
 const reliability = require('../lib/reliability');
 const referrals = require('../lib/referrals');
 const services = require('../lib/services');
+const { isBlockedPair } = require('../lib/blocks');
 const { requireAuth, requireProfile } = require('../lib/auth');
 const { getShift, visibleShifts, publicOrg } = require('../lib/shifts');
 const { localDate } = require('../lib/time');
@@ -253,7 +254,9 @@ function pairingDetail(user, pairingId) {
       : null,
     backed_out_by_me: pairing.backed_out_by === user.id,
     contact_share: { me: Boolean(pairing[`contact_share_${side.me}`]), partner: Boolean(pairing[`contact_share_${side.other}`]) },
-    chat_open: ['confirmed', 'completed'].includes(pairing.status),
+    chat_open: ['confirmed', 'completed'].includes(pairing.status) && !isBlockedPair(pairing.user_a_id, pairing.user_b_id),
+    chat_closed_reason: isBlockedPair(pairing.user_a_id, pairing.user_b_id) ? 'report'
+      : ['confirmed', 'completed'].includes(pairing.status) ? null : 'pairing_ended',
   };
 }
 
@@ -283,6 +286,9 @@ router.get('/pairings/:id/share-plan', volunteer, wrap((req, res) => {
 
 router.post('/pairings/:id/contact-share', volunteer, wrap((req, res) => {
   const { pairing, side } = lifecycle.requirePairingMember(req.params.id, req.user.id);
+  if (req.body?.opt_in && isBlockedPair(pairing.user_a_id, pairing.user_b_id)) {
+    return res.status(403).json({ error: 'Contact sharing is not available for this pairing.', code: 'chat_blocked' });
+  }
   db.prepare(`UPDATE pairings SET contact_share_${side.me} = ? WHERE id = ?`).run(req.body?.opt_in ? 1 : 0, pairing.id);
   const updated = lifecycle.getPairing(pairing.id);
   res.json({ me: Boolean(updated[`contact_share_${side.me}`]), partner: Boolean(updated[`contact_share_${side.other}`]) });
@@ -310,6 +316,9 @@ router.get('/pairings/:id/messages', volunteer, wrap((req, res) => {
 
 router.post('/pairings/:id/messages', volunteer, wrap((req, res) => {
   const { pairing, side } = lifecycle.requirePairingMember(req.params.id, req.user.id);
+  if (isBlockedPair(pairing.user_a_id, pairing.user_b_id)) {
+    return res.status(403).json({ error: 'This chat is closed.', code: 'chat_blocked' });
+  }
   if (!['confirmed', 'completed'].includes(pairing.status)) {
     return res.status(409).json({ error: 'Chat opens once you are both confirmed, and closes if the pairing is cancelled.', code: 'chat_closed' });
   }
@@ -381,8 +390,8 @@ router.get('/deeds', volunteer, wrap((req, res) => {
 // Mock purchase — no payment processor, no card data.
 router.post('/deeds/purchase', volunteer, wrap((req, res) => {
   deeds.purchase(req.user.id, Number(req.body?.deeds));
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  res.status(200).json({ ...user, balances: deeds.balances(user.id) });
+  const balances = deeds.balances(req.user.id);
+  res.status(200).json({ deeds_balance: balances.available, balances });
 }));
 
 router.get('/premium', volunteer, wrap((req, res) => {

@@ -17,7 +17,7 @@ async function main() {
   const { server } = await h.startServer();
   const db = require('./db');
   const pairingsBetween = (a, b) => db.prepare(`
-    SELECT COUNT(*) AS n FROM pairings WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
+    SELECT COUNT(*) AS n FROM pairings WHERE shift_id != 'past-shift' AND ((user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?))
   `).get(a.id, b.id, b.id, a.id).n;
   // A searching request written straight to the DB, for users the route
   // would (correctly) refuse — proves the engine itself also excludes them.
@@ -85,7 +85,11 @@ async function main() {
     const reported = await h.makeVolunteer({ name: 'Rex', deeds: 5 });
     const [low, high] = [reporter.id, reported.id].sort();
     db.prepare("INSERT INTO buddies (user_low_id, user_high_id, status, created_at) VALUES (?, ?, 'active', ?)").run(low, high, new Date().toISOString());
-    await api('/safety/reports', { method: 'POST', token: reporter.token, body: { category: 'made_me_uncomfortable', reported_user_id: reported.id } });
+    // A report by id needs a pairing the two once shared (a past, ended one here).
+    db.prepare(`INSERT INTO pairings (id, user_a_id, user_b_id, shift_id, status) VALUES (?, ?, ?, 'past-shift', 'completed')`)
+      .run(crypto.randomBytes(8).toString('hex'), reporter.id, reported.id);
+    const filed = await api('/safety/reports', { method: 'POST', token: reporter.token, body: { category: 'made_me_uncomfortable', reported_user_id: reported.id } });
+    check('the report about a past partner is accepted', filed.status === 201, filed.body);
     db.prepare("UPDATE buddies SET status = 'active' WHERE user_low_id = ? AND user_high_id = ?").run(low, high); // even if still buddies
     await h.startLooking(reporter, { extra: { buddy_user_id: reported.id } });
     await h.startLooking(reported, { extra: { buddy_user_id: reporter.id } });

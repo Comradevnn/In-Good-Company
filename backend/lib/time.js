@@ -24,6 +24,15 @@ function zonedToUtc(ymd, hour, minute = 0, tz = PLATFORM_TIMEZONE) {
   return new Date(guess - tzOffsetMs(new Date(guess), tz));
 }
 
+// True only for a real calendar day in YYYY-MM-DD form (no Feb 31, no
+// month 13): the parts must survive a round trip through Date.UTC.
+function isRealDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
 function localDate(date, tz = PLATFORM_TIMEZONE) {
   const p = parts(date, tz);
   return `${p.year}-${p.month}-${p.day}`;
@@ -56,4 +65,4 @@ function weekdayName(startsAt, tz = PLATFORM_TIMEZONE) {
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(new Date(startsAt));
 }
 
-module.exports = { zonedToUtc, localDate, monthKey, addDays, endOfLocalDayMs, formatShiftWhen, weekdayName };
+module.exports = { isRealDate, zonedToUtc, localDate, monthKey, addDays, endOfLocalDayMs, formatShiftWhen, weekdayName };

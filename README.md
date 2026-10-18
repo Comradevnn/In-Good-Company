@@ -412,11 +412,15 @@ PORT=3050 node index.js
 EXPO_PUBLIC_BACKEND_PORT=3050 npx expo start --port 8090
 ```
 
-Optional `backend/.env` settings: `ADMIN_TOKEN` enables the admin page at
-`/admin?admin_token=…` (org verification, safety reports, platform
-metrics); `TICK_INTERVAL_MS` changes the lifecycle timer (0 turns it off);
-`DEV_TOOLS=off` disables the dev clock routes (they are always off when
-`NODE_ENV=production`).
+Optional `backend/.env` settings: `ADMIN_TOKEN` (at least 12 characters)
+enables the admin page at `/admin` (org verification, safety reports and
+pausing a user's matching, platform metrics); paste the token into the page,
+which sends it as the `X-Admin-Token` header (it is never accepted in the
+URL). `TICK_INTERVAL_MS` changes the lifecycle timer (0 turns it off).
+The dev clock routes (`/dev/*`) need a signed-in session or the admin token;
+`DEV_TOOLS=off` disables them (they are always off when
+`NODE_ENV=production`). Login and signup are rate-limited in memory
+(`RATE_LIMIT=off` disables it).
 
 Tests (from `backend/`, each starts its own server on port 3050):
 

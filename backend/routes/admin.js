@@ -7,8 +7,9 @@ const clock = require('../lib/clock');
 const deeds = require('../lib/deeds');
 const lifecycle = require('../lib/lifecycle');
 const metrics = require('../lib/metrics');
-const { requireAdmin } = require('../lib/auth');
+const { requireAdmin, adminTokenValid, accountForRequest } = require('../lib/auth');
 const { publicOrg } = require('../lib/shifts');
+const { notify } = require('../lib/notify');
 const { wrap } = require('./volunteer');
 
 const admin = express.Router();
@@ -49,7 +50,18 @@ admin.post('/admin/safety-reports/:id/review', requireAdmin, (req, res) => {
 });
 
 admin.post('/admin/users/:id/clear-review', requireAdmin, (req, res) => {
-  db.prepare('UPDATE users SET account_review = 0, matching_paused_until = NULL WHERE id = ?').run(req.params.id);
+  const result = db.prepare('UPDATE users SET account_review = 0, matching_paused_until = NULL WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  res.json({ ok: true });
+});
+
+// Staff pause a user's matching while a safety report is reviewed. The
+// user is told neutrally; nothing says who reported them or why.
+admin.post('/admin/users/:id/suspend', requireAdmin, (req, res) => {
+  const result = db.prepare('UPDATE users SET account_review = 1 WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  notify(req.params.id, 'account_review', 'Your account is under review',
+    'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
   res.json({ ok: true });
 });
 
@@ -65,6 +77,7 @@ admin.post('/admin/settings/shift-price', requireAdmin, (req, res) => {
 });
 
 admin.get('/admin', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.type('html').send(ADMIN_PAGE);
 });
 
@@ -72,11 +85,18 @@ admin.get('/admin', (req, res) => {
 // period, grace windows, shift day and trial without waiting days. In-memory
 // for this process only. Disabled when NODE_ENV=production or DEV_TOOLS=off.
 const dev = express.Router();
+// Signed-in users (the app's DEV CLOCK bar) or the admin token only — the
+// server listens on the LAN, and moving the clock moves it for everyone.
 function devEnabled(req, res, next) {
-  if (process.env.NODE_ENV === 'production' || process.env.DEV_TOOLS === 'off') {
-    return res.status(404).json({ error: 'Not found.' });
+  if (!devToolsOn()) return res.status(404).json({ error: 'Not found.' });
+  if (!accountForRequest(req) && !adminTokenValid(req.headers['x-admin-token'])) {
+    return res.status(401).json({ error: 'Sign in (or send the admin token) to use dev tools.' });
   }
   next();
+}
+
+function devToolsOn() {
+  return process.env.NODE_ENV !== 'production' && process.env.DEV_TOOLS !== 'off';
 }
 
 dev.get('/dev/clock', devEnabled, (req, res) => {
@@ -119,13 +139,11 @@ const ADMIN_PAGE = `<!doctype html>
   input{border:1.5px solid #D7CEBB;border-radius:10px;padding:8px 10px;}
 </style></head><body>
 <h1>In Good Company — admin</h1>
-<p class="muted">Token: <input id="token" placeholder="ADMIN_TOKEN"> <button onclick="load()">Load</button></p>
+<p class="muted">Token: <input id="token" type="password" placeholder="Paste ADMIN_TOKEN" autocomplete="off"> <button onclick="load()">Load</button></p>
 <h2>Organizations</h2><div id="orgs"></div>
 <h2>Safety reports</h2><div id="reports"></div>
 <h2>Platform metrics</h2><pre id="metrics" class="card"></pre>
 <script>
-const params = new URLSearchParams(location.search);
-document.getElementById('token').value = params.get('admin_token') || '';
 const h = () => ({ 'Content-Type': 'application/json', 'X-Admin-Token': document.getElementById('token').value });
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function load() {
@@ -136,14 +154,19 @@ async function load() {
     '<button onclick="verify(\\'' + o.id + '\\',' + !o.verified + ')">' + (o.verified ? 'Unverify' : 'Verify') + '</button></div>').join('') || esc(orgs.error);
   const reports = await (await fetch('/admin/safety-reports', { headers: h() })).json();
   document.getElementById('reports').innerHTML = (reports.reports || []).map((r) => '<div class="card"><b>' + esc(r.category) + '</b> · ' + esc(r.status) +
-    '<div class="muted">' + esc(r.reporter_name) + ' reported ' + esc(r.reported_name || '—') + ' · ' + esc(r.created_at) + '</div><p>' + esc(r.description) + '</p>' +
-    (r.status === 'open' ? '<button onclick="review(\\'' + r.id + '\\')">Mark reviewed</button>' : '') + '</div>').join('') || '<p class="muted">No reports.</p>';
+    '<div class="muted">' + esc(r.reporter_name) + ' (' + esc(r.reporter_user_id) + ') reported ' + esc(r.reported_name || '—') + ' (' + esc(r.reported_user_id || '—') + ') · ' + esc(r.created_at) + '</div><p>' + esc(r.description) + '</p>' +
+    (r.status === 'open' ? '<textarea id="note-' + r.id + '" rows="2" placeholder="Review note" style="width:100%;border:1.5px solid #D7CEBB;border-radius:10px;padding:8px;"></textarea><p><button onclick="review(\\'' + r.id + '\\')">Mark reviewed</button></p>' : '<p class="muted">Note: ' + esc(r.reviewer_note || '—') + '</p>') +
+    (r.reported_user_id ? '<p><button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'suspend\\')">Pause this user\\'s matching</button> <button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'clear-review\\')">Clear review</button></p>' : '') +
+    '</div>').join('') || '<p class="muted">No reports.</p>';
   const m = await (await fetch('/admin/metrics', { headers: h() })).json();
   document.getElementById('metrics').textContent = JSON.stringify(m, null, 2);
 }
 async function verify(id, verified) { await fetch('/admin/orgs/' + id + '/verify', { method: 'POST', headers: h(), body: JSON.stringify({ verified }) }); load(); }
-async function review(id) { await fetch('/admin/safety-reports/' + id + '/review', { method: 'POST', headers: h(), body: JSON.stringify({ note: 'reviewed' }) }); load(); }
-if (document.getElementById('token').value) load();
+async function review(id) {
+  const note = (document.getElementById('note-' + id) || {}).value || '';
+  await fetch('/admin/safety-reports/' + id + '/review', { method: 'POST', headers: h(), body: JSON.stringify({ note }) }); load();
+}
+async function userAction(id, action) { await fetch('/admin/users/' + id + '/' + action, { method: 'POST', headers: h() }); load(); }
 </script></body></html>`;
 
-module.exports = { admin, dev };
+module.exports = { admin, dev, devToolsOn };

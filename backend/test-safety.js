@@ -1,0 +1,102 @@
+// Safety follow-through after a report: chat closes for the pair (confirmed
+// and completed pairings), contact sharing can't be switched on, no
+// conversation starters, "take me out" works even after the shift started,
+// a report blocks a buddyship from forming, and strangers can't be flagged
+// by id. Own server on :3050, own throwaway database.
+const h = require('./test-helpers');
+
+h.useTempDb('safety');
+const { check, api } = h;
+
+async function main() {
+  const { server } = await h.startServer();
+  const db = require('./db');
+  const org = await h.makeOrg({ mission_tags: ['Animal welfare'] });
+  const isolate = () => {
+    db.prepare("UPDATE shifts SET status = 'cancelled' WHERE status = 'open'").run();
+    db.prepare("UPDATE availability_requests SET status = 'cancelled' WHERE status = 'searching'").run();
+  };
+  const bookingOf = (pid, userId) => db.prepare(`
+    SELECT b.* FROM bookings b JOIN pairings p ON (p.booking_a_id = b.id OR p.booking_b_id = b.id) WHERE p.id = ? AND b.user_id = ?
+  `).get(pid, userId);
+  const pairOn = async (a, b) => {
+    isolate();
+    const shift = await h.makeShift(org, { daysAhead: 3 });
+    await h.startLooking(a);
+    await h.startLooking(b);
+    const pid = await h.proposalFor(a);
+    await h.confirmPairing(a, pid);
+    await h.confirmPairing(b, pid);
+    return { pid, shift };
+  };
+  const say = (v, pid, body) => api(`/pairings/${pid}/messages`, { method: 'POST', token: v.token, body: { body } });
+
+  try {
+    // ── Confirmed pairing: report without leaving → chat closes for both ──
+    const a = await h.makeVolunteer({ name: 'Ada', deeds: 5 });
+    const b = await h.makeVolunteer({ name: 'Bo', deeds: 5 });
+    const one = await pairOn(a, b);
+    await api(`/pairings/${one.pid}/contact-share`, { method: 'POST', token: b.token, body: { opt_in: true } });
+    check('chat works before a report', (await say(b, one.pid, 'hi!')).status === 201);
+    const rep = await api('/safety/reports', { method: 'POST', token: a.token, body: { category: 'inappropriate_messages', pairing_id: one.pid } });
+    check('report is stored', rep.status === 201 && rep.body.report_id);
+    const blocked = await say(b, one.pid, 'why did you go quiet');
+    check('the reported person can no longer message (403 chat_blocked)', blocked.status === 403 && blocked.body.code === 'chat_blocked', blocked.body);
+    check('…nor can the reporter', (await say(a, one.pid, 'test')).status === 403);
+    const history = await api(`/pairings/${one.pid}/messages`, { token: b.token });
+    check('message history stays readable', history.status === 200 && history.body.messages.some((m) => m.body === 'hi!'));
+    const detailB = await api(`/pairings/${one.pid}`, { token: b.token });
+    check('pairing detail says the chat is closed', detailB.body.chat_open === false && detailB.body.chat_closed_reason === 'report');
+    check('existing contact-sharing opt-ins were cleared', detailB.body.contact_share.me === false && detailB.body.contact_share.partner === false);
+    const share = await api(`/pairings/${one.pid}/contact-share`, { method: 'POST', token: b.token, body: { opt_in: true } });
+    check('contact sharing cannot be switched back on', share.status === 403);
+    await h.advance({ to: one.shift.starts_at });
+    await h.advance({ minutes: 30 });
+    const starters = (await api(`/pairings/${one.pid}/messages`, { token: a.token })).body.messages.filter((m) => m.kind === 'starter');
+    check('no conversation starters are posted into a blocked pairing', starters.length === 0, starters);
+
+    // ── Report after the shift started, with "take me out" ──
+    const c = await h.makeVolunteer({ name: 'Cy', deeds: 5 });
+    const d = await h.makeVolunteer({ name: 'Di', deeds: 5 });
+    const two = await pairOn(c, d);
+    await h.advance({ to: two.shift.starts_at });
+    await h.advance({ minutes: 10 });
+    const midShift = await api('/safety/reports', { method: 'POST', token: c.token, body: { category: 'safety_concern', pairing_id: two.pid, cancel_pairing: true } });
+    check('a mid-shift report with "take me out" succeeds', midShift.status === 201 && midShift.body.cancelled === true && !midShift.body.cancel_error, midShift.body);
+    const cDeeds = (await api('/deeds', { token: c.token })).body;
+    check('…the reporter\'s Deeds are released', cDeeds.held === 0);
+    check('…with no late-cancel mark', db.prepare("SELECT COUNT(*) AS n FROM reliability_events WHERE user_id = ? AND kind = 'late_cancel'").get(c.id).n === 0);
+    check('…and the reported partner is not charged either', (await api('/deeds', { token: d.token })).body.held === 0);
+    check('only one report was filed', db.prepare('SELECT COUNT(*) AS n FROM safety_reports WHERE reporter_user_id = ?').get(c.id).n === 1);
+
+    // ── Completed pairing: report closes the chat too; no buddyship forms ──
+    const e = await h.makeVolunteer({ name: 'Ed', deeds: 5 });
+    const f = await h.makeVolunteer({ name: 'Flo', deeds: 5 });
+    const three = await pairOn(e, f);
+    await h.advance({ to: three.shift.starts_at });
+    await h.advance({ minutes: 1 });
+    for (const v of [e, f]) await api(`/orgs/mine/bookings/${bookingOf(three.pid, v.id).id}/check-in`, { method: 'POST', token: org.token });
+    await h.advance({ to: three.shift.ends_at });
+    await h.advance({ minutes: 1 });
+    await api(`/bookings/${bookingOf(three.pid, e.id).id}/ratings`, { method: 'POST', token: e.token, body: { org_operational: 5, personal_fit: 5, partner_showed_up: true, volunteer_again: true } });
+    await api('/safety/reports', { method: 'POST', token: e.token, body: { category: 'other', pairing_id: three.pid } });
+    const fRate = await api(`/bookings/${bookingOf(three.pid, f.id).id}/ratings`, { method: 'POST', token: f.token, body: { org_operational: 5, personal_fit: 5, partner_showed_up: true, volunteer_again: true } });
+    check('yes → report → yes forms no buddyship', fRate.body.became_buddies === false && (await api('/buddies', { token: f.token })).body.buddies.length === 0);
+    check('a completed pairing\'s chat closes after a report', (await say(f, three.pid, 'hey')).status === 403);
+
+    // ── No flagging strangers by id ──
+    const stranger = await h.makeVolunteer({ name: 'Stranger' });
+    const byId = await api('/safety/reports', { method: 'POST', token: stranger.token, body: { category: 'other', reported_user_id: a.id } });
+    check('a report about someone you were never paired with is rejected', byId.status === 404, byId.body);
+    const known = await api('/safety/reports', { method: 'POST', token: b.token, body: { category: 'other', reported_user_id: a.id } });
+    check('…but a report about a past partner by id is accepted', known.status === 201);
+  } finally {
+    h.cleanup(server);
+  }
+  h.summary();
+}
+
+main().catch((err) => {
+  console.error('Test run crashed:', err);
+  process.exitCode = 1;
+});
