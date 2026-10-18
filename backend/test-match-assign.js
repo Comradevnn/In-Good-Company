@@ -296,7 +296,37 @@ check('shuffling the input order does not change the plan', shuffleOk);
     [chosen(person('a')), chosen(lovesO2), chosen(dislikesO1)]);
 }
 
-// ── Time budget ──
+// ── The match bar ──
+{
+  const { personalBar, matchBar } = require('./matching/assign');
+  const at = (hours) => shift('s1', { starts_at: new Date(NOW + hours * HOUR).toISOString() });
+  const fresh = person('m', { waitedHours: 0 });
+  fresh.createdAtMs = NOW;
+  const bar = cfg.matchBar;
+  check('a week or more out, the bar is at its highest', personalBar(fresh, at(bar.farHoursBeforeShift + 24), NOW, cfg) === bar.farValue);
+  check('shortly before the shift, the bar is gone', personalBar(fresh, at(bar.floorHoursBeforeShift - 1), NOW, cfg) === 0);
+  let falling = true;
+  for (let h = bar.floorHoursBeforeShift; h < bar.farHoursBeforeShift + 24; h += 6) {
+    if (personalBar(fresh, at(h), NOW, cfg) > personalBar(fresh, at(h + 6), NOW, cfg)) falling = false;
+  }
+  check('the bar never rises as the shift gets closer', falling);
+  const late = { ...fresh, createdAtMs: NOW - 3 * DAY, deadlineMs: NOW + 12 * HOUR };
+  check('the bar also falls as a search uses up its time', personalBar(late, at(bar.farHoursBeforeShift + 24), NOW, cfg) < bar.farValue * 0.2);
+  check('"anyone", rematches and solo RSVPs skip the bar',
+    personalBar({ ...fresh, matchPreference: 'anyone' }, at(300), NOW, cfg) === 0
+    && personalBar({ ...fresh, kind: 'rematch', anchorShiftId: 's1' }, at(300), NOW, cfg) === 0
+    && personalBar({ ...fresh, kind: 'solo_rsvp', anchorShiftId: 's1' }, at(300), NOW, cfg) === 0);
+  check('a pair needs the higher of the two bars, and mutual buddies skip it',
+    matchBar(fresh, { ...fresh, matchPreference: 'anyone' }, at(300), NOW, cfg) === bar.farValue
+    && matchBar(fresh, fresh, at(300), NOW, cfg, true) === 0);
+  const far = shift('s1', { starts_at: new Date(NOW + 10 * DAY).toISOString(), capacity_remaining: 2 });
+  const p1 = plan([person('h1', { waitedHours: 0.1 }), person('h2', { waitedHours: 0.1 })], [far]);
+  const p2 = plan([person('h1', { waitedHours: 0.1, matchPreference: 'anyone' }), person('h2', { waitedHours: 0.1, matchPreference: 'anyone' })], [far]);
+  check('a good but imperfect pair far from its shift is held, not matched', p1.matches.length === 0 && p1.heldRequestIds.length === 2, p1.heldRequestIds);
+  check('…while two people who chose "anyone" are matched', p2.matches.length === 1);
+}
+
+// ── Time budget ──// ── Time budget ──
 {
   const { persons, shifts, facts } = randomPool(150, 40);
   const t0 = process.hrtime.bigint();

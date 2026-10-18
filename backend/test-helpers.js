@@ -170,7 +170,9 @@ async function makeShift(org, opts = {}) {
 async function startLooking(vol, opts = {}) {
   return api('/requests', {
     method: 'POST', token: vol.token,
-    body: { window_start: opts.window_start ?? await serverDate(1), window_end: opts.window_end ?? await serverDate(10), ...opts.extra },
+    // Lifecycle suites default to "anyone" so they aren't timing-dependent;
+    // the match bar itself is covered in test-match-assign/test-match-ranking.
+    body: { window_start: opts.window_start ?? await serverDate(1), window_end: opts.window_end ?? await serverDate(10), match_preference: opts.preference ?? 'anyone', ...opts.extra },
   });
 }
 

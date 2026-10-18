@@ -285,9 +285,10 @@ function commitPlan(plan, snapshot, nowMs) {
     proposals.push(pairingId);
   }
 
+  const held = new Set(plan.heldRequestIds ?? []);
   for (const ctx of snapshot.contexts) {
     if (ctx.block || handled.has(ctx.request.id)) continue;
-    setReason(ctx, noMatchReason(ctx, ctx.shifts));
+    setReason(ctx, held.has(ctx.request.id) && !ctx.request.buddy_user_id ? 'holding_for_better_match' : noMatchReason(ctx, ctx.shifts));
   }
   return { proposals };
 }

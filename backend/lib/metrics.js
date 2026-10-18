@@ -116,11 +116,28 @@ function platformMetrics() {
     FROM bookings b JOIN shifts s ON s.id = b.shift_id GROUP BY month ORDER BY month
   `).all();
   const requests = Object.fromEntries(db.prepare('SELECT status, COUNT(*) AS n FROM availability_requests GROUP BY status').all().map((r) => [r.status, r.n]));
+  // "Best match" vs "anyone" searches and how each ended, plus the average
+  // fit of the pairings each produced — the data for deciding later whether
+  // to keep both options.
+  const byPreference = {};
+  for (const r of db.prepare(`SELECT match_preference AS pref, status, COUNT(*) AS n FROM availability_requests WHERE kind = 'standard' GROUP BY pref, status`).all()) {
+    byPreference[r.pref] ??= { by_status: {}, avg_pairing_score: null };
+    byPreference[r.pref].by_status[r.status] = r.n;
+  }
+  for (const r of db.prepare(`
+    SELECT ar.match_preference AS pref, AVG(p.score) AS avg FROM pairings p
+    JOIN availability_requests ar ON ar.id IN (p.request_a_id, p.request_b_id)
+    WHERE p.score IS NOT NULL AND ar.kind = 'standard' GROUP BY pref
+  `).all()) {
+    byPreference[r.pref] ??= { by_status: {}, avg_pairing_score: null };
+    byPreference[r.pref].avg_pairing_score = Math.round(r.avg * 1000) / 1000;
+  }
   return {
     cause_density_by_metro: density,
     avg_wait_hours_to_confirmed_pairing: waits.length ? Math.round((waits.reduce((a, b) => a + b, 0) / waits.length / clock.HOUR) * 10) / 10 : null,
     no_show_rate_by_month: trend.map((t) => ({ month: t.month, no_show_pct: pct(t.no_shows, t.resolved), resolved: t.resolved })),
     requests_by_status: requests,
+    searches_by_match_preference: byPreference,
     open_safety_reports: db.prepare("SELECT COUNT(*) AS n FROM safety_reports WHERE status = 'open'").get().n,
   };
 }

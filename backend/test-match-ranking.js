@@ -1,7 +1,8 @@
 // Soft ranking through the real HTTP flow: a run that sees the whole pool
 // pairs by fit, a search near its deadline is served first, a user's own
-// private fit ratings steer their shift choice, and the score and its
-// breakdown stay admin-only. Own server on :3050, own throwaway database.
+// private fit ratings steer their shift choice, early bookings wait for a
+// match that clears the bar unless both chose "anyone", and the score and
+// its breakdown stay admin-only. Own server on :3050, own throwaway database.
 const crypto = require('node:crypto');
 const h = require('./test-helpers');
 
@@ -104,6 +105,36 @@ async function main() {
       preview.status === 200 && preview.body.planned.length === 1 && preview.body.planned[0].shift_id === shiftP.id && preview.body.planned[0].breakdown?.quality != null
       && before.pairings === after.pairings && before.booked === after.booked, { body: preview.body, before, after });
     check('the preview carries ids only, never names', !JSON.stringify(preview.body).includes('Pia') && !JSON.stringify(preview.body).includes('Pat'));
+
+    // ── The match bar: early bookings wait for a better match ──
+    isolate();
+    const reasonOf = (v) => db.prepare("SELECT last_reason FROM availability_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1").get(v.id)?.last_reason;
+    const E1 = await h.makeVolunteer({ name: 'Eve', causes, deeds: 5 });
+    const E2 = await h.makeVolunteer({ name: 'Eli', causes, deeds: 5 });
+    check('fixture: nobody else searching means "anyone" is not offered', (await h.home(E1)).match_options.anyone_available === false);
+    await h.startLooking(E1, { preference: 'best' });
+    check('…and once a compatible person is searching, it is offered', (await h.home(E2)).match_options.anyone_available === true);
+    await h.makeShift(org, { cause_tags: ['Elder care'], daysAhead: 8 });
+    await h.startLooking(E2, { preference: 'best' });
+    check('a good pair for a shift a week or more out waits for a better match', pairingsBetween(E1, E2) === 0 && reasonOf(E1) === 'holding_for_better_match', reasonOf(E1));
+    const waiting = (await api('/requests/current', { token: E1.token })).body.request;
+    check('…and the waiting screen says we are taking our time', waiting.reason === 'holding_for_better_match' && /taking our time/.test(waiting.detail) && waiting.match_preference === 'best', waiting);
+    await h.advance({ days: 4 });
+    check('as the shift gets closer the bar falls and the same pair is matched', pairingsBetween(E1, E2) === 1);
+
+    isolate();
+    await h.makeShift(org, { cause_tags: ['Elder care'], daysAhead: 8 });
+    const F1 = await h.makeVolunteer({ name: 'Fay', causes, deeds: 5 });
+    const F2 = await h.makeVolunteer({ name: 'Fin', causes, deeds: 5 });
+    await h.startLooking(F1, { preference: 'best' });
+    await h.startLooking(F2, { preference: 'anyone' });
+    check('if only one of the two chose "anyone", the other\'s standard still applies', pairingsBetween(F1, F2) === 0);
+    const switched = await api('/requests/current/adjust', { method: 'POST', token: F1.token, body: { match_preference: 'anyone' } });
+    check('switching to "anyone" while waiting pairs them straight away', switched.status === 200 && pairingsBetween(F1, F2) === 1, switched.body);
+    const badPref = await api('/requests', { method: 'POST', token: (await h.makeVolunteer({ causes, deeds: 5 })).token, body: { window_start: await h.serverDate(1), window_end: await h.serverDate(10), match_preference: 'soon' } });
+    check('an unknown match preference is refused', badPref.status === 400 && badPref.body.code === 'invalid_match_preference', badPref.body);
+    const m = (await api('/admin/metrics', { admin: true })).body.searches_by_match_preference;
+    check('admin metrics split searches and pairing scores by match preference', m?.best?.by_status && m?.anyone?.by_status && typeof m.anyone.avg_pairing_score === 'number', m);
 
     // ── Nothing volunteer-facing carries the score ──
     const leaks = [];

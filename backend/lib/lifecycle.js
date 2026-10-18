@@ -20,7 +20,7 @@ const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shift
 const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
-const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray } = require('../matching/engine');
+const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray, tagMatchLevel } = require('../matching/engine');
 const { isBlockedPair } = require('./blocks');
 
 class LifecycleError extends Error {
@@ -99,6 +99,27 @@ function activeBuddyIds(userId) {
   `).all(userId, userId, userId).map((r) => r.other);
 }
 
+const MATCH_PREFERENCES = ['best', 'anyone'];
+function parsePreference(value) {
+  if (value == null) return null;
+  if (!MATCH_PREFERENCES.includes(value)) throw new LifecycleError('invalid_match_preference', `match_preference must be one of: ${MATCH_PREFERENCES.join(', ')}`, 400);
+  return value;
+}
+
+// Whether someone else is searching now with overlapping dates and a cause
+// in common (or close), so "match me with anyone" is likely to work soon.
+// Only a yes/no ever leaves the server, never who or how many.
+function anyonePartnerLikely(user, windowStart, windowEnd) {
+  if (!windowStart || !windowEnd) return false;
+  const mine = safeParseArray(user.cause_tags);
+  const others = db.prepare(`
+    SELECT r.user_id, u.cause_tags FROM availability_requests r JOIN users u ON u.id = r.user_id
+    WHERE r.status = 'searching' AND r.kind = 'standard' AND r.user_id != ? AND r.buddy_user_id IS NULL
+      AND r.window_start <= ? AND r.window_end >= ?
+  `).all(user.id, windowEnd, windowStart);
+  return others.some((o) => tagMatchLevel(mine, safeParseArray(o.cause_tags)) !== 'none' && !isBlockedPair(user.id, o.user_id));
+}
+
 const createRequest = db.transaction((user, body) => {
   if (openRequest(user.id)) {
     throw new LifecycleError('request_open', "You're already being matched — check your current search.");
@@ -146,12 +167,14 @@ const createRequest = db.transaction((user, body) => {
     }
   }
 
+  const preference = parsePreference(body.match_preference) ?? 'best';
+
   const requestId = id();
   db.prepare(`
     INSERT INTO availability_requests (id, user_id, kind, window_start, window_end, travel_radius_miles, buddy_user_id,
-      age_min, age_max, status, search_deadline, created_at)
-    VALUES (?, ?, 'standard', ?, ?, ?, ?, ?, ?, 'searching', ?, ?)
-  `).run(requestId, user.id, windowStart, windowEnd, radius, buddyId, ageMin, ageMax, new Date(deadlineMs).toISOString(), nowIso());
+      age_min, age_max, match_preference, status, search_deadline, created_at)
+    VALUES (?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?)
+  `).run(requestId, user.id, windowStart, windowEnd, radius, buddyId, ageMin, ageMax, preference, new Date(deadlineMs).toISOString(), nowIso());
   // Keep the profile's "latest availability" in step, so the availability
   // screen pre-fills with what the user last submitted.
   db.prepare(`
@@ -222,6 +245,8 @@ const adjustRequest = db.transaction((user, body) => {
     }
   }
   if (body.drop_buddy) updates.buddy_user_id = null;
+  const preference = parsePreference(body.match_preference);
+  if (preference) updates.match_preference = preference;
 
   const nowMs = clock.nowMs();
   const deadlineMs = validateWindow(updates.window_start ?? request.window_start, updates.window_end ?? request.window_end, nowMs);
@@ -871,6 +896,7 @@ const STATUS_COPY = {
   no_shift_in_shared_causes: "No listed shifts match your causes, dates and distance yet. We'll keep checking as orgs add more.",
   no_capacity_in_window: "Shifts that fit you are full on your dates right now. We'll keep checking as spots open up.",
   no_compatible_partner_in_radius: "We've found shifts that fit — now looking for a partner nearby with overlapping causes.",
+  holding_for_better_match: "We're taking our time to find you a really good match. The closer your dates get, the wider we look — so booking early gets you the best pairing.",
   waiting_for_buddy: "Waiting for your buddy to pick the same dates. You can open this up to a new partner anytime.",
   verification_incomplete: BLOCK_MESSAGES.verification_incomplete,
   monthly_cap_reached: BLOCK_MESSAGES.monthly_cap_reached,
@@ -908,6 +934,9 @@ function requestStatus(user) {
     waited_hours: Math.floor(waitedMs / clock.HOUR),
     taking_longer: waitedMs >= rules.WAIT_SOFT_MS,
     reason: request.last_reason,
+    match_preference: request.match_preference ?? 'best',
+    anyone_available: request.status === 'searching' && request.kind === 'standard' && request.match_preference !== 'anyone'
+      ? anyonePartnerLikely(user, request.window_start, request.window_end) : false,
     headline: request.status === 'no_match'
       ? "We couldn't find a match this time"
       : request.kind === 'rematch' ? 'Finding you a new partner for the same shift…'
@@ -930,6 +959,7 @@ function dismissNoMatch(user) {
 
 module.exports = {
   LifecycleError,
+  anyonePartnerLikely,
   openRequest,
   submitRequest,
   cancelRequest,

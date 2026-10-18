@@ -138,6 +138,8 @@ router.get('/me/home', volunteer, wrap((req, res) => {
     deeds: { ...deeds.balances(user.id), shift_price: deeds.shiftPriceDeeds() },
     premium: { ...premium.state(user), cap: premium.capStatus(user), free_late_cancel_available: premium.freeLateCancelAvailable(user) },
     request: lifecycle.requestStatus(user),
+    // Offered on the "find a shift" screen only when a partner looks likely.
+    match_options: { anyone_available: lifecycle.anyonePartnerLikely(user, user.availability_window_start, user.availability_window_end) },
     actions: homeActions(user),
     bookings: bookings.map((b) => bookingView(user, b)),
     buddies: social.listBuddies(user),

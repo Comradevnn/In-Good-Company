@@ -24,6 +24,7 @@ function toMatchPerson(userRow, requestRow, stats, cfg) {
     createdAtMs: parseMs(requestRow.created_at),
     deadlineMs: parseMs(requestRow.search_deadline),
     buddyUserId: requestRow.buddy_user_id ?? null,
+    matchPreference: requestRow.match_preference === 'anyone' ? 'anyone' : 'best',
     anchorShiftId: stats.anchorShiftId ?? null,
 
     age: userRow.age ?? null,

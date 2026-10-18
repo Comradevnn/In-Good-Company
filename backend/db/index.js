@@ -115,6 +115,9 @@ ensureColumns('pairings', [
 ]);
 // Admin-only explain output for a pairing's fit score; never serialized to clients.
 ensureColumns('pairings', [['score_breakdown', 'TEXT']]);
+// best: wait for a match that clears the match bar; anyone: pair with any
+// eligible partner as soon as possible (the user's own choice).
+ensureColumns('availability_requests', [['match_preference', "TEXT NOT NULL DEFAULT 'best'"]]);
 
 
 // Pairings created by the old demo matcher point at hardcoded demo shift ids

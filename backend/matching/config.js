@@ -52,6 +52,14 @@ const MATCHING_CONFIG = deepFreeze({
   // their deadline are served first.
   fairnessWeight: 0.28,
   urgentWithinHours: 30,
+
+  // The match bar (owner decision): a pairing forms only when its quality
+  // reaches the bar. The bar is highest while the shift is far off and
+  // falls in a straight line to zero shortly before it, and it also falls
+  // as a search uses up its allowed time, so nobody's search runs out
+  // without a chance. People who chose "anyone", rematches, solo RSVPs and
+  // mutual buddy requests skip it.
+  matchBar: { farValue: 0.95, farHoursBeforeShift: 168, floorHoursBeforeShift: 48 },
 });
 
 const GROUPS = ['pair', 'shiftFit', 'blend'];
@@ -77,6 +85,11 @@ function validateConfig(cfg) {
   }
   if (typeof cfg.poorFitOrgMax !== 'number') problems.push('poorFitOrgMax: must be a number');
   if (typeof cfg.urgentWithinHours !== 'number' || cfg.urgentWithinHours < 0) problems.push('urgentWithinHours: must be >= 0');
+  const bar = cfg.matchBar ?? {};
+  if (!(bar.farValue >= 0 && bar.farValue <= 1)) problems.push('matchBar.farValue: must be within 0..1');
+  if (!(bar.floorHoursBeforeShift >= 0 && bar.farHoursBeforeShift > bar.floorHoursBeforeShift)) {
+    problems.push('matchBar: farHoursBeforeShift must be greater than floorHoursBeforeShift (both >= 0)');
+  }
   return problems;
 }
 

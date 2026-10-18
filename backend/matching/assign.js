@@ -6,7 +6,9 @@
 // Approach: build every eligible (pair, shared shift) edge, then accept
 // edges best-first (greedy), keeping shift capacity in memory. If an edge's
 // best shift fills up, it falls back to its next shift and is re-sorted.
-// Fairness: rematches go first, then searches close to their deadline, then
+// A pairing only forms once its quality reaches the match bar, which is
+// high while the shift is far off and falls as it nears, so early bookers
+// wait for a better match. Fairness: rematches go first, then searches close to their deadline, then
 // mutual buddy requests; within a tier, time already waited adds a capped
 // boost, so a long waiter only loses to a clearly better pairing.
 const { hardFiltersPass } = require('./engine');
@@ -25,6 +27,25 @@ function pressure(person, nowMs) {
 function isUrgent(person, nowMs, cfg) {
   if (person.kind === 'rematch') return true;
   return Number.isFinite(person.deadlineMs) && person.deadlineMs - nowMs <= cfg.urgentWithinHours * HOUR_MS;
+}
+
+// The bar a pairing on this shift must reach for this one person.
+function personalBar(person, shift, nowMs, cfg) {
+  if (person.matchPreference === 'anyone' || person.anchorShiftId || person.kind !== 'standard') return 0;
+  const bar = cfg.matchBar;
+  const hours = (Date.parse(shift.starts_at) - nowMs) / HOUR_MS;
+  const byShift = hours >= bar.farHoursBeforeShift ? bar.farValue
+    : hours <= bar.floorHoursBeforeShift ? 0
+      : bar.farValue * (hours - bar.floorHoursBeforeShift) / (bar.farHoursBeforeShift - bar.floorHoursBeforeShift);
+  const bySearchTime = bar.farValue * (1 - pressure(person, nowMs));
+  return Math.max(0, Math.min(byShift, bySearchTime));
+}
+
+// Both people's standards apply, so the pair needs the higher of the two.
+// Mutual buddy requests skip the bar (they skip ranking altogether).
+function matchBar(a, b, shift, nowMs, cfg, mutualBuddy = false) {
+  if (mutualBuddy) return 0;
+  return Math.max(personalBar(a, shift, nowMs, cfg), personalBar(b, shift, nowMs, cfg));
 }
 
 function ageBandOk(person, other) {
@@ -66,6 +87,7 @@ function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
   const room = capacity ?? new Map(shifts.map((s) => [s.id, s.capacity_remaining]));
   const edges = [];
   const exclusions = new Map(persons.map((p) => [p.requestId, {}]));
+  const held = new Set(); // had a partner and shift, but no pairing reached the bar yet
   const exclude = (p, reason) => {
     const counts = exclusions.get(p.requestId);
     counts[reason] = (counts[reason] ?? 0) + 1;
@@ -92,13 +114,23 @@ function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
         if (!bShifts.has(id)) continue;
         const shift = shiftById.get(id);
         if (!shift || (room.get(id) ?? 0) < need) continue;
-        options.push({ shift, need, demoted: poor.has(shift.org_id), score: scoreTriple(a, b, shift, facts, cfg) });
+        const score = scoreTriple(a, b, shift, facts, cfg);
+        const bar = matchBar(a, b, shift, nowMs, cfg, mutualBuddy);
+        options.push({ shift, need, demoted: poor.has(shift.org_id), score, bar, passes: score.quality >= bar });
       }
       if (options.length === 0) {
         exclude(a, 'no_shared_shift_with_room');
         exclude(b, 'no_shared_shift_with_room');
         continue;
       }
+      if (!options.some((o) => o.passes)) {
+        exclude(a, 'below_match_bar');
+        exclude(b, 'below_match_bar');
+        held.add(a.requestId);
+        held.add(b.requestId);
+        continue;
+      }
+      options.splice(0, options.length, ...options.filter((o) => o.passes));
       options.sort((o1, o2) => (o1.demoted - o2.demoted)
         || (o2.score.pairShiftFit - o1.score.pairShiftFit)
         || o1.shift.starts_at.localeCompare(o2.shift.starts_at)
@@ -106,7 +138,7 @@ function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
       edges.push(makeEdge(a, b, options, mutualBuddy, nowMs, cfg));
     }
   }
-  return { edges, exclusions };
+  return { edges, exclusions, held };
 }
 
 function makeEdge(a, b, options, mutualBuddy, nowMs, cfg) {
@@ -175,8 +207,9 @@ function breakdownFor(edge, cfg) {
     components: s.components,
     multipliers: s.multipliers,
     flags: s.flags,
+    match_bar: option.bar,
     shift_choice: edge.options.slice(edge.idx, edge.idx + 3).map((o) => ({
-      shift_id: o.shift.id, pair_shift_fit: o.score.pairShiftFit, demoted: o.demoted,
+      shift_id: o.shift.id, pair_shift_fit: o.score.pairShiftFit, demoted: o.demoted, match_bar: o.bar,
     })),
   };
 }
@@ -194,7 +227,7 @@ function roundBreakdown(value) {
 //      breakdown, flags }] in acceptance order, unmatchedRequestIds, edges, exclusions }
 function planAssignments({ persons, shifts, pairFacts, nowMs, config: cfg }) {
   const capacity = new Map(shifts.map((s) => [s.id, s.capacity_remaining]));
-  const { edges, exclusions } = buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity });
+  const { edges, exclusions, held } = buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity });
   const queue = [...edges].sort(compareEdges);
   const matched = new Set();
   const matches = [];
@@ -231,13 +264,16 @@ function planAssignments({ persons, shifts, pairFacts, nowMs, config: cfg }) {
   }
 
   const unmatchedRequestIds = persons.map((p) => p.requestId).filter((id) => !matched.has(id));
-  return { matches, unmatchedRequestIds, edges, exclusions };
+  const heldRequestIds = unmatchedRequestIds.filter((id) => held.has(id));
+  return { matches, unmatchedRequestIds, heldRequestIds, edges, exclusions };
 }
 
 module.exports = {
   pairKey,
   pressure,
   isUrgent,
+  personalBar,
+  matchBar,
   pairEligible,
   buildEdges,
   planAssignments,
