@@ -277,7 +277,11 @@ export default function App() {
         return (
           <OrgOrCauseScreen
             {...commonProps}
-            onKnowsOrg={finishEditing}
+            onKnowsOrg={(updated) => {
+              // An org name alone can't be matched on: pick the closest causes next.
+              if (updated) setProfile(updated);
+              setEditingSection('causes');
+            }}
             onBrowseByCause={() => setEditingSection('causes')}
           />
         );
@@ -395,6 +399,19 @@ export default function App() {
     switch (name) {
       case 'startMatching':
         return <StartMatchingScreen {...common} profile={profile} buddy={params.buddy} />;
+      case 'editCauses':
+        return (
+          <CausesScreen
+            sessionToken={sessionToken}
+            initialValues={profile}
+            title="Your causes"
+            onBack={goBack}
+            onNext={(updated) => {
+              if (updated) setProfile(updated);
+              goBack();
+            }}
+          />
+        );
       case 'editAvailability':
         return (
           <AvailabilityScreen

@@ -14,6 +14,7 @@ const ERROR_ACTIONS = {
   verification_incomplete: ['Verify your ID', 'verify'],
   insufficient_deeds: ['Get Deeds', 'deeds'],
   monthly_cap_reached: ['See Premium', 'premium'],
+  ineligible_data_incomplete: ['Add causes', 'editCauses'],
 };
 
 export default function StartMatchingScreen({ sessionToken, profile, buddy, navigate, onBack }) {

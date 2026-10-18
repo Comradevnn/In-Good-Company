@@ -82,6 +82,9 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
               We don't have a searchable directory yet — we'll pass this along to our team and
               match you with something close in the meantime.
             </Text>
+            <Text style={[s.label, { marginTop: 16, color: colors.mossDark }]} onPress={onBrowseByCause}>
+              Choose causes instead ›
+            </Text>
           </View>
         )}
 

@@ -62,8 +62,9 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
         {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
         <Text style={s.h2}>What do you care about?</Text>
         <Text style={s.rationale}>
-          Pick at least {MIN_CAUSES} — this is what we'll use to find shifts and people you'll
-          click with. Change these anytime.
+          {initialValues?.prospective_org_name
+            ? `Which causes are closest to ${initialValues.prospective_org_name}? Pick at least ${MIN_CAUSES} — we'll match you with something similar while we reach out to them.`
+            : `Pick at least ${MIN_CAUSES} — this is what we'll use to find shifts and people you'll click with. Change these anytime.`}
         </Text>
 
         <View style={s.chipGrid}>

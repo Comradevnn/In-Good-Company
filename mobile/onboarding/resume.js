@@ -1,10 +1,10 @@
 // Onboarding is still manual screen-swapping (no navigation library) — see
-// App.js. "orgOrCause" branches: picking an org skips "causes" (no org
-// directory to browse yet, see OrgOrCauseScreen), picking "browse by cause"
-// keeps it. Identity verification is intentionally not part of this flow
-// yet — that's a separate planned build.
+// App.js. Both paths through "orgOrCause" end with cause tags, since
+// matching needs them: naming an org (captured as a lead) is followed by
+// picking the causes closest to it. Identity verification is not part of
+// this flow — it hangs off the home screen.
 export const CAUSE_FLOW = ['quickProfile', 'location', 'orgOrCause', 'causes', 'partnerPrefs', 'availability', 'done'];
-export const ORG_FLOW = ['quickProfile', 'location', 'orgOrCause', 'partnerPrefs', 'availability', 'done'];
+export const ORG_FLOW = ['quickProfile', 'location', 'orgOrCause', 'causes', 'partnerPrefs', 'availability', 'done'];
 
 function parseJsonArray(value) {
   try {
@@ -42,6 +42,8 @@ export function determineResumeStep(profile) {
   // full_name/age/gender are NOT NULL, so the row can't exist without them.
   if (!locationDone) return { flow, stepIndex: flow.indexOf('location') };
   if (!orgOrCauseDone) return { flow, stepIndex: flow.indexOf('orgOrCause') };
+  // An org lead alone isn't enough to match on — the causes step follows.
+  if (!hasCauses) return { flow, stepIndex: flow.indexOf('causes') };
   if (!partnerPrefsDone) return { flow, stepIndex: flow.indexOf('partnerPrefs') };
   if (!availabilityDone) return { flow, stepIndex: flow.indexOf('availability') };
   return { flow, stepIndex: flow.indexOf('done') };
