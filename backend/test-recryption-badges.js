@@ -16,12 +16,14 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const Database = require('better-sqlite3');
-const { loadRecryption, badgePublicKeyHex } = require('./recryption/keyStore');
+const { loadRecryption, badgePublicKeyHex, SqliteKeyStore } = require('./recryption/keyStore');
 const { SqliteBadgeStore, makeBadgeService, badgeClaims, issueSuperseding, upgradeLegacyBadges } = require('./recryption/badgeStore');
 const { SqliteDocumentHashStore } = require('./recryption/hashStore');
 
 const BASE = 'http://localhost:3050';
-const REGISTERED_KEY_ID = 'd2dd14a4ff33f236040605e3760a0a91'; // module 1's registration
+// Derived from this machine's PEM (backend/keys/ is gitignored and generated
+// on first run, so the key_id differs per machine). Set in the main block.
+let REGISTERED_KEY_ID;
 
 let passed = 0;
 let failed = 0;
@@ -63,7 +65,10 @@ async function part1() {
   const badge1 = await badgeService.issue({ subject_id: user1.id, claims: badgeClaims(user1) }, signer);
   check('issued badge subject_id is users.id (D7)', badge1.payload.subject_id === 'user-1');
   check('issued under the module-1-registered key', badge1.payload.key_id === REGISTERED_KEY_ID, badge1.payload.key_id);
-  check('registered key_id derives from the PEM public key', deriveKeyId(badgePublicKeyHex()) === REGISTERED_KEY_ID);
+  const activeKey = await new SqliteKeyStore(mem).getActive();
+  check('registered key_id derives from the PEM public key',
+    activeKey?.key_id === deriveKeyId(badgePublicKeyHex()) && activeKey?.public_key === badgePublicKeyHex(),
+    JSON.stringify(activeKey));
   check('"preview" labeling lives inside the signed claims', badge1.payload.claims.verification_level === 'preview');
   const expectedDigest = crypto.createHash('sha256')
     .update(canonicalJson({ age: 26, full_name: 'Jordan' }), 'utf8').digest('hex');
@@ -275,6 +280,8 @@ async function part2() {
 }
 
 (async () => {
+  const { deriveKeyId } = await loadRecryption();
+  REGISTERED_KEY_ID = deriveKeyId(badgePublicKeyHex());
   await part1();
   await part2();
 
