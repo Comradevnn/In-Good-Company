@@ -7,6 +7,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
+import { formatDate, parseDate } from './dates';
 
 // Matches specs/plotline.html's "availability" screen for the radius slider
 // and frequency chips (those don't conflict with the schema). Per the
@@ -14,20 +15,6 @@ import { patchProfile } from '../auth/api';
 // window matching availability_window_start/end in the matching schema,
 // not plotline's recurring day-of-week/time-slot chip picker.
 const FREQUENCY_OPTIONS = ['Once a month', 'Twice a month', 'Three times a month', 'Weekly'];
-
-// Dates are calendar days in the user's own timezone. toISOString() (UTC)
-// shifted them by a day east of UTC on save, and new Date('YYYY-MM-DD')
-// (also UTC) made the picker highlight the previous day west of UTC — so a
-// returning user didn't see the dates they had entered.
-function formatDate(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function parseDate(value) {
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
 
 export default function AvailabilityScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const today = new Date();

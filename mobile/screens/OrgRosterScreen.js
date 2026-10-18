@@ -36,7 +36,7 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
   const { shift, roster } = data;
   return (
     <Screen title="Roster" onBack={onBack}>
-      <ShiftCard shift={{ ...shift, org_name: shift.title }} eyebrow={`${shift.capacity_booked} of ${shift.capacity_total} spots booked`} />
+      <ShiftCard shift={{ ...shift, org_name: shift.org?.name || shift.title }} eyebrow={`${shift.capacity_booked} of ${shift.capacity_total} spots booked`} />
       <Text style={[s.rationale, { marginTop: 12 }]}>Check people in as they arrive — that's what confirms they showed up. Mark a no-show only once the shift has started.</Text>
       {roster.length === 0 ? <Text style={[s.rationale, { marginTop: 16 }]}>Nobody is booked yet.</Text> : null}
       {roster.map((r) => {

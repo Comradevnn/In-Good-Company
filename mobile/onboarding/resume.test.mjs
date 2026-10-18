@@ -36,3 +36,37 @@ test('the cause path is unchanged', () => {
   assert.equal(stepOf({ location_city: 'San Jose, CA', cause_tags: '["Animal welfare","Elder care"]' }), 'partnerPrefs');
   assert.equal(stepOf({ ...base, cause_tags: '["Animal welfare","Elder care"]', availability_window_end: null }), 'availability');
 });
+
+test('an org lead with one cause still resumes on causes', () => {
+  assert.equal(stepOf({ ...base, prospective_org_name: 'Some Org', cause_tags: '["Animal welfare"]' }), 'causes');
+});
+
+test('an org lead is resumed on the org flow', () => {
+  const { flow } = determineResumeStep({ ...base, prospective_org_name: 'Some Org', cause_tags: '[]' });
+  assert.ok(flow.includes('causes'));
+});
+
+test('only one availability date set resumes on availability', () => {
+  const causes = '["Animal welfare","Elder care"]';
+  assert.equal(stepOf({ ...base, cause_tags: causes, availability_window_end: null }), 'availability');
+  assert.equal(stepOf({ ...base, cause_tags: causes, availability_window_start: null }), 'availability');
+});
+
+test('malformed or non-array cause tags count as none', () => {
+  assert.equal(stepOf({ location_city: 'San Jose, CA', cause_tags: 'not json' }), 'orgOrCause');
+  assert.equal(stepOf({ location_city: 'San Jose, CA', cause_tags: '{"a":1}' }), 'orgOrCause');
+  assert.equal(stepOf({ location_city: 'San Jose, CA', cause_tags: null }), 'orgOrCause');
+});
+
+test('coordinates alone count as a saved location', () => {
+  assert.equal(stepOf({ location_lat: 37.3, location_lng: -121.9, cause_tags: '[]' }), 'orgOrCause');
+  assert.equal(stepOf({ location_lat: 37.3, cause_tags: '[]' }), 'location');
+});
+
+test('an empty profile resumes on location', () => {
+  assert.equal(stepOf({ cause_tags: '[]' }), 'location');
+});
+
+test('partner preferences unconfirmed resume on partnerPrefs even with availability set', () => {
+  assert.equal(stepOf({ ...base, partner_prefs_confirmed: 0, cause_tags: '["Animal welfare","Elder care"]' }), 'partnerPrefs');
+});

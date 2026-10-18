@@ -21,7 +21,9 @@ const ENTRY_LABELS = {
   return: 'Returned — you showed up',
   forfeit: 'Went to the org',
 };
-const PACKS = [
+// Fallback only: the server's GET /deeds packs (deeds + usd) are what's shown
+// once loaded. opening_balance is still written by the DB migration.
+const FALLBACK_PACKS = [
   { deeds: 5, price: 5 },
   { deeds: 25, price: 25 },
   { deeds: 50, price: 50 },
@@ -63,6 +65,10 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
     }
   }
 
+  const packs = Array.isArray(ledger?.packs) && ledger.packs.length
+    ? ledger.packs.map((p) => ({ deeds: p.deeds, price: p.usd }))
+    : FALLBACK_PACKS;
+
   return (
     <View style={s.container}>
       <OnboardingTopBar title="Deeds (demo)" onBack={onBack} />
@@ -86,7 +92,7 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
         {error ? <Text style={s.errorText}>{error}</Text> : null}
 
         <Text style={[s.label, { marginTop: 22 }]}>Buy Deeds</Text>
-        {PACKS.map((pack) => (
+        {packs.map((pack) => (
           <TouchableOpacity
             key={pack.deeds}
             style={packRow}
