@@ -16,6 +16,7 @@ const premium = require('./premium');
 const reliability = require('./reliability');
 const chat = require('./chat');
 const { notify } = require('./notify');
+const { runResurfacing } = require('./resurface');
 const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shifts');
 const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
@@ -813,6 +814,8 @@ function tick() {
       completePairingIfResolved(booking.pairing_id);
     })();
   }
+
+  runResurfacing(nowMs);
 
   return runMatching(nowMs);
 }

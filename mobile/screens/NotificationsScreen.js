@@ -23,6 +23,7 @@ export default function NotificationsScreen({ sessionToken, navigate, onBack }) 
   function open(n) {
     if (n.ref_type === 'pairing') navigate(n.kind === 'bail_decision' ? 'bail' : 'pairing', { pairingId: n.ref_id });
     else if (n.ref_type === 'booking') navigate(n.kind === 'rate_shift' ? 'rating' : 'booking', { bookingId: n.ref_id });
+    else if (n.ref_type === 'matching') navigate('startMatching');
   }
 
   if (!items) return <Screen title="Notifications" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;

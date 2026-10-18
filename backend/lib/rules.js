@@ -64,4 +64,18 @@ module.exports = {
   NO_SHOW_PAUSE_MS: 14 * DAY,
 
   MIN_AGE: 18,
+
+  // Resurfacing nudges (notifications only; never a matching input).
+  // Proposed default, owner to confirm: how many days of quiet (no shift, no
+  // search, no earlier nudge) before a user is told about new shifts that
+  // fit them, keyed by the volunteering_frequency label chosen at onboarding.
+  RESURFACE_CADENCE_DAYS: {
+    'Weekly': 7,
+    'Three times a month': 10,
+    'Twice a month': 14,
+    'Once a month': 30,
+  },
+  // Proposed default, owner to confirm: how far ahead the nudge looks for
+  // shifts that fit.
+  RESURFACE_HORIZON_MS: 14 * DAY,
 };
