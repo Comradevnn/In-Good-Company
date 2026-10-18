@@ -11,9 +11,11 @@ describe only the API contract.
 `../../Recryption`, linked via `"recryption": "file:../../Recryption"` in
 `backend/package.json`).
 
-**Regenerate this file whenever the Recryption version this app depends on
-changes.** That means a new commit in `../Recryption`, a new version or
-release, or a change to the `recryption` entry in `backend/package.json`.
+**Regenerate this file when the library itself changes:** a new version or
+release, a change to the `recryption` entry in `backend/package.json`, or new
+commits in `../Recryption` that touch its source (`src/`), public exports or
+published API docs. Commits that only touch lockfiles, tests, tooling or
+README wording don't count.
 Update the "Generated against" line, re-derive every section from the
 library's public exports and docs, then re-run the `test-recryption-*.js`
 suites (see `backend/CLAUDE.md`).

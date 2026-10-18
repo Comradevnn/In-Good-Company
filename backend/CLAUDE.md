@@ -2,7 +2,7 @@
 
 Read recryption/INTEGRATION.md before changing anything that touches
 verification, badges, signing keys or duplicate detection. Regenerate it
-whenever the Recryption version changes (see the root CLAUDE.md).
+when the library itself changes (see the root CLAUDE.md for what counts).
 
 ## Known bugs (fix later)
 

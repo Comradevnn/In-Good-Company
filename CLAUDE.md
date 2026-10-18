@@ -35,10 +35,12 @@ its source or its internal spec. This app keeps its own understanding of
 the integration in backend/recryption/INTEGRATION.md, built from the
 library's public API plus this backend's wiring code.
 
-Whenever the Recryption version this app uses changes, regenerate
-INTEGRATION.md. That means a new commit in ../Recryption, a new release, or a
-change to the `recryption` entry in backend/package.json. Then re-run the
-backend's Recryption tests. Don't edit Recryption itself from this repo.
+Regenerate INTEGRATION.md when the library itself changes: a new version
+or release, a change to the `recryption` entry in backend/package.json, or
+new commits in ../Recryption that touch its source (src/), public exports
+or published API docs. Commits that only touch lockfiles, tests, tooling or
+README wording don't count. After regenerating, re-run the backend's
+Recryption tests. Don't edit Recryption itself from this repo.
 
 ## Setup and tests
 
