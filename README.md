@@ -365,7 +365,10 @@ Tracked in [`CLAUDE.md`](CLAUDE.md):
   resume routing and pre-fill logic were fine, but the screen saved and
   displayed dates in UTC, so outside UTC a saved date could come back a day
   off (or the calendar highlighted the day before). Fixed by handling dates
-  as local calendar days; not yet re-checked on a device.
+  as local calendar days. Re-checked in the iOS Simulator on 2026-10-18:
+  resuming onto the step with only a start date, distance and frequency
+  saved showed all three; Settings → "Change dates or distance" showed the
+  saved values; saved dates in the past fell back to today with a note.
 
 ## Prototype scope: built vs not built
 

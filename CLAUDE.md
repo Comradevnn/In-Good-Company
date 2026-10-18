@@ -103,3 +103,8 @@ ordering was flagged before building it.
   ad hoc — specifically re-test resuming onto this screen (ideally via a
   profile with availability fields partially set) during the dedicated
   testing pass called for in the test spec (see above).
+  Re-tested in the iOS Simulator on 2026-10-18 (prototype iteration pass):
+  resume with only start date, radius and frequency set pre-filled all
+  three; the edit path from "Change dates or distance" pre-filled; past
+  saved dates fell back to today with a note. Not reproduced. A UTC
+  date-shift bug in this screen was found and fixed earlier in the build.
