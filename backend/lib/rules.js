@@ -48,6 +48,10 @@ module.exports = {
 
   // Shift day
   STARTERS_PER_SHIFT: 3,
+  // A shift counts as "daytime" when it starts and ends within these local
+  // hours of its own timezone (shown as a tag; not a matching input).
+  DAYTIME_START_HOUR: 7,
+  DAYTIME_END_HOUR: 19,
   ATTENDANCE_AUTO_RESOLVE_MS: 24 * HOUR,
 
   // Reliability escalation (no-shows counted over a trailing window)

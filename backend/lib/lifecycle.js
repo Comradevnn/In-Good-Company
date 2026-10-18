@@ -18,7 +18,7 @@ const chat = require('./chat');
 const { notify } = require('./notify');
 const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shifts');
 const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
-const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate } = require('./time');
+const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
 const { haversineMiles, computeAlignment, safeParseArray } = require('../matching/engine');
 const { isBlockedPair } = require('./blocks');
@@ -841,8 +841,17 @@ function alternatives(user, request) {
   return result;
 }
 
+// Starts and ends inside daytime hours, local to the shift.
+function isDaytime(shift) {
+  const start = localMinutes(new Date(shift.starts_at), shift.timezone);
+  const end = localMinutes(new Date(shift.ends_at), shift.timezone);
+  const sameDay = localDate(new Date(shift.starts_at), shift.timezone) === localDate(new Date(shift.ends_at), shift.timezone);
+  return sameDay && start >= rules.DAYTIME_START_HOUR * 60 && end <= rules.DAYTIME_END_HOUR * 60;
+}
+
 function shiftSummary(shift) {
   return {
+    daytime: isDaytime(shift),
     id: shift.id,
     title: shift.title,
     org_name: shift.org.name,

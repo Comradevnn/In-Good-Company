@@ -39,6 +39,11 @@ async function main() {
     await api(`/admin/orgs/${org.id}/verify`, { method: 'POST', admin: true, body: { verified: true } });
     const visible1 = await api('/shifts', { token: alex.token });
     check('verified org\'s shift becomes visible', visible1.body.shifts.some((s) => s.id === shift.id));
+    const evening = await h.makeShift(org, { daysAhead: 5, start_time: '18:00', end_time: '21:00', title: 'Evening walk' });
+    const listed = (await api('/shifts', { token: alex.token })).body.shifts;
+    check('a morning shift is tagged daytime, an evening one is not',
+      listed.find((s) => s.id === shift.id)?.daytime === true && listed.find((s) => s.id === evening.id)?.daytime === false);
+    await api(`/admin/orgs/${org.id}/verify`, { method: 'POST', admin: true, body: { verified: true } });
 
     // ── Waiting period ──
     const req1 = await h.startLooking(alex);

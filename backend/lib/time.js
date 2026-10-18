@@ -33,6 +33,12 @@ function isRealDate(value) {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
+// Minutes since local midnight in tz.
+function localMinutes(date, tz = PLATFORM_TIMEZONE) {
+  const p = parts(date, tz);
+  return Number(p.hour) * 60 + Number(p.minute);
+}
+
 function localDate(date, tz = PLATFORM_TIMEZONE) {
   const p = parts(date, tz);
   return `${p.year}-${p.month}-${p.day}`;
@@ -65,4 +71,4 @@ function weekdayName(startsAt, tz = PLATFORM_TIMEZONE) {
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(new Date(startsAt));
 }
 
-module.exports = { isRealDate, zonedToUtc, localDate, monthKey, addDays, endOfLocalDayMs, formatShiftWhen, weekdayName };
+module.exports = { isRealDate, localMinutes, zonedToUtc, localDate, monthKey, addDays, endOfLocalDayMs, formatShiftWhen, weekdayName };

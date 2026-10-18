@@ -83,7 +83,7 @@ export function ShiftCard({ shift, eyebrow = 'The shift' }) {
   ].filter(([, value]) => value);
   return (
     <View style={app.shiftCard}>
-      <Text style={app.shiftEyebrow}>{eyebrow}</Text>
+      <Text style={app.shiftEyebrow}>{eyebrow}{shift.daytime ? '  ·  ☀︎ Daytime' : ''}</Text>
       <Text style={app.shiftTitle}>{shift.org_name ?? shift.org?.name}</Text>
       {rows.map(([label, value], i) => (
         <View key={label} style={[app.shiftRow, i === 0 && app.shiftRowFirst]}>

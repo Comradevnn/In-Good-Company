@@ -138,7 +138,7 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
               <View key={shift.id} style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={app.buddyName}>{shift.title}</Text>
-                  <Text style={app.buddySub}>{shift.org_name} · {shift.when_label}</Text>
+                  <Text style={app.buddySub}>{shift.org_name} · {shift.when_label}{shift.daytime ? ' · ☀︎ Daytime' : ''}</Text>
                 </View>
                 <PillButton label="RSVP solo" ghost disabled={busy} onPress={() => rsvp(shift.id)} />
               </View>
