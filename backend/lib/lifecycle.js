@@ -20,7 +20,7 @@ const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shift
 const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
-const { haversineMiles, computeAlignment, safeParseArray } = require('../matching/engine');
+const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray } = require('../matching/engine');
 const { isBlockedPair } = require('./blocks');
 
 class LifecycleError extends Error {
@@ -798,7 +798,7 @@ function alternatives(user, request) {
   const nowMs = clock.nowMs();
   const shifts = visibleShifts(new Date(nowMs + rules.MIN_LEAD_MS).toISOString()).filter((s) => s.capacity_remaining >= 1);
   const causes = safeParseArray(user.cause_tags);
-  const aligned = (s) => computeAlignment(causes, s).score >= 0.5;
+  const aligned = (s) => causeGatePasses(causeMatchLevels(causes, s));
   const inWindow = (s) => {
     const day = localDate(new Date(s.starts_at), s.timezone);
     return day >= request.window_start && day <= request.window_end;

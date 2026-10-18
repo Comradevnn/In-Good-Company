@@ -1,15 +1,13 @@
 const { ADJACENCY_TABLE } = require('./adjacency');
 
-// Matching engine — the pure, DB-free checks: Step 1a user-to-user hard
-// filters and Step 1b user-to-shift alignment from the private matching spec
+// Matching engine — the pure, DB-free checks: who can be paired with whom
+// (hard filters) and which shifts a user's causes qualify them for (the
+// cause gate). The private matching spec defines the required behaviour
 // (see README "Specs"). lib/matchingRunner.js applies these to real
 // users/orgs/shifts and adds everything that needs the database: the monthly
 // matched-shift cap, reliability pauses, one open request ("slot") per user,
 // the live shift capacity counter, buddy requests and prior-pairing history.
-//
-// NOT implemented (see README "Not built yet"): the weighted Step 3 soft
-// ranking and its newcomer/veteran and first-timer adjustments. The runner
-// orders candidates by fairness (longest wait first) instead.
+// Soft ranking lives in score.js and assign.js beside this file.
 
 const HARD_FILTER_REASONS = {
   UNDERAGE: 'underage',
@@ -19,14 +17,10 @@ const HARD_FILTER_REASONS = {
   SAME_USER: 'same_user',
 };
 
-// Step 1a. Named filters per this build's scope: age 18+, both verified,
-// mutual gender_pref compatibility, no duplicate pairing (checked by the
-// caller against the pairings table, not here — this function is pure and
-// has no DB access). The safety-flag block is included too, beyond the
-// four explicitly scoped, because the data already exists on the user rows
-// and it's the one hard filter the spec calls out as overriding every other
-// rule — skipping a safety check to save a few lines felt like the wrong
-// place to cut scope.
+// User-to-user hard filters: age 18+, both verified, mutual gender_pref
+// compatibility, and no safety report in either direction (which overrides
+// everything, buddy status included). No duplicate pairing is checked by the
+// caller against the pairings table — this function is pure.
 function hardFiltersPass(userA, userB) {
   const reasons = [];
 
@@ -57,26 +51,33 @@ function safeParseArray(json) {
   }
 }
 
-// Step 1b. shift_tag_alignment / org_mission_alignment / weighted score,
-// exactly as specced (0.6/0.4 weights, "higher of exact-vs-close wins" per
-// point 8, threshold >= 0.5).
-function computeAlignment(userCauseTags, shift) {
-  const shiftAlignment = tagAlignment(userCauseTags, shift.cause_tags);
-  const orgAlignment = tagAlignment(userCauseTags, shift.org.mission_tags);
-  const score = 0.6 * shiftAlignment.value + 0.4 * orgAlignment.value;
-  return {
-    score,
-    shiftAlignment: shiftAlignment.value,
-    orgAlignment: orgAlignment.value,
-    closeMatchUsed: shiftAlignment.usedClose || orgAlignment.usedClose,
-  };
+// How a user's causes relate to a list of tags: 'exact' if any is listed,
+// 'close' if one is only adjacent (ADJACENCY_TABLE), else 'none'. An exact
+// match is never combined with a close one.
+function tagMatchLevel(userTags, targetTags) {
+  if (userTags.some((tag) => targetTags.includes(tag))) return 'exact';
+  if (userTags.some((tag) => (ADJACENCY_TABLE[tag] || []).some((adj) => targetTags.includes(adj)))) return 'close';
+  return 'none';
 }
 
-function tagAlignment(userTags, targetTags) {
-  const exact = userTags.some((tag) => targetTags.includes(tag));
-  if (exact) return { value: 1.0, usedClose: false };
-  const close = userTags.some((tag) => (ADJACENCY_TABLE[tag] || []).some((adj) => targetTags.includes(adj)));
-  return { value: close ? 0.5 : 0.0, usedClose: close };
+function causeMatchLevels(userCauseTags, shift) {
+  const shiftLevel = tagMatchLevel(userCauseTags, shift.cause_tags);
+  const orgLevel = tagMatchLevel(userCauseTags, shift.org.mission_tags);
+  return { shiftLevel, orgLevel, closeMatchUsed: shiftLevel === 'close' || orgLevel === 'close' };
+}
+
+// The cause gate as a lookup on (shift level, org level). The shift itself
+// has to carry the signal: an exact shift match always qualifies, a close
+// one only with some support from the org's mission, and an org-only match
+// never does.
+const CAUSE_GATE = {
+  exact: { exact: true, close: true, none: true },
+  close: { exact: true, close: true, none: false },
+  none: { exact: false, close: false, none: false },
+};
+
+function causeGatePasses(levels) {
+  return Boolean(CAUSE_GATE[levels.shiftLevel]?.[levels.orgLevel]);
 }
 
 // Haversine distance in miles, for the travel_radius_miles check.
@@ -91,7 +92,7 @@ function haversineMiles(a, b) {
   return R * 2 * Math.asin(Math.sqrt(h));
 }
 
-// A user clears a given shift if: alignment score >= 0.5, the org is
+// A user clears a given shift if: the cause gate passes, the org is
 // verified, and — if the user has a saved lat/lng and a travel radius — the
 // shift falls within it. Users who
 // only entered a city (no lat/lng, see LocationScreen.js) skip the radius
@@ -99,8 +100,8 @@ function haversineMiles(a, b) {
 // on a map at all — flagged as a real simplification, not a silent gap.
 function passesShiftGate(user, shift) {
   const causeTags = safeParseArray(user.cause_tags);
-  const alignment = computeAlignment(causeTags, shift);
-  if (alignment.score < 0.5) return { pass: false, alignment };
+  const alignment = causeMatchLevels(causeTags, shift);
+  if (!causeGatePasses(alignment)) return { pass: false, alignment };
   if (!shift.org.verified) return { pass: false, alignment };
 
   if (user.location_lat != null && user.location_lng != null && user.travel_radius_miles != null) {
@@ -115,7 +116,9 @@ function passesShiftGate(user, shift) {
 module.exports = {
   HARD_FILTER_REASONS,
   hardFiltersPass,
-  computeAlignment,
+  causeMatchLevels,
+  causeGatePasses,
+  tagMatchLevel,
   haversineMiles,
   passesShiftGate,
   safeParseArray,

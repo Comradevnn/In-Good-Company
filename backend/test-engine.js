@@ -1,7 +1,6 @@
 // Pure-function checks of matching/engine.js and the adjacency table: no
 // server, no database. Inputs are built from tag membership only and the
-// assertions are pass/fail outcomes, not scores, so nothing here restates
-// the private spec's numbers.
+// assertions are pass/fail outcomes and match levels, not scores.
 const { hardFiltersPass, passesShiftGate } = require('./matching/engine');
 const { ADJACENCY_TABLE } = require('./matching/adjacency');
 
@@ -32,7 +31,13 @@ check('an org-mission match alone does not clear the gate', !passesShiftGate(use
 check('close matches on both shift and org clear the gate (the boundary is inclusive)', passesShiftGate(user([closeA]), shift([closeB], [closeB])).pass);
 check('a close match on the shift alone does not clear the gate', !passesShiftGate(user([closeA]), shift([closeB], [unrelated])).pass);
 const exactAndClose = passesShiftGate(user([closeA, closeB]), shift([closeA], [unrelated]));
-check('an exact match is not added on top of a close match', exactAndClose.alignment.shiftAlignment === passesShiftGate(user([closeA]), shift([closeA], [unrelated])).alignment.shiftAlignment);
+check('an exact match is not added on top of a close match', exactAndClose.alignment.shiftLevel === 'exact' && exactAndClose.alignment.closeMatchUsed === false);
+check('a close shift match backed by an exact org match clears the gate', passesShiftGate(user([closeA]), shift([closeB], [closeA])).pass);
+check('an exact shift match with a close org match clears the gate', passesShiftGate(user([closeA]), shift([closeA], [closeB])).pass);
+check('exact matches on both clear the gate', passesShiftGate(user([closeA]), shift([closeA], [closeA])).pass);
+check('a close org match alone does not clear the gate', !passesShiftGate(user([closeA]), shift([unrelated], [closeB])).pass);
+check('no match on either does not clear the gate', !passesShiftGate(user([closeA]), shift([unrelated], [unrelated])).pass);
+check('a close match is reported as such (for the pairing flags)', passesShiftGate(user([closeA]), shift([closeB], [closeB])).alignment.closeMatchUsed === true);
 check("an unverified org's shift never clears the gate", !passesShiftGate(user([closeA]), { ...shift([closeA], [closeA]), org: { verified: false, mission_tags: [closeA] } }).pass);
 check('an empty cause list clears nothing', !passesShiftGate(user([]), shift([closeA], [closeA])).pass);
 check('a missing cause list clears nothing (not treated as a match)', !passesShiftGate({ ...user([]), cause_tags: undefined }, shift([closeA], [closeA])).pass);
