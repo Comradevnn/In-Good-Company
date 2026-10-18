@@ -77,7 +77,11 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
         </Text>
       )}
 
-      <PillButton label="List a shift" onPress={() => navigate('orgShiftForm')} style={{ marginTop: 18 }} />
+      {org.location_lat == null || org.location_lng == null ? (
+        <InfoCard tone="warn" title="Add your location first" body="Your organization has no map location yet, so volunteers' travel distance can't be checked. Contact us to add it before listing shifts." />
+      ) : (
+        <PillButton label="List a shift" onPress={() => navigate('orgShiftForm')} style={{ marginTop: 18 }} />
+      )}
 
       <SectionTitle title="Your shifts" />
       {upcoming.length === 0 ? <Text style={s.rationale}>No upcoming shifts yet.</Text> : null}
