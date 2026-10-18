@@ -41,8 +41,13 @@ backend/
     org.js                 Org profile, waiver upload, shift listings, roster/check-in, org metrics
     admin.js               Admin page + routes (ADMIN_TOKEN) and dev-only clock routes
   matching/
-    engine.js             Hard filters + alignment scoring (pure functions)
+    engine.js             Hard filters + the cause gate (pure functions)
     adjacency.js           Cause-tag "close match" table
+    config.js              Every ranking weight in one place (custom, untuned)
+    score.js               Fit score for two people on one shift
+    affinity.js            Bounded adjustment from a user's own private fit ratings
+    person.js              Builds the ranker's input from DB rows (leaves out ignored fields)
+    assign.js              Picks pairs best-first across the whole pool
   keys/                  Ed25519 badge-signing key (gitignored, generated on first run)
   recryption/            Recryption library integration (identity verification)
     keyStore.js            KeyManager wiring: registers the PEM key, ESM-interop loader
@@ -180,8 +185,9 @@ Email/password only, no third-party auth provider:
 
 ## Matching algorithm
 
-The pure checks are in `backend/matching/engine.js`; `lib/matchingRunner.js`
-applies them to every open search against the real `orgs`/`shifts` tables.
+The pure checks and ranking are in `backend/matching/`; `lib/matchingRunner.js`
+reads every open search against the real `orgs`/`shifts` tables, asks the
+planner for a set of pairings and writes the proposals.
 It's a reduced version of the full matching spec — kept in the private
 specs repo (see **Private repos** below). At a high level:
 
@@ -194,27 +200,41 @@ plan's monthly matched-shift cap, or whose matching is paused after repeat
 no-shows, are left out of the pool, with a distinct reason so the app can
 show the right next step.
 
-**Shift alignment:** each candidate shift (verified orgs only) is scored for
+**Shift alignment:** each candidate shift (verified orgs only) is checked for
 cause-tag and org-mission alignment against both people, with a
 hand-built adjacency table for "close enough" causes, plus the travel
 radius and the person's chosen dates. Distance is only enforced when both
 the volunteer and the shift have map coordinates, so the app geocodes typed
-places, new orgs must give a location, and shifts inherit their org's. The exact weighting and thresholds
-are part of the private spec, not reproduced here.
+places, new orgs must give a location, and shifts inherit their org's. Which
+cause combinations qualify is defined by the private spec.
 
 **Capacity:** a proposal reserves its spots on the shift through the atomic
 capacity counter as it is created, so concurrent searches, solo RSVPs and
 matching runs in different processes can't overbook (each matching run is
 one `IMMEDIATE` SQLite transaction).
 
-**Ordering:** fairness rather than score — the longest-waiting search is
-served first (rematches after a partner backed out come before everything
-else), and candidates are preferred in this order: a mutual buddy request,
-someone never paired with before, the longest waiter. Shifts are tried
-earliest first, except that a person's own private "not for me" rating of
-an org pushes that org's shifts to the back for them only. Plan tier is
-used only for the monthly cap check, never for ordering. The spec's
-weighted soft ranking is **not built** (see below).
+**Ranking:** only pairs that pass every hard filter are ranked, so no score
+can create a pairing. Each candidate (two people on one shift) gets a fit
+score from shared interests, how close their ages are, an experience mix
+that pairs someone new to a cause with someone experienced in it, how well
+the shift suits each person's causes and travel distance, and each
+person's own private "personal fit" ratings of past orgs and causes (these
+only tune that person's own matches). Reliability can only lower a score,
+and only on a record of late cancels or no-shows; someone with no history
+is not penalised. A volunteer with a habit of late cancels is ranked lower
+next to someone with no attended shifts, never blocked. Previous partners
+are slightly less preferred unless they asked to go together as buddies.
+Pairs are then chosen best-first across the whole pool: rematches after a
+partner backed out come first, then searches close to their deadline, then
+mutual buddy requests; time already waited adds a capped boost, so a long
+waiter only loses to a clearly better pairing. A person's own "not for me"
+rating of an org pushes that org's shifts to the back for them. Plan tier,
+the friendship/romance preference, volunteering frequency and free-text
+profile fields are never used (tier only gates the monthly cap). The
+weights in `backend/matching/config.js` are this prototype's own, untuned
+starting values; the private spec is the source of truth for the required
+behaviour. Each pairing stores its score and a breakdown that only the
+admin can see.
 
 **Lifecycle:** a match is a *proposal*. Each person sees the exact shift
 and partner and confirms — Deeds are held only at that point — or
@@ -386,9 +406,9 @@ reports, share my plans, and user/org/platform metrics.
 
 **Not built yet:**
 
-- The matching spec's weighted soft ranking (interest overlap, age band,
-  proximity, reliability weighting, newcomer/veteran and first-timer
-  adjustments) and its score-based tie-break — ordering is fairness-based.
+- Calibrated ranking weights: the soft ranking is built, but its weights
+  are untuned starting values. Matching also runs as soon as a search
+  starts (no batching window to gather a bigger pool).
 - Premium's advanced filters beyond a partner age range (hobbies/values,
   badge tier).
 - Paid org tiers, billing, corporate CSR packages, org payouts as real
@@ -421,7 +441,10 @@ Optional `backend/.env` settings: `ADMIN_TOKEN` (at least 12 characters)
 enables the admin page at `/admin` (org verification, safety reports and
 pausing a user's matching, platform metrics); paste the token into the page,
 which sends it as the `X-Admin-Token` header (it is never accepted in the
-URL). `TICK_INTERVAL_MS` changes the lifecycle timer (0 turns it off).
+URL). The same token unlocks two read-only matching explain routes:
+`GET /admin/pairings/:id/score` (a pairing's fit score and breakdown) and
+`GET /admin/matching/preview` (what a matching run would do right now).
+`TICK_INTERVAL_MS` changes the lifecycle timer (0 turns it off).
 The dev clock routes (`/dev/*`) need a signed-in session or the admin token;
 `DEV_TOOLS=off` disables them (they are always off when
 `NODE_ENV=production`). Login and signup are rate-limited in memory
@@ -432,7 +455,8 @@ Tests (from `backend/`, each starts its own server on port 3050):
 ```bash
 node test-recryption-keymanager.js   # also: duplicates, badges, badge-reveal
 node test-journey.js                 # also: capacity, matching-filters, deeds, pairing-flows,
-                                     #       ratings-buddies, safety, authz, engine
+                                     #       ratings-buddies, safety, authz, engine,
+                                     #       match-score, match-assign, match-ranking
 ```
 
 Or run every suite in sequence with a one-line result each:
