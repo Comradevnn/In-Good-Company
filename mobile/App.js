@@ -10,6 +10,7 @@ import {
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 import { BACKEND_URL } from './config/api';
 import { loadSessionToken, clearSessionToken } from './auth/session';
+import { installAuthInterceptor, setUnauthorizedHandler } from './api/client';
 import { CAUSE_FLOW, ORG_FLOW, determineResumeStep } from './onboarding/resume';
 import EmailCaptureScreen from './screens/EmailCaptureScreen';
 import QuickProfileScreen from './screens/QuickProfileScreen';
@@ -77,6 +78,9 @@ export default function App() {
   // Org side: null = still checking, false = no org row yet, true = set up.
   const [orgReady, setOrgReady] = useState(null);
 
+  // Shown on the sign-in screen after the server ended this session.
+  const [signedOutNotice, setSignedOutNotice] = useState(null);
+
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Inter_400Regular,
@@ -92,6 +96,20 @@ export default function App() {
       .then((data) => setBackendStatus(`Backend says: ${data.message}`))
       .catch((error) => setBackendStatus(`Backend error: ${error.message}`));
   }, []);
+
+  useEffect(() => {
+    installAuthInterceptor();
+  }, []);
+
+  // Any 401 on an authenticated call means the session is gone (signed in
+  // elsewhere, or logged out): sign out here too, and say why.
+  useEffect(() => {
+    if (!sessionToken) return;
+    setUnauthorizedHandler(() => {
+      resetToSignedOut();
+      setSignedOutNotice('You were signed out. Your account was signed in somewhere else.');
+    });
+  }, [sessionToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadSessionToken()
@@ -202,6 +220,7 @@ export default function App() {
         <TouchableOpacity onPress={loadResumeState} style={styles.retryBtn}>
           <Text style={styles.retryBtnText}>Retry</Text>
         </TouchableOpacity>
+        <Text style={styles.signOutLink} onPress={handleLogOut}>Sign out</Text>
       </View>
     );
   }
@@ -242,6 +261,16 @@ export default function App() {
   // Testing convenience for switching between accounts — clears the stored
   // token and resets everything back to the signup screen's starting state.
   function handleLogOut() {
+    // Best effort: end the session server-side too, then forget it locally.
+    if (sessionToken) {
+      fetch(`${BACKEND_URL}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${sessionToken}` } }).catch(() => {});
+    }
+    setSignedOutNotice(null);
+    resetToSignedOut();
+  }
+
+  function resetToSignedOut() {
+    setUnauthorizedHandler(null);
     clearSessionToken();
     setProfile(null);
     setFlow(CAUSE_FLOW);
@@ -490,7 +519,17 @@ export default function App() {
   }
 
   function renderApp() {
-    if (!sessionToken) return <EmailCaptureScreen onSignedUp={setSessionToken} />;
+    if (!sessionToken) {
+      return (
+        <EmailCaptureScreen
+          notice={signedOutNotice}
+          onSignedUp={(token) => {
+            setSignedOutNotice(null);
+            setSessionToken(token);
+          }}
+        />
+      );
+    }
     if (accountKind === 'org') return renderOrgApp();
     if (showSettings) {
       if (editingSection) return renderEditingScreen();
@@ -512,7 +551,7 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.debugBar}>{backendStatus}</Text>
+      {__DEV__ ? <Text style={styles.debugBar}>{backendStatus}</Text> : null}
       {sessionToken && profile && accountKind !== 'org' ? (
         <View style={styles.deedsBadge}>
           <Text style={styles.deedsBadgeText}>🪙 {profile.deeds_balance ?? 0}</Text>
@@ -540,6 +579,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     backgroundColor: '#4F6F52',
+  },
+  signOutLink: {
+    fontFamily: 'Inter_600SemiBold',
+    color: '#B4543A',
+    marginTop: 4,
   },
   retryBtnText: {
     fontFamily: 'Inter_600SemiBold',

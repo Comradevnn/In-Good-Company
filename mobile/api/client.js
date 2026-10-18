@@ -1,5 +1,35 @@
 import { BACKEND_URL } from '../config/api';
 
+// A session ends server-side when the account signs in somewhere else (one
+// session per account) or logs out. Every authenticated call to the backend
+// — through api() below or a raw fetch elsewhere — goes through this
+// wrapper, so a 401 signs the app out cleanly instead of stranding the user
+// on an error screen. Installed once by App.js.
+let unauthorizedHandler = null;
+let installed = false;
+
+export function setUnauthorizedHandler(fn) {
+  unauthorizedHandler = fn;
+}
+
+export function installAuthInterceptor() {
+  if (installed) return;
+  installed = true;
+  const originalFetch = global.fetch;
+  global.fetch = async (input, init = {}) => {
+    const response = await originalFetch(input, init);
+    const url = typeof input === 'string' ? input : input?.url ?? '';
+    const authHeader = init?.headers?.Authorization ?? init?.headers?.authorization;
+    const isAuthRoute = /\/auth\/(login|signup|logout)$/.test(url);
+    if (response.status === 401 && authHeader && url.startsWith(BACKEND_URL) && !isAuthRoute && unauthorizedHandler) {
+      const handler = unauthorizedHandler;
+      unauthorizedHandler = null; // once per session; App re-registers on sign-in
+      handler();
+    }
+    return response;
+  };
+}
+
 // Thin fetch wrapper for the lifecycle routes. Throws an Error carrying the
 // backend's message and machine-readable `code` (e.g. 'insufficient_deeds',
 // 'monthly_cap_reached') so screens can show the right next step.

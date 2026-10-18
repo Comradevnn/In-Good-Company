@@ -153,7 +153,16 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
 
       {card ? <StatusCard {...card} /> : null}
 
-      {!hasOpenRequest && home.profile.verified && !home.matching_block ? (
+      {!hasOpenRequest && home.profile.verified && !home.matching_block && premium.cap.used >= premium.cap.cap ? (
+        <InfoCard
+          title="You've used this month's matched shifts"
+          body={`Your plan includes ${premium.cap.cap} matched shift${premium.cap.cap === 1 ? '' : 's'} a month. You can look again next month${premium.tier === 'premium' ? '' : ', or go Premium for more'}.`}
+        >
+          {premium.tier !== 'premium' ? <PillButton label="See Premium" onPress={() => navigate('premium')} style={{ marginTop: 10, alignSelf: 'flex-start' }} /> : null}
+        </InfoCard>
+      ) : null}
+
+      {!hasOpenRequest && home.profile.verified && !home.matching_block && premium.cap.used < premium.cap.cap ? (
         <View style={app.ctaInline}>
           <Text style={app.ctaInlineText}>
             {home.impact.shifts || home.bookings.length ? 'Ready for another one?' : 'Ready for your first shift?'} Tell us when you're free and we'll start looking.
@@ -177,7 +186,9 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
                 {b.pairing
                   ? b.pairing.status === 'proposed'
                     ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
-                    : `With ${b.pairing.partner_name}`
+                    : b.pairing.status === 'cancelled'
+                      ? `${b.pairing.partner_name} can't make it — tap to choose what's next`
+                      : `With ${b.pairing.partner_name}`
                   : b.status === 'attended' ? 'Checked in' : 'Solo spot'}
               </Text>
             </TouchableOpacity>

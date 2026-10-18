@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
 import { ErrorText, Screen } from '../components/AppParts';
 import { detectLocation, geocodePlace } from '../location/geocode';
+import WaiverPicker, { waiverBody } from '../components/WaiverPicker';
 
 // Org onboarding (plotline "orgOnboard"): the basics we need to verify a
 // nonprofit, the causes it works on, and its liability waiver / consent
@@ -25,6 +25,8 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [coords, setCoords] = useState(null); // { lat, lng } — needed so travel distance applies
+  // Set once the org row exists, so a failed waiver upload retries only that step.
+  const [orgCreated, setOrgCreated] = useState(false);
 
   async function useCurrentLocation() {
     setError(null);
@@ -37,34 +39,30 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
     }
   }
 
-  async function pickWaiver() {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.6 });
-    if (!result.canceled && result.assets?.[0]?.base64) {
-      const asset = result.assets[0];
-      setWaiver({ uri: asset.uri, base64: asset.base64, mime: asset.mimeType === 'image/png' ? 'image/png' : 'image/jpeg' });
-    }
-  }
-
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      const where = coords ?? await geocodePlace(location);
-      if (!where) {
-        throw new Error("We couldn't find that location on a map. Check the spelling, or tap \"Use my current location\".");
+      if (!orgCreated) {
+        const where = coords ?? await geocodePlace(location);
+        if (!where) {
+          throw new Error("We couldn't find that location on a map. Check the spelling, or tap \"Use my current location\".");
+        }
+        setCoords(where);
+        try {
+          await api(sessionToken, '/orgs', {
+            method: 'POST',
+            body: {
+              name, registration_number: registration, website: website.trim() || undefined, location_label: location, description, mission_tags: causes,
+              location_lat: where.lat, location_lng: where.lng,
+            },
+          });
+        } catch (err) {
+          if (err.status !== 409) throw err; // 409: created on an earlier try
+        }
+        setOrgCreated(true);
       }
-      setCoords(where);
-      await api(sessionToken, '/orgs', {
-        method: 'POST',
-        body: {
-          name, registration_number: registration, website: website.trim() || undefined, location_label: location, description, mission_tags: causes,
-          location_lat: where.lat, location_lng: where.lng,
-        },
-      });
-      await api(sessionToken, '/orgs/mine/waiver', {
-        method: 'POST',
-        body: waiver === 'default' ? { use_default: true } : { mime: waiver.mime, data_base64: waiver.base64 },
-      });
+      await api(sessionToken, '/orgs/mine/waiver', { method: 'POST', body: waiverBody(waiver) });
       onDone();
     } catch (err) {
       setError(err);
@@ -124,23 +122,7 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
       <View style={s.field}>
         <Text style={s.label}>Liability waiver</Text>
         <Text style={[s.rationale, { marginTop: 0, marginBottom: 8 }]}>Upload a photo of your own signed waiver, or use our default form.</Text>
-        <TouchableOpacity style={s.locateCard} onPress={pickWaiver}>
-          {waiver && waiver !== 'default' ? (
-            <>
-              <Image source={{ uri: waiver.uri }} style={{ width: 120, height: 90, borderRadius: 8 }} />
-              <Text style={[s.successText, { marginTop: 8 }]}>✓ Waiver uploaded — tap to replace</Text>
-            </>
-          ) : (
-            <>
-              <Text style={s.pin}>📄</Text>
-              <Text style={[s.optionTitle, { marginTop: 8 }]}>Tap to upload a photo of your waiver</Text>
-            </>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.toggleRow]} onPress={() => setWaiver(waiver === 'default' ? null : 'default')}>
-          <Text style={s.toggleLabel}>Use the platform's default waiver instead</Text>
-          <View style={[s.switchTrack, waiver === 'default' && s.switchTrackOn]}><View style={[s.switchThumb, waiver === 'default' && s.switchThumbOn]} /></View>
-        </TouchableOpacity>
+        <WaiverPicker value={waiver} onChange={setWaiver} />
       </View>
       <ErrorText error={error} />
       <Text style={{ marginTop: 22, textAlign: 'center', color: colors.danger, fontFamily: 'Inter_600SemiBold' }} onPress={onLogOut}>Log out</Text>

@@ -19,7 +19,7 @@ import { saveSessionToken } from '../auth/session';
 // the spec screen leans on social sign-in, which we don't have yet.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function EmailCaptureScreen({ onSignedUp }) {
+export default function EmailCaptureScreen({ onSignedUp, notice }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +31,6 @@ export default function EmailCaptureScreen({ onSignedUp }) {
   const [referralCode, setReferralCode] = useState('');
 
   const emailValid = EMAIL_RE.test(email.trim());
-  const isGmail = /@gmail\.com$/i.test(email.trim());
   const canSubmit = emailValid && password.length >= 8 && !submitting;
 
   async function handleContinue() {
@@ -84,6 +83,7 @@ export default function EmailCaptureScreen({ onSignedUp }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
         <Text style={styles.eyebrow}>Get started</Text>
         <Text style={styles.h2}>What's your email?</Text>
         <Text style={styles.rationale}>
@@ -103,11 +103,6 @@ export default function EmailCaptureScreen({ onSignedUp }) {
             autoComplete="email"
           />
         </View>
-        {isGmail ? (
-          <Text style={styles.gmailHint}>
-            ✓ Gmail detected — you'll be able to sign in with one tap next time.
-          </Text>
-        ) : null}
 
         <View style={styles.field}>
           <Text style={styles.label}>Password</Text>
@@ -165,6 +160,15 @@ export default function EmailCaptureScreen({ onSignedUp }) {
 }
 
 const styles = StyleSheet.create({
+  noticeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#8A5A18',
+    backgroundColor: '#F6E3C7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
   altLink: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
@@ -224,12 +228,6 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: colors.ink,
     backgroundColor: colors.surface,
-  },
-  gmailHint: {
-    fontFamily: 'Inter_600SemiBold',
-    color: colors.mossDark,
-    fontSize: 12.5,
-    marginTop: 8,
   },
   errorText: {
     fontFamily: 'Inter_400Regular',

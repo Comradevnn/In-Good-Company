@@ -5,6 +5,7 @@ import { app } from '../theme/appStyles';
 import { api } from '../api/client';
 import { ErrorText, InfoCard, Loading, PillButton, Screen, SectionTitle, StatRow } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
+import WaiverPicker, { waiverBody } from '../components/WaiverPicker';
 
 // Org dashboard: verification status (shifts stay hidden until verified),
 // shift listings with their live capacity, aggregate turnout metrics and the
@@ -14,6 +15,20 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
   const [shifts, setShifts] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [error, setError] = useState(null);
+  const [waiver, setWaiver] = useState(null);
+  const [savingWaiver, setSavingWaiver] = useState(false);
+
+  async function saveWaiver() {
+    setSavingWaiver(true);
+    setError(null);
+    try {
+      setOrg(await api(sessionToken, '/orgs/mine/waiver', { method: 'POST', body: waiverBody(waiver) }));
+    } catch (err) {
+      setError(err);
+    } finally {
+      setSavingWaiver(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +64,17 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
         <InfoCard tone="ok" title="✓ Verified" body="Your shifts are visible to volunteers and in the matching pool." />
       ) : (
         <InfoCard tone="warn" title="Verification pending" body="You can list shifts now; volunteers will see them as soon as we've verified your organization." />
+      )}
+
+      {!org.waiver ? (
+        <InfoCard tone="warn" title="Add your liability waiver" body="Volunteers need a waiver or consent form on file for your shifts. Upload a photo of yours, or use our default.">
+          <WaiverPicker value={waiver} onChange={setWaiver} />
+          <PillButton label="Save waiver" onPress={saveWaiver} disabled={!waiver || savingWaiver} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
+        </InfoCard>
+      ) : (
+        <Text style={[s.rationale, { marginTop: 10 }]}>
+          Waiver on file: {org.waiver.kind === 'platform_default' ? "the platform's default form" : 'your uploaded waiver'}.
+        </Text>
       )}
 
       <PillButton label="List a shift" onPress={() => navigate('orgShiftForm')} style={{ marginTop: 18 }} />
