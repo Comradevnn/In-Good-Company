@@ -33,7 +33,7 @@ export default function CancelScreen({ sessionToken, bookingId, navigate, onBack
 
   if (done) {
     return (
-      <Screen title="Cancelled" footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
+      <Screen key="done" title="Cancelled" footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
         <Text style={s.h2}>{keepSolo ? "You're going solo" : 'Your shift is cancelled'}</Text>
         <Text style={s.rationale}>
           {done.deeds_outcome === 'released' ? `Your ${done.amount} Deeds are back in your balance. ` : ''}

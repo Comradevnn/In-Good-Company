@@ -49,7 +49,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
 
   if (result || (form.org_rated && (!form.partner || form.partner_rated))) {
     return (
-      <Screen footer={<PrimaryButton label="Find your next shift" onPress={() => navigate('startMatching', {}, { replace: true })} />}>
+      <Screen key="done" footer={<PrimaryButton label="Find your next shift" onPress={() => navigate('startMatching', {}, { replace: true })} />}>
         <View style={app.doneWrap}>
           <View style={app.doneBadge}><Text style={app.doneBadgeText}>✓</Text></View>
           <Text style={[s.h2, { textAlign: 'center' }]}>Nice work.</Text>
@@ -68,7 +68,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   const ready = (!needsOrg || (operational && fit)) && (!needsPartner || again !== null);
 
   return (
-    <Screen title="Rate your shift" onBack={onBack} footer={<PrimaryButton label="Submit" onPress={submit} disabled={!ready || busy} loading={busy} />}>
+    <Screen key="form" title="Rate your shift" onBack={onBack} footer={<PrimaryButton label="Submit" onPress={submit} disabled={!ready || busy} loading={busy} />}>
       <Text style={s.eyebrow}>Shift complete</Text>
       <Text style={s.h2}>How'd it go?</Text>
 

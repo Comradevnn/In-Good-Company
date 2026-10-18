@@ -49,7 +49,7 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
 
   if (sent) {
     return (
-      <Screen title="Safety" footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
+      <Screen key="done" title="Safety" footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
         <Text style={s.h2}>Thank you for telling us</Text>
         <Text style={s.rationale}>
           A real person will review your report.{partnerName ? ` You won't be paired with ${partnerName} again.` : ''}

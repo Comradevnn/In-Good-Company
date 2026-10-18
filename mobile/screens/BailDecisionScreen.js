@@ -35,7 +35,7 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
 
   if (result) {
     return (
-      <Screen title="Change of plans">
+      <Screen key="done" title="Change of plans">
         <Text style={s.h2}>{result.choice === 'rematch' ? "We're on it" : 'Your Deeds are back'}</Text>
         <Text style={s.rationale}>
           {result.choice === 'rematch'

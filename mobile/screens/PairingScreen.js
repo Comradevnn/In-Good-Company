@@ -70,8 +70,11 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
   // ── Proposal: confirm or decline ──
   if (proposedNeedsMe) {
     const canConfirm = !p.safety_notice_required || noticeRead;
+    // Each state gets its own keyed Screen so moving from the long proposal to
+    // the shorter detail view starts at the top instead of a stale offset.
     return (
       <Screen
+        key="proposal"
         title="Shift proposal"
         onBack={onBack}
         footer={(
@@ -142,7 +145,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
   // ── Bail: your partner backed out ──
   if (p.status === 'cancelled' && p.bail) {
     return (
-      <Screen title="Your shift" onBack={onBack}>
+      <Screen key="bail" title="Your shift" onBack={onBack}>
         <Text style={s.eyebrow}>Change of plans</Text>
         <Text style={s.h2}>{p.bail.backed_out_by_name} can't make it</Text>
         <ShiftCard shift={p.shift} />
@@ -169,7 +172,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
   if (['declined', 'expired'].includes(p.status) || (p.status === 'cancelled' && p.backed_out_by_me)) {
     const titles = { declined: 'This proposal was declined', expired: 'This proposal expired', cancelled: 'You cancelled this shift' };
     return (
-      <Screen title="Your shift" onBack={onBack}>
+      <Screen key="ended" title="Your shift" onBack={onBack}>
         <Text style={s.h2}>{titles[p.status]}</Text>
         <Text style={s.rationale}>
           {p.status === 'cancelled'
@@ -188,6 +191,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
 
   return (
     <Screen
+      key="detail"
       title="Your shift"
       onBack={onBack}
       footer={p.chat_open ? <PrimaryButton label={`Chat with ${partnerName}`} onPress={() => navigate('chat', { pairingId })} /> : null}
@@ -213,7 +217,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
       {p.my_booking.hold ? (
         <Text style={app.finetext}>
           {p.my_booking.hold.amount} Deeds {p.my_booking.hold.status === 'held' ? 'held for this shift' : p.my_booking.hold.status}.
-          {inGrace ? ` Free to cancel until ${new Date(p.my_booking.grace_ends_at).toLocaleTimeString()}.` : ''}
+          {inGrace ? ` Free to cancel until ${new Date(p.my_booking.grace_ends_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : ''}
         </Text>
       ) : null}
 
