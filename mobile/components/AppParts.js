@@ -8,7 +8,8 @@ import OnboardingTopBar from './OnboardingTopBar';
 // screen file stays about its own flow.
 
 // Standard screen frame: plotline topbar (title + back), scroll body, and an
-// optional footer (usually a PrimaryButton).
+// optional footer (usually a PrimaryButton). The scroll body insets itself for
+// the iOS keyboard so a focused field lower in a form isn't hidden behind it.
 export function Screen({ title, onBack, children, footer, refreshing, onRefresh, scrollRef }) {
   return (
     <View style={s.container}>
@@ -17,6 +18,9 @@ export function Screen({ title, onBack, children, footer, refreshing, onRefresh,
         ref={scrollRef}
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
         refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined}
       >
         {children}

@@ -1,17 +1,21 @@
+import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 
 // Coordinates are what make the travel-distance limit apply (matching skips
 // the distance check when either side has none), so both the device-location
 // and typed-place paths try to produce them.
 
-// Typed place → { lat, lng } or null. iOS geocodes without an API key;
-// Android needs location permission first.
+// Typed place → { lat, lng } or null. iOS geocodes without an API key or
+// permission, so only Android is asked (someone typing an address shouldn't
+// get a location prompt).
 export async function geocodePlace(text) {
   const query = text?.trim();
   if (!query) return null;
   try {
-    const { status } = await Location.getForegroundPermissionsAsync();
-    if (status !== 'granted') await Location.requestForegroundPermissionsAsync();
+    if (Platform.OS === 'android') {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') await Location.requestForegroundPermissionsAsync();
+    }
     const [hit] = await Location.geocodeAsync(query);
     return hit ? { lat: hit.latitude, lng: hit.longitude } : null;
   } catch {
