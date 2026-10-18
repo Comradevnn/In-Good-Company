@@ -46,7 +46,8 @@ admin.post('/admin/orgs/:id/verify', requireAdmin, (req, res) => {
 
 admin.get('/admin/safety-reports', requireAdmin, (req, res) => {
   const reports = db.prepare(`
-    SELECT r.*, a.display_name AS reporter_name, b.display_name AS reported_name FROM safety_reports r
+    SELECT r.*, a.display_name AS reporter_name, b.display_name AS reported_name,
+      b.account_review AS reported_matching_paused, b.review_reason AS reported_review_reason FROM safety_reports r
     LEFT JOIN users a ON a.id = r.reporter_user_id LEFT JOIN users b ON b.id = r.reported_user_id
     ORDER BY r.status, r.created_at DESC
   `).all();
@@ -61,7 +62,7 @@ admin.post('/admin/safety-reports/:id/review', requireAdmin, (req, res) => {
 });
 
 admin.post('/admin/users/:id/clear-review', requireAdmin, (req, res) => {
-  const result = db.prepare('UPDATE users SET account_review = 0, matching_paused_until = NULL WHERE id = ?').run(req.params.id);
+  const result = db.prepare('UPDATE users SET account_review = 0, review_reason = NULL, matching_paused_until = NULL WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
   res.json({ ok: true });
 });
@@ -69,7 +70,7 @@ admin.post('/admin/users/:id/clear-review', requireAdmin, (req, res) => {
 // Staff pause a user's matching while a safety report is reviewed. The
 // user is told neutrally; nothing says who reported them or why.
 admin.post('/admin/users/:id/suspend', requireAdmin, (req, res) => {
-  const result = db.prepare('UPDATE users SET account_review = 1 WHERE id = ?').run(req.params.id);
+  const result = db.prepare("UPDATE users SET account_review = 1, review_reason = COALESCE(review_reason, 'staff') WHERE id = ?").run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
   notify(req.params.id, 'account_review', 'Your account is under review',
     'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');

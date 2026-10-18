@@ -42,7 +42,7 @@ function escalate(userId) {
     SELECT COUNT(*) AS n FROM reliability_events WHERE user_id = ? AND kind = 'no_show' AND created_at > ?
   `).get(userId, new Date(clock.nowMs() - rules.NO_SHOW_WINDOW_MS).toISOString()).n;
   if (recent >= rules.NO_SHOW_REVIEW_AT) {
-    db.prepare('UPDATE users SET account_review = 1 WHERE id = ?').run(userId);
+    db.prepare("UPDATE users SET account_review = 1, review_reason = 'no_shows' WHERE id = ?").run(userId);
     notify(userId, 'reliability_review', 'Your account is under review',
       "You've missed several shifts recently. Matching is paused while a person from our team reviews your account.");
   } else if (recent >= rules.NO_SHOW_PAUSE_AT) {

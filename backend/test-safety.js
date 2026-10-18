@@ -2,7 +2,8 @@
 // and completed pairings), contact sharing can't be switched on, no
 // conversation starters, "take me out" works even after the shift started,
 // a report blocks a buddyship from forming, and strangers can't be flagged
-// by id. Own server on :3050, own throwaway database.
+// by id, and open reports from several different past partners pause the
+// reported person's matching. Own server on :3050, own throwaway database.
 const h = require('./test-helpers');
 
 h.useTempDb('safety');
@@ -90,6 +91,30 @@ async function main() {
     check('a report about someone you were never paired with is rejected', byId.status === 404, byId.body);
     const known = await api('/safety/reports', { method: 'POST', token: b.token, body: { category: 'other', reported_user_id: a.id } });
     check('…but a report about a past partner by id is accepted', known.status === 201);
+
+    // ── Repeated reports from different past partners pause matching ──
+    const R = await h.makeVolunteer({ name: 'Rex', deeds: 5 });
+    const P1 = await h.makeVolunteer({ name: 'Pam' });
+    const P2 = await h.makeVolunteer({ name: 'Pip' });
+    for (const p of [P1, P2]) {
+      db.prepare("INSERT INTO pairings (id, user_a_id, user_b_id, shift_id, status) VALUES (?, ?, ?, 'past-shift', 'completed')")
+        .run(`past-${p.id}`, R.id, p.id);
+    }
+    const reportAbout = (v) => api('/safety/reports', { method: 'POST', token: v.token, body: { category: 'other', reported_user_id: R.id } });
+    const reviewOf = () => db.prepare('SELECT account_review, review_reason FROM users WHERE id = ?').get(R.id);
+    await reportAbout(P1);
+    await reportAbout(P1);
+    check('one past partner reporting (even twice) does not pause matching', reviewOf().account_review === 0, reviewOf());
+    await reportAbout(P2);
+    check('open reports from two different past partners pause matching', reviewOf().account_review === 1 && reviewOf().review_reason === 'safety_reports', reviewOf());
+    const refusedSearch = await h.startLooking(R);
+    check('…so the paused person cannot start a search', refusedSearch.status === 409 && refusedSearch.body.code === 'account_review', refusedSearch.body);
+    const notice = db.prepare("SELECT title, body FROM notifications WHERE user_id = ? AND kind = 'account_review' ORDER BY id DESC LIMIT 1").get(R.id);
+    check('…and is told neutrally, with nothing about who reported them', notice && !/Pam|Pip|report/i.test(`${notice.title} ${notice.body}`), notice);
+    const own = JSON.stringify((await api('/users/me', { token: R.token })).body);
+    check('the review reason is never sent to the user', !own.includes('review_reason') && !own.includes('safety_reports'));
+    await api(`/admin/users/${R.id}/clear-review`, { method: 'POST', admin: true });
+    check('staff clearing the review lifts the pause', reviewOf().account_review === 0 && reviewOf().review_reason === null);
   } finally {
     h.cleanup(server);
   }

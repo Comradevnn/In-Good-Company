@@ -10,6 +10,7 @@
 //     a buddy forms only when both said yes, otherwise nobody learns anything.
 const db = require('../db');
 const clock = require('./clock');
+const rules = require('./rules');
 const premium = require('./premium');
 const { notify } = require('./notify');
 const { getShift } = require('./shifts');
@@ -202,6 +203,21 @@ const SAFETY_NOTICE = {
   ],
 };
 
+// Open reports from several different past partners pause the reported
+// person's matching until staff review it (one report alone never does, so
+// a single bad-faith report can't). They are told neutrally, as for any
+// account review; nothing says who reported them or why.
+function pauseIfRepeatedlyReported(userId) {
+  const reporters = db.prepare(`
+    SELECT COUNT(DISTINCT reporter_user_id) AS n FROM safety_reports WHERE reported_user_id = ? AND status = 'open'
+  `).get(userId).n;
+  const user = getUser(userId);
+  if (reporters < rules.SAFETY_PAUSE_DISTINCT_REPORTERS || !user || user.account_review) return;
+  db.prepare("UPDATE users SET account_review = 1, review_reason = 'safety_reports' WHERE id = ?").run(userId);
+  notify(userId, 'account_review', 'Your account is under review',
+    'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
+}
+
 const fileReport = db.transaction((user, body) => {
   const category = REPORT_CATEGORIES.includes(body.category) ? body.category : null;
   if (!category) throw new LifecycleError('invalid_category', `category must be one of: ${REPORT_CATEGORIES.join(', ')}`, 400);
@@ -247,6 +263,7 @@ const fileReport = db.transaction((user, body) => {
       UPDATE pairings SET contact_share_a = 0, contact_share_b = 0
       WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
     `).run(user.id, reportedId, reportedId, user.id);
+    pauseIfRepeatedlyReported(reportedId);
   }
   notify(user.id, 'report_received', 'We got your report', 'A person on our team will review it. Thank you for telling us.');
   return { report_id: reportId, reported_user_id: reportedId, pairing };

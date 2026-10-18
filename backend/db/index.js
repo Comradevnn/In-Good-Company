@@ -88,6 +88,8 @@ ensureColumns('users', [
   ['safety_notice_ack_at', 'TEXT'],
   ['matching_paused_until', 'TEXT'],
   ['account_review', 'INTEGER NOT NULL DEFAULT 0'],
+  // Why account_review is set: no_shows | safety_reports | staff (admin-only).
+  ['review_reason', 'TEXT'],
 ]);
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)');
 

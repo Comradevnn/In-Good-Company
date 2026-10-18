@@ -6,8 +6,9 @@ const ADJACENCY_TABLE = {
   'Community organizing': ['Food banks & shelters'],
   'Animal welfare': ['Environmental cleanups'],
   'Environmental cleanups': ['Animal welfare'],
-  'Youth mentorship': [],
-  'Elder care': [],
+  // People-facing care work with similar screening (owner decision, 2026-10).
+  'Youth mentorship': ['Elder care'],
+  'Elder care': ['Youth mentorship'],
 };
 
 module.exports = { ADJACENCY_TABLE };

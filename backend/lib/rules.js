@@ -58,6 +58,9 @@ module.exports = {
   NO_SHOW_WINDOW_MS: 90 * DAY,
   NO_SHOW_PAUSE_AT: 2,
   NO_SHOW_REVIEW_AT: 3,
+  // Owner decision: open safety reports from this many different past partners
+  // pause the reported person's matching until staff review it.
+  SAFETY_PAUSE_DISTINCT_REPORTERS: 2,
   NO_SHOW_PAUSE_MS: 14 * DAY,
 
   MIN_AGE: 18,

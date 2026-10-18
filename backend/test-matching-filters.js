@@ -138,8 +138,9 @@ async function main() {
     // ── Cause alignment: org-mission match alone isn't enough ──
     const orgMixed = await h.makeOrg({ mission_tags: ['Community organizing', 'Youth mentorship'] });
     const youthOnly = await h.makeShift(orgMixed, { cause_tags: ['Youth mentorship'], daysAhead: 6 });
-    const org1 = await h.makeVolunteer({ deeds: 5, causes: ['Community organizing', 'Elder care'] });
-    const org2 = await h.makeVolunteer({ deeds: 5, causes: ['Community organizing', 'Elder care'] });
+    // Neither cause is close to Youth mentorship, so only the org's mission matches.
+    const org1 = await h.makeVolunteer({ deeds: 5, causes: ['Community organizing', 'Animal welfare'] });
+    const org2 = await h.makeVolunteer({ deeds: 5, causes: ['Community organizing', 'Animal welfare'] });
     await h.startLooking(org1);
     await h.startLooking(org2);
     check("users matching only the org's mission (not the shift's cause) aren't placed on it",

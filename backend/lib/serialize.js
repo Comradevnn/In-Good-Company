@@ -9,6 +9,7 @@ const INTERNAL_USER_COLUMNS = [
   'reliability_flag_habitual_late_canceller',
   'reliability_flag_notably_nervous_or_first_time',
   'account_review',
+  'review_reason',
   'matching_paused_until',
   'referred_by_user_id',
   'referral_credited_at',
