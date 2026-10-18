@@ -197,7 +197,9 @@ show the right next step.
 **Shift alignment:** each candidate shift (verified orgs only) is scored for
 cause-tag and org-mission alignment against both people, with a
 hand-built adjacency table for "close enough" causes, plus the travel
-radius and the person's chosen dates. The exact weighting and thresholds
+radius and the person's chosen dates. Distance is only enforced when both
+the volunteer and the shift have map coordinates, so the app geocodes typed
+places, new orgs must give a location, and shifts inherit their org's. The exact weighting and thresholds
 are part of the private spec, not reproduced here.
 
 **Capacity:** a proposal reserves its spots on the shift through the atomic

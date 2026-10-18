@@ -5,6 +5,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
 import { ErrorText, Screen } from '../components/AppParts';
+import { geocodePlace } from '../location/geocode';
 
 // List a shift (plotline "orgListShift"). Times are in the org's local time.
 const CAUSES = ['Food banks & shelters', 'Animal welfare', 'Environmental cleanups', 'Youth mentorship', 'Elder care', 'Community organizing'];
@@ -30,9 +31,16 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
     setBusy(true);
     setError(null);
     try {
+      // A different shift location is placed on the map; otherwise the
+      // shift inherits the org's own coordinates (server side).
+      const where = location.trim() ? await geocodePlace(location) : null;
+      if (location.trim() && !where) throw new Error("We couldn't find that shift location on a map — check it, or leave it blank to use your org's address.");
       await api(sessionToken, '/orgs/mine/shifts', {
         method: 'POST',
-        body: { title, cause_tags: [cause], date, start_time: start, end_time: end, capacity: Number(capacity), location_label: location || undefined, description },
+        body: {
+          title, cause_tags: [cause], date, start_time: start, end_time: end, capacity: Number(capacity), location_label: location || undefined, description,
+          ...(where ? { location_lat: where.lat, location_lng: where.lng } : {}),
+        },
       });
       onDone();
     } catch (err) {

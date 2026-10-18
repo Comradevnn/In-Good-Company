@@ -19,6 +19,7 @@ admin.get('/admin/orgs', requireAdmin, (req, res) => {
     ...publicOrg(org),
     registration_number: org.registration_number,
     waiver: org.waiver_kind,
+    has_coordinates: org.location_lat != null && org.location_lng != null,
     created_at: org.created_at,
   }));
   res.json({ orgs });
@@ -26,6 +27,13 @@ admin.get('/admin/orgs', requireAdmin, (req, res) => {
 
 admin.post('/admin/orgs/:id/verify', requireAdmin, (req, res) => {
   const verified = req.body?.verified !== false;
+  const org = db.prepare('SELECT location_lat, location_lng FROM orgs WHERE id = ?').get(req.params.id);
+  if (!org) return res.status(404).json({ error: 'Org not found.' });
+  // Without coordinates, volunteers' distance limits can't be applied to
+  // this org's shifts — verifying anyway takes an explicit override.
+  if (verified && (org.location_lat == null || org.location_lng == null) && req.body?.allow_missing_location !== true) {
+    return res.status(409).json({ error: 'This org has no map location, so distance limits would not apply to its shifts.', code: 'org_needs_location' });
+  }
   const result = db.prepare('UPDATE orgs SET verified = ?, verified_at = ? WHERE id = ?')
     .run(verified ? 1 : 0, verified ? clock.isoNow() : null, req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Org not found.' });
@@ -150,8 +158,9 @@ async function load() {
   const orgs = await (await fetch('/admin/orgs', { headers: h() })).json();
   document.getElementById('orgs').innerHTML = (orgs.orgs || []).map((o) => '<div class="card"><b>' + esc(o.name) + '</b> ' +
     (o.verified ? '✓ verified' : '<span class="muted">unverified — shifts hidden</span>') +
+    (o.has_coordinates ? '' : ' <span style="color:#B4543A;font-weight:600;">no location — distance limits are not applied</span>') +
     '<div class="muted">' + esc((o.mission_tags || []).join(', ')) + ' · reg ' + esc(o.registration_number || '—') + ' · waiver ' + esc(o.waiver || 'none') + '</div>' +
-    '<button onclick="verify(\\'' + o.id + '\\',' + !o.verified + ')">' + (o.verified ? 'Unverify' : 'Verify') + '</button></div>').join('') || esc(orgs.error);
+    '<button onclick="verify(\\'' + o.id + '\\',' + !o.verified + ',' + o.has_coordinates + ')">' + (o.verified ? 'Unverify' : 'Verify') + '</button></div>').join('') || esc(orgs.error);
   const reports = await (await fetch('/admin/safety-reports', { headers: h() })).json();
   document.getElementById('reports').innerHTML = (reports.reports || []).map((r) => '<div class="card"><b>' + esc(r.category) + '</b> · ' + esc(r.status) +
     '<div class="muted">' + esc(r.reporter_name) + ' (' + esc(r.reporter_user_id) + ') reported ' + esc(r.reported_name || '—') + ' (' + esc(r.reported_user_id || '—') + ') · ' + esc(r.created_at) + '</div><p>' + esc(r.description) + '</p>' +
@@ -161,7 +170,14 @@ async function load() {
   const m = await (await fetch('/admin/metrics', { headers: h() })).json();
   document.getElementById('metrics').textContent = JSON.stringify(m, null, 2);
 }
-async function verify(id, verified) { await fetch('/admin/orgs/' + id + '/verify', { method: 'POST', headers: h(), body: JSON.stringify({ verified }) }); load(); }
+async function verify(id, verified, hasCoordinates) {
+  let allow = false;
+  if (verified && !hasCoordinates) {
+    allow = confirm('This org has no map location, so volunteers\\' distance limits will not apply to its shifts. Verify anyway?');
+    if (!allow) return;
+  }
+  await fetch('/admin/orgs/' + id + '/verify', { method: 'POST', headers: h(), body: JSON.stringify({ verified, allow_missing_location: allow }) }); load();
+}
 async function review(id) {
   const note = (document.getElementById('note-' + id) || {}).value || '';
   await fetch('/admin/safety-reports/' + id + '/review', { method: 'POST', headers: h(), body: JSON.stringify({ note }) }); load();

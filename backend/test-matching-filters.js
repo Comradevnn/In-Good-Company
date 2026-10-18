@@ -162,6 +162,30 @@ async function main() {
     check('after both widen their radius, they are matched', adj.body.request.status === 'proposed', adj.body.request);
 
     isolate();
+    // ── Org coordinates: required at signup, inherited by shifts ──
+    isolate();
+    const noCoordsToken = (await api('/auth/signup', { method: 'POST', body: { email: `nocoords-${Date.now()}@example.com`, password: 'testpassword1', kind: 'org' } })).body.session_token;
+    const noCoords = await api('/orgs', { method: 'POST', token: noCoordsToken, body: { name: 'Somewhere Org', mission_tags: ['Elder care'], location_label: 'Somewhere' } });
+    check('an org without a map location is refused at signup', noCoords.status === 400 && noCoords.body.code === 'location_required', noCoords.body);
+    const legacyOrgId = crypto.randomBytes(8).toString('hex');
+    db.prepare(`INSERT INTO orgs (id, name, mission_tags, verified, created_at) VALUES (?, 'Legacy Org', '["Elder care"]', 0, ?)`).run(legacyOrgId, new Date().toISOString());
+    const legacyVerify = await api(`/admin/orgs/${legacyOrgId}/verify`, { method: 'POST', admin: true, body: { verified: true } });
+    check('verifying a coordinate-less org needs an explicit override', legacyVerify.status === 409 && legacyVerify.body.code === 'org_needs_location');
+    check('…which works', (await api(`/admin/orgs/${legacyOrgId}/verify`, { method: 'POST', admin: true, body: { verified: true, allow_missing_location: true } })).status === 200);
+    const listed = (await api('/admin/orgs', { admin: true })).body.orgs.find((o) => o.id === legacyOrgId);
+    check('the admin list flags it as having no coordinates', listed?.has_coordinates === false);
+    const paloAlto = await h.makeOrg({ mission_tags: ['Elder care'], lat: 37.4419, lng: -122.143 });
+    const inherited = await h.makeShift(paloAlto, { cause_tags: ['Elder care'], daysAhead: 3 });
+    const row = db.prepare('SELECT location_lat, location_lng FROM shifts WHERE id = ?').get(inherited.id);
+    check("a shift listed without coordinates inherits the org's", row.location_lat === 37.4419 && row.location_lng === -122.143, row);
+    const sj1 = await h.makeVolunteer({ deeds: 5, lat: 37.3382, lng: -121.8863, causes: ['Elder care', 'Youth mentorship'] });
+    const sj2 = await h.makeVolunteer({ deeds: 5, lat: 37.3382, lng: -121.8863, causes: ['Elder care', 'Youth mentorship'] });
+    await h.startLooking(sj1, { extra: { travel_radius_miles: 5 } });
+    await h.startLooking(sj2, { extra: { travel_radius_miles: 5 } });
+    check("…so volunteers outside their radius of it aren't matched to it", db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE shift_id = ?').get(inherited.id).n === 0);
+    await stop(sj1, sj2);
+
+    isolate();
     // ── Buddy requests must be mutual ──
     await h.makeShift(orgAnimal, { cause_tags: ['Animal welfare'], daysAhead: 6 });
     const bud1 = await h.makeVolunteer({ deeds: 5, causes: ['Animal welfare', 'Youth mentorship'] });

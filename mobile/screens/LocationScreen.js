@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
-import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
+import { detectLocation, geocodePlace } from '../location/geocode';
 
 // Matches the "location" screen in specs/plotline.html: locate-card +
-// manual fallback. Auto-detect uses real device geolocation (expo-location)
-// and stores lat/lng. The manual fallback here is a plain city text field
-// rather than plotline's full state/city dropderown dataset — there's no
-// geocoding step to turn a typed city into coordinates either way, so a
-// manual entry only ever sets location_city, never lat/lng.
+// manual fallback. Auto-detect uses device geolocation (expo-location) and
+// stores lat/lng plus the reverse-geocoded city. The manual fallback is a
+// plain city field (not plotline's full state/city dropdown dataset); a typed
+// city is geocoded to coordinates too, so the travel-distance limit applies.
+// If geocoding finds nothing, the city is saved alone and the user is told
+// distance limits won't apply until a location is detected.
 export default function LocationScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const hasSavedCoords = initialValues?.location_lat != null && initialValues?.location_lng != null;
 
@@ -24,23 +25,14 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
   ); // { lat, lng, label } | null
   const [manualCity, setManualCity] = useState(!hasSavedCoords ? initialValues?.location_city ?? '' : '');
   const [submitting, setSubmitting] = useState(false);
+  const [geocodeWarned, setGeocodeWarned] = useState(false);
   const [error, setError] = useState(null);
 
   async function handleDetect() {
     setError(null);
     setDetecting(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        throw new Error('Location permission denied — use the manual field below instead.');
-      }
-      const position = await Location.getCurrentPositionAsync({});
-      const [place] = await Location.reverseGeocodeAsync({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-      const label = place ? [place.city, place.region].filter(Boolean).join(', ') : 'Location detected';
-      setDetected({ lat: position.coords.latitude, lng: position.coords.longitude, label });
+      setDetected(await detectLocation());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -54,9 +46,22 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
     setError(null);
     setSubmitting(true);
     try {
-      const fields = detected
-        ? { location_lat: detected.lat, location_lng: detected.lng }
-        : { location_city: manualCity.trim() };
+      let fields;
+      if (detected) {
+        fields = { location_lat: detected.lat, location_lng: detected.lng };
+        if (detected.label && detected.label !== 'Previously saved location' && detected.label !== 'Location detected') {
+          fields.location_city = detected.label;
+        }
+      } else {
+        const coords = await geocodePlace(manualCity);
+        fields = { location_city: manualCity.trim(), location_lat: coords?.lat ?? null, location_lng: coords?.lng ?? null };
+        if (!coords && !geocodeWarned) {
+          // Tell them once, then let them continue with the city alone.
+          setGeocodeWarned(true);
+          setError("We couldn't place that city on a map, so distance limits won't apply until you detect your location. Tap Continue again to save it anyway.");
+          return;
+        }
+      }
       const updated = await patchProfile(sessionToken, fields);
       onNext(updated);
     } catch (err) {

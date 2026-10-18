@@ -84,6 +84,10 @@ router.post('/orgs', requireAuth, wrap((req, res) => {
   const invalid = firstError(description, website, registration, locationLabel, lat, lng);
   if (invalid) return res.status(400).json({ error: invalid });
   if (website.value && !/^https?:\/\/\S+$/i.test(website.value)) return res.status(400).json({ error: 'Website must start with http:// or https://.' });
+  // Coordinates are what make volunteers' travel-distance limits apply.
+  if (lat.value == null || lng.value == null) {
+    return res.status(400).json({ error: 'Add where your organization is (a map location) so volunteers can be matched by distance.', code: 'location_required' });
+  }
   const id = crypto.randomBytes(16).toString('hex');
   db.prepare(`
     INSERT INTO orgs (id, account_id, name, description, website, registration_number, mission_tags, location_label,

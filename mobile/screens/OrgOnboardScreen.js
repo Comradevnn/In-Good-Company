@@ -6,6 +6,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
 import { ErrorText, Screen } from '../components/AppParts';
+import { detectLocation, geocodePlace } from '../location/geocode';
 
 // Org onboarding (plotline "orgOnboard"): the basics we need to verify a
 // nonprofit, the causes it works on, and its liability waiver / consent
@@ -23,6 +24,18 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
   const [waiver, setWaiver] = useState(null); // { uri, base64, mime } | 'default'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [coords, setCoords] = useState(null); // { lat, lng } — needed so travel distance applies
+
+  async function useCurrentLocation() {
+    setError(null);
+    try {
+      const found = await detectLocation();
+      setCoords({ lat: found.lat, lng: found.lng });
+      if (!location.trim() && found.label) setLocation(found.label);
+    } catch (err) {
+      setError(err);
+    }
+  }
 
   async function pickWaiver() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.6 });
@@ -36,9 +49,17 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
     setBusy(true);
     setError(null);
     try {
+      const where = coords ?? await geocodePlace(location);
+      if (!where) {
+        throw new Error("We couldn't find that location on a map. Check the spelling, or tap \"Use my current location\".");
+      }
+      setCoords(where);
       await api(sessionToken, '/orgs', {
         method: 'POST',
-        body: { name, registration_number: registration, website, location_label: location, description, mission_tags: causes },
+        body: {
+          name, registration_number: registration, website: website.trim() || undefined, location_label: location, description, mission_tags: causes,
+          location_lat: where.lat, location_lng: where.lng,
+        },
       });
       await api(sessionToken, '/orgs/mine/waiver', {
         method: 'POST',
@@ -52,7 +73,7 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
     }
   }
 
-  const ready = name.trim() && registration.trim() && causes.length && waiver;
+  const ready = name.trim() && registration.trim() && location.trim() && causes.length && waiver;
   return (
     <Screen footer={<PrimaryButton label="Continue" onPress={submit} disabled={!ready || busy} loading={busy} />}>
       <Text style={s.eyebrow}>For organizations</Text>
@@ -62,13 +83,27 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
         ['Organization name', name, setName, 'Your organization'],
         ['501(c)(3) or equivalent', registration, setRegistration, 'EIN / registration number'],
         ['Organization website', website, setWebsite, 'https://yourorg.org'],
-        ['Where you are', location, setLocation, 'Neighborhood, city'],
       ].map(([label, value, set, placeholder]) => (
         <View key={label} style={s.field}>
           <Text style={s.label}>{label}</Text>
           <TextInput style={s.input} value={value} onChangeText={set} placeholder={placeholder} placeholderTextColor={colors.inkSoft} autoCapitalize={label.includes('website') ? 'none' : 'sentences'} />
         </View>
       ))}
+      <View style={s.field}>
+        <Text style={s.label}>Where you are</Text>
+        <TextInput
+          style={s.input}
+          value={location}
+          onChangeText={(text) => { setLocation(text); setCoords(null); }}
+          placeholder="Street address, neighborhood or city"
+          placeholderTextColor={colors.inkSoft}
+        />
+        <TouchableOpacity onPress={useCurrentLocation}>
+          <Text style={[s.label, { marginTop: 8, color: colors.mossDark }]}>
+            {coords ? '✓ Location found — shown to volunteers by distance' : 'Use my current location ›'}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <View style={s.field}>
         <Text style={s.label}>What you do</Text>
         <TextInput style={[s.input, s.textarea]} multiline value={description} onChangeText={setDescription} placeholder="A sentence or two volunteers will see" placeholderTextColor={colors.inkSoft} />
