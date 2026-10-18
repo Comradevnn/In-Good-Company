@@ -22,6 +22,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
   const [buddyId, setBuddyId] = useState(buddy?.user_id ?? null);
   const [ageMin, setAgeMin] = useState('');
   const [ageMax, setAgeMax] = useState('');
+  const [anyone, setAnyone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -45,6 +46,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
           window_end: end,
           travel_radius_miles: profile.travel_radius_miles,
           buddy_user_id: buddyId ?? undefined,
+          match_preference: anyone && !buddyId ? 'anyone' : 'best',
           ...(ageMin ? { age_min: Number(ageMin) } : {}),
           ...(ageMax ? { age_max: Number(ageMax) } : {}),
         },
@@ -101,6 +103,22 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
             );
           })}
         </>
+      ) : null}
+
+      {home.match_options?.anyone_available && !buddyId ? (
+        <View style={s.field}>
+          <TouchableOpacity style={s.toggleRow} onPress={() => setAnyone((v) => !v)}>
+            <Text style={s.toggleLabel}>Match me with anyone available</Text>
+            <View style={[s.switchTrack, anyone && s.switchTrackOn]}>
+              <View style={[s.switchThumb, anyone && s.switchThumbOn]} />
+            </View>
+          </TouchableOpacity>
+          <Text style={s.rationale}>
+            {anyone
+              ? "We'll pair you with the first good partner who fits your dates — usually sooner."
+              : "Off: we take our time to find you a really good match. Booking early gives us the most time."}
+          </Text>
+        </View>
       ) : null}
 
       {home.premium.tier === 'premium' ? (

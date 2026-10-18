@@ -158,6 +158,9 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
             )}
         </View>
       ))}
+      {request.anyone_available && request.match_preference !== 'anyone' ? (
+        <PillButton label="Match me with anyone available" ghost style={{ marginTop: 14 }} disabled={busy} onPress={() => adjust({ match_preference: 'anyone' })} />
+      ) : null}
       {request.reason === 'waiting_for_buddy' ? (
         <PillButton label="Open up to a new partner" ghost style={{ marginTop: 14 }} disabled={busy} onPress={() => adjust({ drop_buddy: true })} />
       ) : null}
