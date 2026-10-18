@@ -14,7 +14,7 @@ import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import PrimaryButton from '../components/PrimaryButton';
 import { BACKEND_URL } from '../config/api';
-import { nameMatches, dobMatchesAge, expiryIsValid } from '../verification/localChecks';
+import { nameMatches, dobMatchesAge, dobIsAdult, expiryIsValid } from '../verification/localChecks';
 
 // Identity verification, prototype scope (see the planning decisions +
 // specs/identity-verification-encryption-spec.md):
@@ -30,6 +30,11 @@ import { nameMatches, dobMatchesAge, expiryIsValid } from '../verification/local
 //   number itself. The photo never leaves the device.
 // - Copy reflects the spec's instant on-device design, not plotline.html's
 //   stale "2-3 business days" human-review text.
+// Shown when the ID's date of birth makes the holder under 18, whether the
+// device or the server caught it. Kept kind: a minor did nothing wrong.
+const UNDERAGE_MESSAGE =
+  'In Good Company is for adults 18 and over, so we can\'t verify this ID. Thanks for your interest. We\'d love to have you back once you\'re 18.';
+
 const DOC_TYPES = ["Driver's license", 'Passport', 'State ID'];
 
 // Stable identity slugs for the server's normalized document identity —
@@ -92,6 +97,10 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
       name_match: nameMatches(profile?.full_name, idName),
       // Profile stores age, not DOB, so this is an age-consistency check.
       dob_match: dobMatchesAge(dob, profile?.age),
+      // Strict, separate from the typo-tolerant check above: decided from
+      // the document's own date of birth, not the typed age. Only this
+      // boolean is sent; the date of birth itself never leaves the device.
+      dob_is_adult: dobIsAdult(dob),
       // Spec point 7 — with manual entry there's no independent extracted
       // type to compare against the claim, so this is trivially the
       // selected chip. STUB: becomes a real cross-check once an SDK
@@ -104,6 +113,8 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
       setError("The name on the ID doesn't match your profile name.");
     } else if (!results.dob_match) {
       setError("The date of birth doesn't line up with the age on your profile.");
+    } else if (!results.dob_is_adult) {
+      setError(UNDERAGE_MESSAGE);
     } else if (!results.expiry_ok) {
       setError('This document is expired (or the date is invalid).');
     } else {
@@ -113,6 +124,12 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
 
   async function handleSubmit() {
     setError(null);
+    // Belt and braces: the review step is only reachable after the local
+    // checks pass, but never submit an under-18 result.
+    if (!checks?.dob_is_adult) {
+      setError(UNDERAGE_MESSAGE);
+      return;
+    }
     setSubmitting(true);
     try {
       // D6: the document fields go to the server over TLS; the server
@@ -149,12 +166,17 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
         body: JSON.stringify({
           name_match: checks.name_match,
           dob_match: checks.dob_match,
+          dob_is_adult: checks.dob_is_adult,
           doc_type_confirmed: checks.doc_type_confirmed,
           expiry_date: expiry.trim(),
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Verification failed.');
+      if (!response.ok) {
+        throw new Error(
+          data.code === 'underage_document' ? UNDERAGE_MESSAGE : data.error || 'Verification failed.'
+        );
+      }
 
       await discardPhoto();
       onVerified(data);

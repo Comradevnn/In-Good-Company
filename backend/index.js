@@ -423,7 +423,7 @@ function underDocCheckLimit(accountId) {
 // conflict.
 app.post('/verification/document-check', requireAuth, requireProfile, async (req, res) => {
   if (!underDocCheckLimit(req.account.id)) {
-    return res.status(429).json({ error: 'Too many document checks. Try again in an hour.' });
+    return res.status(429).json({ error: 'Too many document checks. Try again in an hour.', code: 'too_many_document_checks' });
   }
 
   const { document_type, issuing_country, document_number } = req.body ?? {};
@@ -432,6 +432,7 @@ app.post('/verification/document-check', requireAuth, requireProfile, async (req
     typeof issuing_country !== 'string' ||
     typeof document_number !== 'string';
   const staticFieldError = {
+    code: 'invalid_document_fields',
     error: 'document_type, issuing_country, and document_number are required; the number must contain letters or digits, and ":" is not allowed in type or country.',
   };
   if (fieldsInvalid) {
@@ -485,28 +486,40 @@ app.get('/verification/public-key', async (req, res) => {
 // the client. The device signature slot is stubbed at prototype stage — no
 // hardware key without a dev build — so transport trust is TLS only.
 app.post('/verification/attest', requireAuth, requireProfile, async (req, res) => {
-  const { name_match, dob_match, doc_type_confirmed, expiry_date } = req.body ?? {};
+  const { name_match, dob_match, doc_type_confirmed, dob_is_adult, expiry_date } = req.body ?? {};
+
+  // The device decides adulthood from the ID's own date of birth (which never
+  // leaves the device) and sends only this boolean. An explicit false is a
+  // minor's document and is refused before anything is staged or issued. A
+  // missing field is still accepted for older clients and the Recryption
+  // suites; see the open question on closing that gap.
+  if (dob_is_adult === false) {
+    return res.status(400).json({
+      error: 'In Good Company is for adults only, so this document can\'t be used to verify.',
+      code: 'underage_document',
+    });
+  }
 
   for (const [field, value] of Object.entries({ name_match, dob_match, doc_type_confirmed })) {
     if (value !== true) {
       // Server re-checks what the device asserts; a failed local check
       // should never have been submitted, but don't trust the client.
-      return res.status(400).json({ error: `Verification failed: ${field} is not true.` });
+      return res.status(400).json({ error: `Verification failed: ${field} is not true.`, code: `${field}_not_true` });
     }
   }
 
   // V3: expiry is actually checked, not just extracted and ignored.
   if (typeof expiry_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(expiry_date)) {
-    return res.status(400).json({ error: 'expiry_date must be a YYYY-MM-DD date.' });
+    return res.status(400).json({ error: 'expiry_date must be a YYYY-MM-DD date.', code: 'invalid_expiry_date' });
   }
   if (expiry_date <= new Date().toISOString().slice(0, 10)) {
-    return res.status(400).json({ error: 'This document is expired.' });
+    return res.status(400).json({ error: 'This document is expired.', code: 'document_expired' });
   }
 
   const staged = pendingDocChecks.get(req.account.id);
   if (!staged || staged.expiresAt < Date.now()) {
     pendingDocChecks.delete(req.account.id);
-    return res.status(400).json({ error: 'No recent document check. Start verification again.' });
+    return res.status(400).json({ error: 'No recent document check. Start verification again.', code: 'no_recent_document_check' });
   }
   const doc_hmac = staged.hmac;
 
@@ -520,11 +533,11 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
   const claim = await docHashStore.findByHmac(doc_hmac);
   if (!claim) {
     pendingDocChecks.delete(req.account.id);
-    return res.status(400).json({ error: 'No recent document check. Start verification again.' });
+    return res.status(400).json({ error: 'No recent document check. Start verification again.', code: 'no_recent_document_check' });
   }
   if (claim.subject_id !== user.id) {
     pendingDocChecks.delete(req.account.id);
-    return res.status(409).json({ error: 'This document has already verified another account.' });
+    return res.status(409).json({ error: 'This document has already verified another account.', code: 'document_already_used' });
   }
 
   // Badge issuance via Recryption's BadgeService (module 3): payload built
