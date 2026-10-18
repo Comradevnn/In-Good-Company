@@ -23,6 +23,8 @@ function toMatchPerson(userRow, requestRow, stats, cfg) {
     kind: requestRow.kind,
     createdAtMs: parseMs(requestRow.created_at),
     deadlineMs: parseMs(requestRow.search_deadline),
+    // Set when the search is adjusted: the match bar never rises above where it had fallen to.
+    pressureFloor: Number(requestRow.pressure_floor) > 0 ? Math.min(1, Number(requestRow.pressure_floor)) : 0,
     buddyUserId: requestRow.buddy_user_id ?? null,
     matchPreference: requestRow.match_preference === 'anyone' ? 'anyone' : 'best',
     anchorShiftId: stats.anchorShiftId ?? null,

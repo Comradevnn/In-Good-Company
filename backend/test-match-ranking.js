@@ -136,6 +136,75 @@ async function main() {
     const m = (await api('/admin/metrics', { admin: true })).body.searches_by_match_preference;
     check('admin metrics split searches and pairing scores by match preference', m?.best?.by_status && m?.anyone?.by_status && typeof m.anyone.avg_pairing_score === 'number', m);
 
+    // ── Adjusting a search never raises its match bar ──
+    const adjustScenario = async (label, { dropFloor }) => {
+      isolate();
+      const G1 = await h.makeVolunteer({ name: `${label}1`, age: 24, hobbies: 'hiking', causes, deeds: 5 });
+      const G2 = await h.makeVolunteer({ name: `${label}2`, age: 62, hobbies: 'chess', causes, deeds: 5 });
+      await h.startLooking(G1, { preference: 'best', window_end: await h.serverDate(40) });
+      await h.advance({ days: 4, hours: 12 }); // most of the search's allowed time is used
+      await h.makeShift(org, { cause_tags: ['Elder care'], daysAhead: 14 });
+      const adjusted = await api('/requests/current/adjust', { method: 'POST', token: G1.token, body: { travel_radius_miles: 20 } });
+      if (dropFloor) db.prepare('UPDATE availability_requests SET pressure_floor = NULL WHERE user_id = ?').run(G1.id);
+      await h.startLooking(G2, { preference: 'anyone', window_end: await h.serverDate(40) });
+      return { adjusted, G1, G2 };
+    };
+    const kept = await adjustScenario('Kit', { dropFloor: false });
+    check('a search near its end that is adjusted can still be matched', kept.adjusted.status === 200 && pairingsBetween(kept.G1, kept.G2) === 1, kept.adjusted.body);
+    const floorRow = db.prepare('SELECT pressure_floor FROM availability_requests WHERE user_id = ?').get(kept.G1.id);
+    check('…because the adjustment stored how much of its time the search had used', floorRow.pressure_floor > 0.5 && floorRow.pressure_floor <= 1, floorRow);
+    const lost = await adjustScenario('Lou', { dropFloor: true });
+    check('control: without the stored floor the same adjusted search would be held back', pairingsBetween(lost.G1, lost.G2) === 0 && reasonOf(lost.G1) === 'holding_for_better_match', reasonOf(lost.G1));
+
+    // ── "Match me with anyone" is only offered when a partner could really be paired ──
+    const SJ_HOME = { lat: 37.3382, lng: -121.8863 };
+    const NYC_HOME = { lat: 40.7128, lng: -74.006 };
+    const offered = async (searcherOpts, mutate) => {
+      isolate();
+      const me = await h.makeVolunteer({ name: 'Me', causes, deeds: 5, ...SJ_HOME });
+      const other = await h.makeVolunteer({ name: 'Other', causes, deeds: 5, ...SJ_HOME, ...searcherOpts });
+      await h.startLooking(other, { preference: 'best' });
+      if (mutate) mutate(other);
+      return (await h.home(me)).match_options.anyone_available;
+    };
+    check('an eligible nearby searcher makes "anyone" available', await offered({}) === true);
+    check('a searcher whose account is under review does not', await offered({}, (o) => db.prepare('UPDATE users SET account_review = 1, review_reason = ? WHERE id = ?').run('staff', o.id)) === false);
+    const serverMs = await h.serverNow();
+    check('a searcher in a temporary matching pause does not',
+      await offered({}, (o) => db.prepare('UPDATE users SET matching_paused_until = ? WHERE id = ?').run(new Date(serverMs + 14 * 86400000).toISOString(), o.id)) === false);
+    check('a searcher whose gender preference rules the caller out does not', await offered({ gender: 'Male', gender_pref: 'same_gender_only' }) === false);
+    check('a searcher living far outside both travel radii does not', await offered({ ...NYC_HOME }) === false);
+    const SANTA_CRUZ_HOME = { lat: 36.9741, lng: -122.0308 };
+    check('a searcher a little beyond the caller\'s radius but with a wider radius of their own still counts', await offered({ ...SANTA_CRUZ_HOME, radius: 60 }) === true);
+    check('…and one beyond both radii does not', await offered({ ...SANTA_CRUZ_HOME, radius: 5 }) === false);
+    isolate();
+    const asker = await h.makeVolunteer({ name: 'Ask', causes, deeds: 5, ...SJ_HOME });
+    const helper = await h.makeVolunteer({ name: 'Help', causes, deeds: 5, ...SJ_HOME });
+    await h.startLooking(helper, { preference: 'best' });
+    await h.startLooking(asker, { preference: 'best' });
+    const askerHome = await h.home(asker);
+    check('someone who already has a search open is not sent a second prediction in match_options',
+      askerHome.match_options.anyone_available === false && askerHome.request?.status === 'searching' && askerHome.request.anyone_available === true, askerHome.match_options);
+
+    // ── Metrics count each pairing once and leave buddy searches out ──
+    const pairingRows = db.prepare(`
+      SELECT p.id, p.score, ar.match_preference AS pref FROM pairings p
+      JOIN availability_requests ar ON ar.id IN (p.request_a_id, p.request_b_id)
+      WHERE p.score IS NOT NULL AND ar.kind = 'standard' AND ar.buddy_user_id IS NULL
+    `).all();
+    const expectedAvg = (pref) => {
+      const byPairing = new Map(pairingRows.filter((r) => r.pref === pref).map((r) => [r.id, r.score]));
+      return byPairing.size ? [...byPairing.values()].reduce((a, b) => a + b, 0) / byPairing.size : null;
+    };
+    const buddyCountBefore = (await api('/admin/metrics', { admin: true })).body.searches_by_match_preference;
+    db.prepare(`INSERT INTO availability_requests (id, user_id, kind, window_start, window_end, travel_radius_miles, buddy_user_id, match_preference, status, search_deadline, created_at)
+      VALUES (?, ?, 'standard', ?, ?, 15, ?, 'best', 'cancelled', ?, ?)`).run(crypto.randomBytes(8).toString('hex'), asker.id, await h.serverDate(1), await h.serverDate(10), helper.id,
+      new Date(Date.now() + 86400000).toISOString(), new Date().toISOString());
+    const mAfter = (await api('/admin/metrics', { admin: true })).body.searches_by_match_preference;
+    check('a buddy search is left out of both preference groups', JSON.stringify(mAfter) === JSON.stringify(buddyCountBefore), { buddyCountBefore, mAfter });
+    check('each pairing counts once in the average fit of its preference group',
+      ['best', 'anyone'].every((pref) => Math.abs((mAfter[pref]?.avg_pairing_score ?? 0) - (expectedAvg(pref) ?? 0)) < 0.0006), { mAfter, best: expectedAvg('best'), anyone: expectedAvg('anyone') });
+
     // ── Nothing volunteer-facing carries the score ──
     const leaks = [];
     for (const path of [`/pairings/${pairing.id}`, '/me/home', '/requests/current', '/users/me']) {

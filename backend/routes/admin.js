@@ -7,6 +7,8 @@ const clock = require('../lib/clock');
 const deeds = require('../lib/deeds');
 const lifecycle = require('../lib/lifecycle');
 const metrics = require('../lib/metrics');
+const reliability = require('../lib/reliability');
+const social = require('../lib/social');
 const { requireAdmin, adminTokenValid, accountForRequest } = require('../lib/auth');
 const { publicOrg } = require('../lib/shifts');
 const { notify } = require('../lib/notify');
@@ -58,20 +60,30 @@ admin.post('/admin/safety-reports/:id/review', requireAdmin, (req, res) => {
   const result = db.prepare("UPDATE safety_reports SET status = 'reviewed', reviewer_note = ?, reviewed_at = ? WHERE id = ?")
     .run(req.body?.note ?? null, clock.isoNow(), req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Report not found.' });
+  // Staff review lifts the automatic safety hold when too few open reports
+  // remain; other review reasons stay, and staff can still pause manually.
+  const reported = db.prepare('SELECT reported_user_id FROM safety_reports WHERE id = ?').get(req.params.id)?.reported_user_id;
+  social.liftSafetyHoldIfBelowThreshold(reported);
   res.json({ ok: true });
 });
 
+// Review reasons are independent. With a body { reason } only that reason is
+// cleared (the no-shows reason also ends its temporary pause); without one,
+// every reason is cleared.
 admin.post('/admin/users/:id/clear-review', requireAdmin, (req, res) => {
-  const result = db.prepare('UPDATE users SET account_review = 0, review_reason = NULL, matching_paused_until = NULL WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  const reason = req.body?.reason;
+  if (reason != null && !reliability.REVIEW_REASONS.includes(reason)) {
+    return res.status(400).json({ error: `reason must be one of: ${reliability.REVIEW_REASONS.join(', ')}` });
+  }
+  const done = reason == null ? reliability.clearAllReviewReasons(req.params.id) : reliability.clearReviewReason(req.params.id, reason);
+  if (!done) return res.status(404).json({ error: 'User not found.' });
   res.json({ ok: true });
 });
 
 // Staff pause a user's matching while a safety report is reviewed. The
 // user is told neutrally; nothing says who reported them or why.
 admin.post('/admin/users/:id/suspend', requireAdmin, (req, res) => {
-  const result = db.prepare("UPDATE users SET account_review = 1, review_reason = COALESCE(review_reason, 'staff') WHERE id = ?").run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  if (!reliability.addReviewReason(req.params.id, 'staff')) return res.status(404).json({ error: 'User not found.' });
   notify(req.params.id, 'account_review', 'Your account is under review',
     'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
   res.json({ ok: true });
@@ -196,7 +208,7 @@ async function load() {
   document.getElementById('reports').innerHTML = (reports.reports || []).map((r) => '<div class="card"><b>' + esc(r.category) + '</b> · ' + esc(r.status) +
     '<div class="muted">' + esc(r.reporter_name) + ' (' + esc(r.reporter_user_id) + ') reported ' + esc(r.reported_name || '—') + ' (' + esc(r.reported_user_id || '—') + ') · ' + esc(r.created_at) + (r.reported_matching_paused ? ' · <b>matching paused (' + esc(r.reported_review_reason || 'review') + ')</b>' : '') + '</div><p>' + esc(r.description) + '</p>' +
     (r.status === 'open' ? '<textarea id="note-' + r.id + '" rows="2" placeholder="Review note" style="width:100%;border:1.5px solid #D7CEBB;border-radius:10px;padding:8px;"></textarea><p><button onclick="review(\\'' + r.id + '\\')">Mark reviewed</button></p>' : '<p class="muted">Note: ' + esc(r.reviewer_note || '—') + '</p>') +
-    (r.reported_user_id ? '<p><button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'suspend\\')">Pause this user\\'s matching</button> <button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'clear-review\\')">Clear review</button></p>' : '') +
+    (r.reported_user_id ? '<p><button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'suspend\\')">Pause this user\\'s matching</button> <button class="ghost" onclick="userAction(\\'' + r.reported_user_id + '\\', \\'clear-review\\', { reason: \\'safety_reports\\' })">Clear review</button></p>' : '') +
     '</div>').join('') || '<p class="muted">No reports.</p>';
   const m = await (await fetch('/admin/metrics', { headers: h() })).json();
   document.getElementById('metrics').textContent = JSON.stringify(m, null, 2);
@@ -213,7 +225,7 @@ async function review(id) {
   const note = (document.getElementById('note-' + id) || {}).value || '';
   await fetch('/admin/safety-reports/' + id + '/review', { method: 'POST', headers: h(), body: JSON.stringify({ note }) }); load();
 }
-async function userAction(id, action) { await fetch('/admin/users/' + id + '/' + action, { method: 'POST', headers: h() }); load(); }
+async function userAction(id, action, body) { await fetch('/admin/users/' + id + '/' + action, { method: 'POST', headers: h(), body: body ? JSON.stringify(body) : undefined }); load(); }
 </script></body></html>`;
 
 module.exports = { admin, dev, devToolsOn };

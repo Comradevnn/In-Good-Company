@@ -129,6 +129,7 @@ router.get('/me/home', volunteer, wrap((req, res) => {
     ORDER BY s.starts_at
   `).all(user.id, clock.isoNow());
   const m = metrics.userMetrics(user);
+  const request = lifecycle.requestStatus(user);
   res.json({
     now: clock.isoNow(),
     // Calendar "today" in the platform timezone — dates the user picks are
@@ -137,9 +138,11 @@ router.get('/me/home', volunteer, wrap((req, res) => {
     profile: { display_name: user.display_name, verified: Boolean(user.verified), referral_code: referrals.ensureCode(user) },
     deeds: { ...deeds.balances(user.id), shift_price: deeds.shiftPriceDeeds() },
     premium: { ...premium.state(user), cap: premium.capStatus(user), free_late_cancel_available: premium.freeLateCancelAvailable(user) },
-    request: lifecycle.requestStatus(user),
-    // Offered on the "find a shift" screen only when a partner looks likely.
-    match_options: { anyone_available: lifecycle.anyonePartnerLikely(user, user.availability_window_start, user.availability_window_end) },
+    request,
+    // Offered on the "find a shift" screen only when a partner looks likely;
+    // not worked out when a search is already open (request reports it).
+    match_options: { anyone_available: request && ['searching', 'proposed'].includes(request.status)
+      ? false : lifecycle.anyonePartnerLikely(user, user.availability_window_start, user.availability_window_end) },
     actions: homeActions(user),
     bookings: bookings.map((b) => bookingView(user, b)),
     buddies: social.listBuddies(user),

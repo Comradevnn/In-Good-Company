@@ -18,10 +18,13 @@ const HOUR_MS = 3600 * 1000;
 const pairKey = (u1, u2) => (String(u1) < String(u2) ? `${u1}|${u2}` : `${u2}|${u1}`);
 
 // Share of its allowed search time a request has used, 0..1.
+// Never below the floor stored when the search was last adjusted, so
+// moving the deadline out can't raise the bar again.
 function pressure(person, nowMs) {
+  const floor = Number.isFinite(person.pressureFloor) ? person.pressureFloor : 0;
   const span = person.deadlineMs - person.createdAtMs;
   if (!(span > 0)) return 1;
-  return Math.max(0, Math.min(1, (nowMs - person.createdAtMs) / span));
+  return Math.max(floor, Math.max(0, Math.min(1, (nowMs - person.createdAtMs) / span)));
 }
 
 function isUrgent(person, nowMs, cfg) {
@@ -33,7 +36,8 @@ function isUrgent(person, nowMs, cfg) {
 function personalBar(person, shift, nowMs, cfg) {
   if (person.matchPreference === 'anyone' || person.anchorShiftId || person.kind !== 'standard') return 0;
   const bar = cfg.matchBar;
-  const hours = (Date.parse(shift.starts_at) - nowMs) / HOUR_MS;
+  const rawHours = (Date.parse(shift.starts_at) - nowMs) / HOUR_MS;
+  const hours = Number.isFinite(rawHours) ? rawHours : 0; // unparseable start: no bar
   const byShift = hours >= bar.farHoursBeforeShift ? bar.farValue
     : hours <= bar.floorHoursBeforeShift ? 0
       : bar.farValue * (hours - bar.floorHoursBeforeShift) / (bar.farHoursBeforeShift - bar.floorHoursBeforeShift);
@@ -126,8 +130,11 @@ function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
       if (!options.some((o) => o.passes)) {
         exclude(a, 'below_match_bar');
         exclude(b, 'below_match_bar');
-        held.add(a.requestId);
-        held.add(b.requestId);
+        // Only someone whose OWN bar is what holds them is "held" (told we're
+        // taking our time); a partner's bar alone doesn't make it so.
+        for (const p of [a, b]) {
+          if (options.some((o) => personalBar(p, o.shift, nowMs, cfg) > o.score.quality)) held.add(p.requestId);
+        }
         continue;
       }
       options.splice(0, options.length, ...options.filter((o) => o.passes));

@@ -42,8 +42,8 @@ function escalate(userId) {
     SELECT COUNT(*) AS n FROM reliability_events WHERE user_id = ? AND kind = 'no_show' AND created_at > ?
   `).get(userId, new Date(clock.nowMs() - rules.NO_SHOW_WINDOW_MS).toISOString()).n;
   if (recent >= rules.NO_SHOW_REVIEW_AT) {
-    db.prepare("UPDATE users SET account_review = 1, review_reason = 'no_shows' WHERE id = ?").run(userId);
-    notify(userId, 'reliability_review', 'Your account is under review',
+    addReviewReason(userId, 'no_shows');
+    notify(userId, 'account_review', 'Your account is under review',
       "You've missed several shifts recently. Matching is paused while a person from our team reviews your account.");
   } else if (recent >= rules.NO_SHOW_PAUSE_AT) {
     const until = new Date(clock.nowMs() + rules.NO_SHOW_PAUSE_MS).toISOString();
@@ -56,6 +56,47 @@ function escalate(userId) {
   }
 }
 
+// Account-review reasons are independent: users.review_reason holds the set
+// of active ones (no_shows | safety_reports | staff) as a comma-separated
+// list, and account_review stays 1 while the set is non-empty. Clearing one
+// reason never lifts the others.
+const REVIEW_REASONS = ['no_shows', 'safety_reports', 'staff'];
+
+function parseReasons(value) {
+  return String(value ?? '').split(',').map((r) => r.trim()).filter(Boolean);
+}
+
+function reviewReasons(userId) {
+  return parseReasons(db.prepare('SELECT review_reason FROM users WHERE id = ?').get(userId)?.review_reason);
+}
+
+function addReviewReason(userId, reason) {
+  const row = db.prepare('SELECT review_reason FROM users WHERE id = ?').get(userId);
+  if (!row) return false;
+  const set = parseReasons(row.review_reason);
+  if (!set.includes(reason)) set.push(reason);
+  db.prepare('UPDATE users SET account_review = 1, review_reason = ? WHERE id = ?').run(set.join(','), userId);
+  return true;
+}
+
+// Removes one reason (the no-show reason also ends the temporary matching
+// pause). The review itself ends only when no reason is left. A legacy row
+// with the flag set but no recorded reason is treated as having none left.
+function clearReviewReason(userId, reason) {
+  const row = db.prepare('SELECT review_reason FROM users WHERE id = ?').get(userId);
+  if (!row) return false;
+  const set = parseReasons(row.review_reason).filter((r) => r !== reason);
+  db.prepare('UPDATE users SET account_review = ?, review_reason = ? WHERE id = ?')
+    .run(set.length ? 1 : 0, set.length ? set.join(',') : null, userId);
+  if (reason === 'no_shows') db.prepare('UPDATE users SET matching_paused_until = NULL WHERE id = ?').run(userId);
+  return true;
+}
+
+function clearAllReviewReasons(userId) {
+  const result = db.prepare('UPDATE users SET account_review = 0, review_reason = NULL, matching_paused_until = NULL WHERE id = ?').run(userId);
+  return result.changes > 0;
+}
+
 // Why (if at all) this user is currently blocked from matching.
 function matchingBlock(user, nowMs = clock.nowMs()) {
   if (user.account_review) return { code: 'account_review' };
@@ -65,4 +106,7 @@ function matchingBlock(user, nowMs = clock.nowMs()) {
   return null;
 }
 
-module.exports = { record, recompute, matchingBlock };
+module.exports = {
+  record, recompute, matchingBlock,
+  REVIEW_REASONS, reviewReasons, addReviewReason, clearReviewReason, clearAllReviewReasons,
+};

@@ -118,6 +118,8 @@ ensureColumns('pairings', [['score_breakdown', 'TEXT']]);
 // best: wait for a match that clears the match bar; anyone: pair with any
 // eligible partner as soon as possible (the user's own choice).
 ensureColumns('availability_requests', [['match_preference', "TEXT NOT NULL DEFAULT 'best'"]]);
+// Share of its search time a search had used when last adjusted (keeps its match bar from rising).
+ensureColumns('availability_requests', [['pressure_floor', 'REAL']]);
 
 
 // Pairings created by the old demo matcher point at hardcoded demo shift ids

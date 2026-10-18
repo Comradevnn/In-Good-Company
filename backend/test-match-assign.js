@@ -3,7 +3,7 @@
 // protection, buddy handling, determinism, and the inputs matching must
 // ignore. No server, no database. Checks are named by behaviour.
 const { MATCHING_CONFIG: cfg, withOverrides } = require('./matching/config');
-const { planAssignments, pairEligible, buildEdges, compareEdges, pairKey } = require('./matching/assign');
+const { planAssignments, pairEligible, buildEdges, compareEdges, pairKey, pressure } = require('./matching/assign');
 const { scoreTriple } = require('./matching/score');
 const { toMatchPerson } = require('./matching/person');
 
@@ -324,6 +324,31 @@ check('shuffling the input order does not change the plan', shuffleOk);
   const p2 = plan([person('h1', { waitedHours: 0.1, matchPreference: 'anyone' }), person('h2', { waitedHours: 0.1, matchPreference: 'anyone' })], [far]);
   check('a good but imperfect pair far from its shift is held, not matched', p1.matches.length === 0 && p1.heldRequestIds.length === 2, p1.heldRequestIds);
   check('…while two people who chose "anyone" are matched', p2.matches.length === 1);
+
+  // Adjusting a search moves its deadline out but must not raise its bar.
+  const farShift = shift('s1', { starts_at: new Date(NOW + 10 * DAY).toISOString() });
+  const nearEnd = person('n1', { waitedHours: 20, deadlineMs: NOW + 6 * HOUR }); // most of its time used
+  const adjusted = { ...nearEnd, deadlineMs: NOW + 10 * DAY, pressureFloor: pressure(nearEnd, NOW) };
+  const unfloored = { ...adjusted, pressureFloor: 0 };
+  check('the stored floor keeps the bar from rising when the deadline is moved out',
+    personalBar(adjusted, farShift, NOW, cfg) <= personalBar(nearEnd, farShift, NOW, cfg) + 1e-9
+    && personalBar(unfloored, farShift, NOW, cfg) > personalBar(adjusted, farShift, NOW, cfg));
+  check('the floor only ever lifts pressure, never lowers it', pressure({ ...adjusted, pressureFloor: 0.001 }, NOW) === pressure(unfloored, NOW) && pressure(adjusted, NOW) >= pressure(unfloored, NOW));
+  const pAdjusted = plan([adjusted, person('n2', { waitedHours: 0.1, matchPreference: 'anyone', age: 62, interests: ['chess'] })], [farShift]);
+  const pUnadjusted = plan([unfloored, person('n2', { waitedHours: 0.1, matchPreference: 'anyone', age: 62, interests: ['chess'] })], [farShift]);
+  check('an adjusted search near its end is still matched where the same search without the floor is held',
+    pAdjusted.matches.length === 1 && pUnadjusted.matches.length === 0, { adjusted: pAdjusted.matches.length, unadjusted: pUnadjusted.matches.length, q: pUnadjusted.matches[0]?.quality, bar: personalBar(unfloored, farShift, NOW, cfg) });
+
+  // Only the person whose own bar holds the pairing is told we're taking our time.
+  const mixed = plan([person('m1', { waitedHours: 0.1, matchPreference: 'anyone' }), person('m2', { waitedHours: 0.1 })], [far]);
+  check('a partner who chose "anyone" is not given the holding reason, the one with the bar is',
+    mixed.matches.length === 0 && mixed.heldRequestIds.length === 1 && mixed.heldRequestIds[0] === 'r-m2', mixed.heldRequestIds);
+  const rematchHeld = plan([person('m3', { waitedHours: 0.1, kind: 'rematch' }), person('m4', { waitedHours: 0.1, kind: 'solo_rsvp' })], [far]);
+  check('rematch and solo searches are never held', rematchHeld.heldRequestIds.length === 0, rematchHeld.heldRequestIds);
+
+  // An unreadable shift start must not turn the bar into NaN.
+  const noStart = personalBar(person('b1', { waitedHours: 0.1 }), { ...far, starts_at: 'not a date' }, NOW, cfg);
+  check('an unparseable shift start gives a bar of zero, not NaN', noStart === 0, noStart);
 }
 
 // ── Time budget ──// ── Time budget ──

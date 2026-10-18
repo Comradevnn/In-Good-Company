@@ -21,8 +21,9 @@ const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shift
 const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
-const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray, tagMatchLevel } = require('../matching/engine');
+const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray, tagMatchLevel, hardFiltersPass } = require('../matching/engine');
 const { isBlockedPair } = require('./blocks');
+const { pressure } = require('../matching/assign');
 
 class LifecycleError extends Error {
   constructor(code, message, status = 409, extra = {}) {
@@ -108,17 +109,44 @@ function parsePreference(value) {
 }
 
 // Whether someone else is searching now with overlapping dates and a cause
-// in common (or close), so "match me with anyone" is likely to work soon.
-// Only a yes/no ever leaves the server, never who or how many.
-function anyonePartnerLikely(user, windowStart, windowEnd) {
+// in common (or close), who could actually be paired with this user: verified
+// and not on hold, mutually gender-compatible and inside each other's partner
+// age bands, not declined / already paired / blocked, and near enough (when
+// both homes are known, within the larger of the two travel radii). `request`
+// is the caller's own open search, when there is one, for its age band and
+// radius. Only a yes/no ever leaves the server, never who or how many.
+function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   if (!windowStart || !windowEnd) return false;
   const mine = safeParseArray(user.cause_tags);
+  const nowMs = clock.nowMs();
   const others = db.prepare(`
-    SELECT r.user_id, u.cause_tags FROM availability_requests r JOIN users u ON u.id = r.user_id
+    SELECT u.*, r.age_min AS req_age_min, r.age_max AS req_age_max, r.travel_radius_miles AS req_radius
+    FROM availability_requests r JOIN users u ON u.id = r.user_id
     WHERE r.status = 'searching' AND r.kind = 'standard' AND r.user_id != ? AND r.buddy_user_id IS NULL
       AND r.window_start <= ? AND r.window_end >= ?
   `).all(user.id, windowEnd, windowStart);
-  return others.some((o) => tagMatchLevel(mine, safeParseArray(o.cause_tags)) !== 'none' && !isBlockedPair(user.id, o.user_id));
+  const inBand = (min, max, age) => (min == null || (age != null && age >= min)) && (max == null || (age != null && age <= max));
+  const myRadius = request?.travel_radius_miles ?? user.travel_radius_miles ?? null;
+  const unfit = db.prepare(`
+    SELECT 1 FROM pairings WHERE status IN ('proposed', 'confirmed')
+      AND ((user_a_id = @me AND user_b_id = @other) OR (user_a_id = @other AND user_b_id = @me))
+    UNION ALL
+    SELECT 1 FROM partner_ratings WHERE volunteer_again = 0
+      AND ((rater_user_id = @me AND ratee_user_id = @other) OR (rater_user_id = @other AND ratee_user_id = @me))
+  `);
+  return others.some((o) => {
+    if (tagMatchLevel(mine, safeParseArray(o.cause_tags)) === 'none') return false;
+    if (isBlockedPair(user.id, o.id)) return false;
+    if (eligibilityBlock(o, { kind: 'standard' }, nowMs)) return false;
+    if (!hardFiltersPass(user, o).pass) return false;
+    if (!inBand(o.req_age_min, o.req_age_max, user.age) || !inBand(request?.age_min, request?.age_max, o.age)) return false;
+    if (user.location_lat != null && user.location_lng != null && o.location_lat != null && o.location_lng != null) {
+      const radius = [myRadius, o.req_radius ?? o.travel_radius_miles ?? null];
+      if (radius.every((r) => r != null)
+        && haversineMiles({ lat: user.location_lat, lng: user.location_lng }, { lat: o.location_lat, lng: o.location_lng }) > Math.max(...radius)) return false;
+    }
+    return !unfit.get({ me: user.id, other: o.id });
+  });
 }
 
 const createRequest = db.transaction((user, body) => {
@@ -251,6 +279,11 @@ const adjustRequest = db.transaction((user, body) => {
 
   const nowMs = clock.nowMs();
   const deadlineMs = validateWindow(updates.window_start ?? request.window_start, updates.window_end ?? request.window_end, nowMs);
+  // Moving the deadline out must not push the match bar back up: remember how
+  // much of its search time the request had used (never lowering an earlier floor).
+  updates.pressure_floor = pressure({
+    createdAtMs: Date.parse(request.created_at), deadlineMs: Date.parse(request.search_deadline), pressureFloor: request.pressure_floor,
+  }, nowMs);
   updates.search_deadline = new Date(deadlineMs).toISOString();
   updates.status = 'searching';
   updates.last_reason = null;
@@ -939,7 +972,7 @@ function requestStatus(user) {
     reason: request.last_reason,
     match_preference: request.match_preference ?? 'best',
     anyone_available: request.status === 'searching' && request.kind === 'standard' && request.match_preference !== 'anyone'
-      ? anyonePartnerLikely(user, request.window_start, request.window_end) : false,
+      ? anyonePartnerLikely(user, request.window_start, request.window_end, request) : false,
     headline: request.status === 'no_match'
       ? "We couldn't find a match this time"
       : request.kind === 'rematch' ? 'Finding you a new partner for the same shift…'

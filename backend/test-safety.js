@@ -115,6 +115,74 @@ async function main() {
     check('the review reason is never sent to the user', !own.includes('review_reason') && !own.includes('safety_reports'));
     await api(`/admin/users/${R.id}/clear-review`, { method: 'POST', admin: true });
     check('staff clearing the review lifts the pause', reviewOf().account_review === 0 && reviewOf().review_reason === null);
+
+    // ── Review reasons are independent ──
+    const reliabilityLib = require('./lib/reliability');
+    const rules = require('./lib/rules');
+    const reportedUser = async (name) => {
+      const user = await h.makeVolunteer({ name, deeds: 5 });
+      const partners = [];
+      for (let i = 0; i < rules.SAFETY_PAUSE_DISTINCT_REPORTERS; i++) {
+        const partner = await h.makeVolunteer({ name: `${name}-partner-${i}` });
+        db.prepare("INSERT INTO pairings (id, user_a_id, user_b_id, shift_id, status) VALUES (?, ?, ?, 'past-shift', 'completed')")
+          .run(`past-${name}-${i}`, user.id, partner.id);
+        partners.push(partner);
+      }
+      const report = (partner) => api('/safety/reports', { method: 'POST', token: partner.token, body: { category: 'other', reported_user_id: user.id } });
+      return { user, partners, report };
+    };
+    const stateOf = (u) => db.prepare('SELECT account_review, review_reason, matching_paused_until FROM users WHERE id = ?').get(u.id);
+    const reasonsOf = (u) => String(stateOf(u).review_reason ?? '').split(',').filter(Boolean).sort();
+    const missShifts = (u) => { for (let i = 0; i < rules.NO_SHOW_REVIEW_AT; i++) reliabilityLib.record(u.id, 'no_show'); };
+
+    // A no-show review first, then safety reports: both reasons are kept.
+    const N = await reportedUser('Nia');
+    missShifts(N.user);
+    check('repeat no-shows put the account under review', stateOf(N.user).account_review === 1 && reasonsOf(N.user).join() === 'no_shows', stateOf(N.user));
+    for (const p of N.partners) await N.report(p);
+    check('safety reports add their reason even when the account is already under review',
+      stateOf(N.user).account_review === 1 && reasonsOf(N.user).join() === 'no_shows,safety_reports', stateOf(N.user));
+    const unknownReason = await api(`/admin/users/${N.user.id}/clear-review`, { method: 'POST', admin: true, body: { reason: 'because' } });
+    check('clearing an unknown review reason is refused and changes nothing', unknownReason.status === 400 && reasonsOf(N.user).length === 2, unknownReason.body);
+    await api(`/admin/users/${N.user.id}/clear-review`, { method: 'POST', admin: true, body: { reason: 'safety_reports' } });
+    check('clearing the safety reason leaves the no-show review in place',
+      stateOf(N.user).account_review === 1 && reasonsOf(N.user).join() === 'no_shows', stateOf(N.user));
+    check('…so the person still cannot start a search', (await h.startLooking(N.user)).body.code === 'account_review');
+    const noShowNotice = db.prepare("SELECT title FROM notifications WHERE user_id = ? AND kind = 'account_review'").all(N.user.id);
+    check('the no-show review is announced with the same notification kind as any other review',
+      noShowNotice.length >= 1 && db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND kind = 'reliability_review'").get(N.user.id).n === 0, noShowNotice);
+    await api(`/admin/users/${N.user.id}/clear-review`, { method: 'POST', admin: true, body: { reason: 'no_shows' } });
+    check('clearing the last reason lifts the review', stateOf(N.user).account_review === 0 && stateOf(N.user).review_reason === null);
+
+    // Safety reports first, then a no-show review: clearing no-shows keeps the safety hold.
+    const M = await reportedUser('Moe');
+    for (const p of M.partners) await M.report(p);
+    missShifts(M.user);
+    check('a no-show review is added alongside an existing safety hold', reasonsOf(M.user).join() === 'no_shows,safety_reports', stateOf(M.user));
+    db.prepare("UPDATE users SET matching_paused_until = ? WHERE id = ?").run(new Date(Date.now() + 86400000).toISOString(), M.user.id);
+    await api(`/admin/users/${M.user.id}/clear-review`, { method: 'POST', admin: true, body: { reason: 'no_shows' } });
+    check('clearing the no-show reason leaves the safety hold and ends the temporary pause',
+      stateOf(M.user).account_review === 1 && reasonsOf(M.user).join() === 'safety_reports' && stateOf(M.user).matching_paused_until === null, stateOf(M.user));
+    await api(`/admin/users/${M.user.id}/clear-review`, { method: 'POST', admin: true });
+    check('clearing without a reason lifts every reason', stateOf(M.user).account_review === 0 && stateOf(M.user).review_reason === null);
+
+    // Staff review of the reports lifts only the automatic safety hold.
+    const S = await reportedUser('Sol');
+    missShifts(S.user);
+    for (const p of S.partners) await S.report(p);
+    const openReports = () => db.prepare("SELECT id FROM safety_reports WHERE reported_user_id = ? AND status = 'open'").all(S.user.id);
+    check('two open reports plus a no-show review hold the account for both reasons', reasonsOf(S.user).join() === 'no_shows,safety_reports' && openReports().length === rules.SAFETY_PAUSE_DISTINCT_REPORTERS);
+    await api(`/admin/safety-reports/${openReports()[0].id}/review`, { method: 'POST', admin: true, body: { note: 'checked' } });
+    check('reviewing a report so that too few remain open lifts the safety hold but not the no-show review',
+      stateOf(S.user).account_review === 1 && reasonsOf(S.user).join() === 'no_shows', stateOf(S.user));
+    const T = await reportedUser('Tess');
+    for (const p of T.partners) await T.report(p);
+    const tReports = db.prepare("SELECT id FROM safety_reports WHERE reported_user_id = ?").all(T.user.id);
+    await api(`/admin/safety-reports/${tReports[0].id}/review`, { method: 'POST', admin: true });
+    check('a safety hold with no other reason ends when the reports drop below the threshold', stateOf(T.user).account_review === 0 && stateOf(T.user).review_reason === null, stateOf(T.user));
+    await api(`/admin/users/${T.user.id}/suspend`, { method: 'POST', admin: true });
+    await api(`/admin/safety-reports/${tReports[1].id}/review`, { method: 'POST', admin: true });
+    check('a manual staff pause is not lifted by reviewing reports', stateOf(T.user).account_review === 1 && reasonsOf(T.user).join() === 'staff', stateOf(T.user));
   } finally {
     h.cleanup(server);
   }

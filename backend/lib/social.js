@@ -12,6 +12,7 @@ const db = require('../db');
 const clock = require('./clock');
 const rules = require('./rules');
 const premium = require('./premium');
+const reliability = require('./reliability');
 const { notify } = require('./notify');
 const { getShift } = require('./shifts');
 const { safeParseArray } = require('../matching/engine');
@@ -212,10 +213,29 @@ function pauseIfRepeatedlyReported(userId) {
     SELECT COUNT(DISTINCT reporter_user_id) AS n FROM safety_reports WHERE reported_user_id = ? AND status = 'open'
   `).get(userId).n;
   const user = getUser(userId);
-  if (reporters < rules.SAFETY_PAUSE_DISTINCT_REPORTERS || !user || user.account_review) return;
-  db.prepare("UPDATE users SET account_review = 1, review_reason = 'safety_reports' WHERE id = ?").run(userId);
+  if (reporters < rules.SAFETY_PAUSE_DISTINCT_REPORTERS || !user) return;
+  // Already held for this very reason: nothing new to say. A hold for another
+  // reason (e.g. no-shows) doesn't stop this one being added alongside it.
+  if (reliability.reviewReasons(userId).includes('safety_reports')) return;
+  reliability.addReviewReason(userId, 'safety_reports');
+  // Someone already told they're under review isn't told a second time.
+  if (user.account_review) return;
   notify(userId, 'account_review', 'Your account is under review',
     'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
+}
+
+// Staff review lifts the automatic safety hold: once a reported person's
+// open reports (distinct reporters) fall below the pause threshold, only the
+// safety_reports reason is cleared; any other reason stays. Staff can still
+// pause manually.
+function liftSafetyHoldIfBelowThreshold(userId) {
+  if (!userId || !reliability.reviewReasons(userId).includes('safety_reports')) return false;
+  const reporters = db.prepare(`
+    SELECT COUNT(DISTINCT reporter_user_id) AS n FROM safety_reports WHERE reported_user_id = ? AND status = 'open'
+  `).get(userId).n;
+  if (reporters >= rules.SAFETY_PAUSE_DISTINCT_REPORTERS) return false;
+  reliability.clearReviewReason(userId, 'safety_reports');
+  return true;
 }
 
 const fileReport = db.transaction((user, body) => {
@@ -336,6 +356,7 @@ module.exports = {
   REPORT_CATEGORIES,
   SAFETY_NOTICE,
   submitReport,
+  liftSafetyHoldIfBelowThreshold,
   sharePlan,
   completedShiftCount,
 };

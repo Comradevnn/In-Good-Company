@@ -120,14 +120,20 @@ function platformMetrics() {
   // fit of the pairings each produced — the data for deciding later whether
   // to keep both options.
   const byPreference = {};
-  for (const r of db.prepare(`SELECT match_preference AS pref, status, COUNT(*) AS n FROM availability_requests WHERE kind = 'standard' GROUP BY pref, status`).all()) {
+  // Buddy searches skip the preference choice altogether, so they're left out.
+  for (const r of db.prepare(`
+    SELECT match_preference AS pref, status, COUNT(*) AS n FROM availability_requests
+    WHERE kind = 'standard' AND buddy_user_id IS NULL GROUP BY pref, status
+  `).all()) {
     byPreference[r.pref] ??= { by_status: {}, avg_pairing_score: null };
     byPreference[r.pref].by_status[r.status] = r.n;
   }
   for (const r of db.prepare(`
-    SELECT ar.match_preference AS pref, AVG(p.score) AS avg FROM pairings p
-    JOIN availability_requests ar ON ar.id IN (p.request_a_id, p.request_b_id)
-    WHERE p.score IS NOT NULL AND ar.kind = 'standard' GROUP BY pref
+    SELECT pref, AVG(score) AS avg FROM (
+      SELECT DISTINCT p.id AS pairing_id, ar.match_preference AS pref, p.score AS score FROM pairings p
+      JOIN availability_requests ar ON ar.id IN (p.request_a_id, p.request_b_id)
+      WHERE p.score IS NOT NULL AND ar.kind = 'standard' AND ar.buddy_user_id IS NULL
+    ) GROUP BY pref
   `).all()) {
     byPreference[r.pref] ??= { by_status: {}, avg_pairing_score: null };
     byPreference[r.pref].avg_pairing_score = Math.round(r.avg * 1000) / 1000;
