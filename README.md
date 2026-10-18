@@ -32,7 +32,9 @@ backend/
     premium.js             Trial, mock subscription, weekly grant, monthly cap, free late cancel
     shifts.js              Orgs/shifts queries + the atomic capacity counter
     chat.js / social.js    Chat intro + contact guard + starters; partner card, ratings, buddies, safety
-    reliability.js         Reliability signal and no-show escalation
+    reliability.js         Reliability signal, no-show escalation, account-review reasons
+    resurface.js           Nudges quiet volunteers about fitting shifts, paced by their frequency
+    rateLimit.js           In-memory sliding-window limits (login, signup, chat, reports, purchases)
     metrics.js             User / org / platform aggregates
     referrals.js           Referral codes, credit at ID verification
     clock.js / time.js     App clock (dev offset) and platform-timezone helpers
@@ -285,13 +287,16 @@ device keys for per-event ticket proof-of-possession — most of which
     ID-name comparison survives real-world formatting differences.
   - `dobMatchesAge` — since the profile only stores an integer age, not a
     DOB, this checks the age implied by the typed DOB against the stored
-    profile age, ±1 year.
+    profile age, ±1 year (typo tolerance only).
+  - `dobIsAdult` — a separate, strict check that the ID's own date of birth
+    makes the holder an adult; only its yes/no (`dob_is_adult`) is sent, and
+    the server refuses an explicit no (`underage_document`).
   - `expiryIsValid` — must be a real, non-expired date.
 - **What reaches the server is an attestation plus the document fields —
   never the ID image.** `POST /verification/document-check` transiently
   receives `{document_type, issuing_country, document_number}`, and `POST
   /verification/attest` receives only booleans (`name_match`, `dob_match`,
-  `doc_type_confirmed`) and an expiry date. The server independently
+  `doc_type_confirmed`, `dob_is_adult`) and an expiry date. The server independently
   re-validates the expiry date and re-checks that all three booleans are
   `true` server-side rather than trusting the client.
 - **Duplicate-document detection via server-side HMAC-SHA256, not a bare
@@ -472,7 +477,8 @@ Tests (from `backend/`, each starts its own server on port 3050):
 node test-recryption-keymanager.js   # also: duplicates, badges, badge-reveal
 node test-journey.js                 # also: capacity, matching-filters, deeds, pairing-flows,
                                      #       ratings-buddies, safety, authz, engine,
-                                     #       match-score, match-assign, match-ranking
+                                     #       match-score, match-assign, match-ranking, id-checks,
+                                     #       spec-coverage, resurface, abuse
 ```
 
 Or run every suite in sequence with a one-line result each:
@@ -481,7 +487,8 @@ Or run every suite in sequence with a one-line result each:
 npm test
 ```
 
-From `mobile/`, the resume logic has a small `node --test onboarding/resume.test.mjs`.
+From `mobile/`, pure logic has `node --test` suites: `onboarding/resume.test.mjs`,
+`verification/localChecks.test.mjs`, `screens/dates.test.mjs` and `api/client.test.mjs`.
 
 The lifecycle suites (`test-*.js` other than `test-recryption-*`) each use
 their own throwaway database file (`DB_PATH`), so matching runs never touch

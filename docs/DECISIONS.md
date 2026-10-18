@@ -4,6 +4,37 @@ Decisions the owner has made that aren't (or aren't yet) in the private
 specs, with what was built for each. Newest first. The private specs
 remain the source of truth for everything else (see README "Specs").
 
+## 2026-10-18 — Iteration 3 (proposed defaults, awaiting owner confirmation)
+
+These were chosen during an orchestrated build pass; none is an owner
+decision yet. Each lives in `backend/lib/rules.js` so it can be changed in
+one place.
+
+- **Resurfacing nudges** (built): a quiet volunteer with no open search or
+  upcoming shift gets one in-app notification about open shifts that fit
+  their causes and distance, at most once per period. Proposed periods:
+  weekly volunteers every 7 days, three-times-a-month every 10, twice a
+  month every 14, once a month every 30; looking two weeks ahead. Never a
+  matching input.
+- **Abuse limits** (built), per account, set well above normal use: chat
+  60 messages a minute, safety reports 10 an hour, Deeds purchases 10 an
+  hour, Premium subscribe 5 an hour; chat messages up to 1000 characters
+  (the existing cap). A repeat Premium subscribe while a paid period is
+  running or booked is refused rather than stacking another period.
+- **Under-18 documents** (built): the device checks adulthood from the ID's
+  own date of birth and sends only a yes/no; the server refuses an explicit
+  no. A missing answer is still accepted so older clients and existing
+  library tests keep working — closing that gap is an owner call.
+- **Review reasons** (built): no-show reviews, the automatic safety hold
+  and staff pauses are tracked separately; clearing one leaves the others,
+  and staff marking reports reviewed lifts the automatic safety hold once
+  too few open reports remain.
+
+Open questions raised this pass: should a duplicate-document account get
+the Premium trial's free Deeds at all (it can't spend them); should a
+safety pause also freeze the person's existing proposals; should a
+revived search after its deadline start with no match bar.
+
 ## 2026-10-18 — Matching iteration 2
 
 ### Early bookings wait for a better match (built)
