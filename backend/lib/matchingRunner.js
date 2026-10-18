@@ -1,16 +1,14 @@
-// Runs the matching engine over every open availability request against the
-// real orgs/shifts tables. The pure checks live in matching/engine.js; this
-// file adds everything that needs the database: eligibility (verification,
-// age, monthly cap, reliability pause), the live capacity counter, existing
-// bookings, prior-pairing history, buddy requests and safety flags.
+// Runs matching over every open availability request against the real
+// orgs/shifts tables. The pure checks and ranking live in matching/: this
+// file adds everything that needs the database — eligibility (verification,
+// age, monthly cap, reliability pause), each request's eligible shifts,
+// existing bookings, prior-pairing history and the live capacity counter.
 //
-// Order is deterministic and fairness-based rather than score-based: the
-// longest-waiting request is served first (rematches ahead of everything,
-// since they are time-critical), and for each request the candidate list
-// prefers a mutual buddy request, then someone the user has never been
-// paired with, then whoever has been waiting longest. Shifts are tried
-// earliest-first. The spec's weighted soft ranking is not implemented — see
-// README "Not built yet".
+// Each run reads one snapshot of the pool, asks matching/assign.js for a
+// plan (best pairings first across the whole pool, with rematches and
+// searches near their deadline served first), then writes the proposals.
+// capacity is still reserved atomically per proposal, so the database stays
+// the authority on spots.
 //
 // The whole run is one IMMEDIATE transaction, so two runs (or a run and a
 // solo RSVP, in another process) serialize instead of interleaving.
@@ -20,7 +18,10 @@ const rules = require('./rules');
 const premium = require('./premium');
 const reliability = require('./reliability');
 const { notify } = require('./notify');
-const { hardFiltersPass, passesShiftGate, safeParseArray } = require('../matching/engine');
+const { passesShiftGate, safeParseArray } = require('../matching/engine');
+const { MATCHING_CONFIG } = require('../matching/config');
+const { toMatchPerson } = require('../matching/person');
+const { planAssignments, pairKey, roundBreakdown } = require('../matching/assign');
 const { visibleShifts, getShift, reserveSpots } = require('./shifts');
 const { localDate } = require('./time');
 
@@ -87,36 +88,6 @@ function shiftsFor(ctx, nowMs, allShifts) {
     .sort((a, b) => (lowFit.has(a.org_id) - lowFit.has(b.org_id)) || a.starts_at.localeCompare(b.starts_at));
 }
 
-function pairedBefore(userA, userB) {
-  return Boolean(db.prepare(`
-    SELECT 1 FROM pairings WHERE status IN ('confirmed', 'completed', 'cancelled')
-      AND ((user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?))
-  `).get(userA, userB, userB, userA));
-}
-
-// Either side said they wouldn't volunteer with the other again → they are
-// not paired again. (A safety report is the stronger, permanent version,
-// enforced by hardFiltersPass via flagged_users.)
-function declinedEachOther(userA, userB) {
-  return Boolean(db.prepare(`
-    SELECT 1 FROM partner_ratings WHERE volunteer_again = 0
-      AND ((rater_user_id = ? AND ratee_user_id = ?) OR (rater_user_id = ? AND ratee_user_id = ?))
-  `).get(userA, userB, userB, userA));
-}
-
-function activePairingBetween(userA, userB) {
-  return Boolean(db.prepare(`
-    SELECT 1 FROM pairings WHERE status IN ('proposed', 'confirmed')
-      AND ((user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?))
-  `).get(userA, userB, userB, userA));
-}
-
-function ageBandOk(request, other) {
-  if (request.age_min != null && other.age < request.age_min) return false;
-  if (request.age_max != null && other.age > request.age_max) return false;
-  return true;
-}
-
 function anchorShiftId(request) {
   if (!request.anchor_booking_id) return null;
   return db.prepare('SELECT shift_id FROM bookings WHERE id = ?').get(request.anchor_booking_id)?.shift_id ?? null;
@@ -135,7 +106,7 @@ function describeReasoning(shift, a, b, flags) {
   return parts.join(' ');
 }
 
-function createProposal(ctxA, ctxB, shift, flags, nowMs) {
+function createProposal(ctxA, ctxB, shift, flags, nowMs, score = null) {
   const need = (ctxA.request.anchor_booking_id ? 0 : 1) + (ctxB.request.anchor_booking_id ? 0 : 1);
   if (!reserveSpots(shift.id, need)) return null;
 
@@ -163,10 +134,11 @@ function createProposal(ctxA, ctxB, shift, flags, nowMs) {
       : (ctxA.request.kind === 'solo_rsvp' || ctxB.request.kind === 'solo_rsvp') ? 'solo_rsvp' : 'match';
 
   db.prepare(`
-    INSERT INTO pairings (id, user_a_id, user_b_id, shift_id, status, score, booking_a_id, booking_b_id,
+    INSERT INTO pairings (id, user_a_id, user_b_id, shift_id, status, score, score_breakdown, booking_a_id, booking_b_id,
       request_a_id, request_b_id, origin, reasoning, flags, proposed_at, proposal_expires_at)
-    VALUES (?, ?, ?, ?, 'proposed', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(pairingId, ctxA.user.id, ctxB.user.id, shift.id, bookingA, bookingB, ctxA.request.id, ctxB.request.id,
+    VALUES (?, ?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(pairingId, ctxA.user.id, ctxB.user.id, shift.id, score ? Math.round(score.quality * 1000) / 1000 : null,
+    score ? JSON.stringify(roundBreakdown(score.breakdown)) : null, bookingA, bookingB, ctxA.request.id, ctxB.request.id,
     origin, describeReasoning(shift, ctxA.user, ctxB.user, flags), JSON.stringify(flags), now, expiresAt);
 
   for (const ctx of [ctxA, ctxB]) {
@@ -177,7 +149,7 @@ function createProposal(ctxA, ctxB, shift, flags, nowMs) {
       `${shift.org.name}, ${shift.when_label}, with ${other.display_name}. Take a look and confirm.`,
       { type: 'pairing', id: pairingId });
   }
-  logMatch(`proposed ${ctxA.user.display_name} + ${ctxB.user.display_name} for "${shift.title}" at ${shift.org.name} (${shift.when_label}); ${shift.capacity_remaining - need} spot(s) left`);
+  logMatch(`proposed ${ctxA.user.display_name} + ${ctxB.user.display_name} for "${shift.title}" at ${shift.org.name} (${shift.when_label}); ${liveRemaining(shift.id)} spot(s) left${score ? `; fit ${score.quality.toFixed(2)}` : ''}`);
   return pairingId;
 }
 
@@ -192,85 +164,136 @@ function noMatchReason(ctx, myShifts) {
   return 'no_compatible_partner_in_radius';
 }
 
-function runOnce(nowMs) {
+// Bulk reads for the whole pool, keyed for the planner.
+function poolStats(userIds) {
+  const ids = JSON.stringify(userIds);
+  const attended = new Map(userIds.map((id) => [id, { total: 0, byCause: {} }]));
+  for (const row of db.prepare(`
+    SELECT b.user_id, s.cause_tags FROM bookings b JOIN shifts s ON s.id = b.shift_id
+    WHERE b.status = 'attended' AND b.user_id IN (SELECT value FROM json_each(?))
+  `).all(ids)) {
+    const entry = attended.get(row.user_id);
+    entry.total++;
+    for (const tag of new Set(safeParseArray(row.cause_tags))) entry.byCause[tag] = (entry.byCause[tag] ?? 0) + 1;
+  }
+  const events = new Map(userIds.map((id) => [id, { attended: 0, late: 0, noShow: 0 }]));
+  for (const row of db.prepare(`
+    SELECT user_id, kind, COUNT(*) AS n FROM reliability_events
+    WHERE user_id IN (SELECT value FROM json_each(?)) GROUP BY user_id, kind
+  `).all(ids)) {
+    const entry = events.get(row.user_id);
+    if (row.kind === 'attended') entry.attended = row.n;
+    else if (row.kind === 'late_cancel') entry.late = row.n;
+    else if (row.kind === 'no_show') entry.noShow = row.n;
+  }
+  const ratings = new Map(userIds.map((id) => [id, []]));
+  for (const row of db.prepare(`
+    SELECT r.user_id, r.org_id, r.personal_fit, s.cause_tags FROM volunteer_org_ratings r
+    LEFT JOIN shifts s ON s.id = r.shift_id WHERE r.user_id IN (SELECT value FROM json_each(?))
+  `).all(ids)) {
+    ratings.get(row.user_id).push({ orgId: row.org_id, personalFit: row.personal_fit, causeTags: safeParseArray(row.cause_tags) });
+  }
+  const pairSet = (sql) => new Set(db.prepare(sql).all(ids, ids).map((r) => pairKey(r.u1, r.u2)));
+  const pairFacts = {
+    prior: pairSet(`SELECT user_a_id AS u1, user_b_id AS u2 FROM pairings WHERE status IN ('confirmed', 'completed', 'cancelled')
+      AND user_a_id IN (SELECT value FROM json_each(?)) AND user_b_id IN (SELECT value FROM json_each(?))`),
+    active: pairSet(`SELECT user_a_id AS u1, user_b_id AS u2 FROM pairings WHERE status IN ('proposed', 'confirmed')
+      AND user_a_id IN (SELECT value FROM json_each(?)) AND user_b_id IN (SELECT value FROM json_each(?))`),
+    // Either side said they wouldn't volunteer with the other again → they
+    // are not paired again (a safety report is the stronger, permanent version).
+    declined: pairSet(`SELECT rater_user_id AS u1, ratee_user_id AS u2 FROM partner_ratings WHERE volunteer_again = 0
+      AND rater_user_id IN (SELECT value FROM json_each(?)) AND ratee_user_id IN (SELECT value FROM json_each(?))`),
+  };
+  return { attended, events, ratings, pairFacts };
+}
+
+// Step 1: everything the planner needs, read once.
+function buildSnapshot(nowMs, cfg = MATCHING_CONFIG) {
   const requests = db.prepare(`
     SELECT * FROM availability_requests WHERE status = 'searching'
     ORDER BY CASE kind WHEN 'rematch' THEN 0 ELSE 1 END, created_at
   `).all();
-  if (requests.length === 0) return { proposals: [] };
-
-  const allShifts = visibleShifts(new Date(nowMs).toISOString());
+  const allShifts = requests.length ? visibleShifts(new Date(nowMs).toISOString()) : [];
   const contexts = requests.map((request) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(request.user_id);
     return { request, user, block: user ? eligibilityBlock(user, request, nowMs) : 'ineligible_data_incomplete' };
   }).filter((ctx) => ctx.user);
-  for (const ctx of contexts) ctx.shifts = ctx.block ? [] : shiftsFor(ctx, nowMs, allShifts);
+
+  const shiftById = new Map(allShifts.map((s) => [s.id, s]));
+  for (const ctx of contexts) {
+    ctx.shifts = ctx.block ? [] : shiftsFor(ctx, nowMs, allShifts);
+    if (ctx.request.anchor_booking_id) {
+      // An anchored request's own booking doesn't count as an overlap.
+      const mine = activeBookings(ctx.user.id);
+      ctx.shifts = ctx.shifts.filter((shift) => !overlaps(shift, mine, ctx.request.anchor_booking_id));
+    }
+    for (const shift of ctx.shifts) if (!shiftById.has(shift.id)) shiftById.set(shift.id, shift);
+  }
+
+  const open = contexts.filter((ctx) => !ctx.block);
+  const stats = poolStats([...new Set(open.map((ctx) => ctx.user.id))]);
+  const persons = open.map((ctx) => {
+    const attended = stats.attended.get(ctx.user.id);
+    ctx.person = toMatchPerson(ctx.user, ctx.request, {
+      attendedShifts: attended.total,
+      attendedByCause: attended.byCause,
+      reliability: stats.events.get(ctx.user.id),
+      ratings: stats.ratings.get(ctx.user.id),
+      eligibleShiftIds: ctx.shifts.map((s) => s.id),
+      anchorShiftId: anchorShiftId(ctx.request),
+    }, cfg);
+    return ctx.person;
+  });
+  return { nowMs, cfg, contexts, persons, shifts: [...shiftById.values()], pairFacts: stats.pairFacts };
+}
+
+// Step 2 lives in matching/assign.js (planAssignments). Step 3: write it.
+function commitPlan(plan, snapshot, nowMs) {
+  const nowIso = new Date(nowMs).toISOString();
+  const byRequest = new Map(snapshot.contexts.map((ctx) => [ctx.request.id, ctx]));
+  const shiftById = new Map(snapshot.shifts.map((s) => [s.id, s]));
+  const setReason = (ctx, reason) => db.prepare('UPDATE availability_requests SET last_reason = ?, last_checked_at = ? WHERE id = ?')
+    .run(reason, nowIso, ctx.request.id);
+
+  for (const ctx of snapshot.contexts) if (ctx.block) setReason(ctx, ctx.block);
 
   const handled = new Set();
   const proposals = [];
-  for (const ctx of contexts) {
-    if (handled.has(ctx.request.id)) continue;
-    if (ctx.block) {
-      db.prepare('UPDATE availability_requests SET last_reason = ?, last_checked_at = ? WHERE id = ?')
-        .run(ctx.block, new Date(nowMs).toISOString(), ctx.request.id);
-      continue;
-    }
+  for (const match of plan.matches) {
+    const ctxA = byRequest.get(match.aRequestId);
+    const ctxB = byRequest.get(match.bRequestId);
+    const shift = getShift(match.shiftId) ?? shiftById.get(match.shiftId);
+    const flags = [...match.flags];
+    const closeA = passesShiftGate(ctxA.user, shift).alignment.closeMatchUsed;
+    const closeB = passesShiftGate(ctxB.user, shift).alignment.closeMatchUsed;
+    if (closeA || closeB) flags.push('close_match_alignment_used');
+    const pairingId = createProposal(ctxA, ctxB, shift, flags, nowMs, match);
+    if (!pairingId) continue; // capacity changed underneath us; both stay searching
+    handled.add(ctxA.request.id);
+    handled.add(ctxB.request.id);
+    proposals.push(pairingId);
+  }
 
-    const candidates = contexts
-      .filter((other) => other !== ctx && !handled.has(other.request.id) && !other.block && other.user.id !== ctx.user.id)
-      .filter((other) => {
-        const wantsBuddy = ctx.request.buddy_user_id || other.request.buddy_user_id;
-        if (wantsBuddy) {
-          // Buddy requests pair only when mutual: each asked for the other.
-          return ctx.request.buddy_user_id === other.user.id && other.request.buddy_user_id === ctx.user.id;
-        }
-        return true;
-      })
-      .filter((other) => {
-        // Two anchored requests can only share their (common) anchored shift.
-        const a = anchorShiftId(ctx.request);
-        const b = anchorShiftId(other.request);
-        return !(a && b && a !== b);
-      })
-      .filter((other) => hardFiltersPass(ctx.user, other.user).pass)
-      .filter((other) => ageBandOk(ctx.request, other.user) && ageBandOk(other.request, ctx.user))
-      .filter((other) => !declinedEachOther(ctx.user.id, other.user.id) && !activePairingBetween(ctx.user.id, other.user.id))
-      .map((other) => ({
-        other,
-        buddy: Boolean(ctx.request.buddy_user_id),
-        repeat: pairedBefore(ctx.user.id, other.user.id),
-      }))
-      .sort((x, y) => (y.buddy - x.buddy) || (x.repeat - y.repeat) || x.other.request.created_at.localeCompare(y.other.request.created_at));
-
-    let pairingId = null;
-    for (const { other, buddy, repeat } of candidates) {
-      const otherShiftIds = new Set(other.shifts.map((s) => s.id));
-      const shared = ctx.shifts.filter((s) => otherShiftIds.has(s.id) && !overlaps(s, activeBookings(other.user.id), other.request.anchor_booking_id));
-      for (const shift of shared) {
-        const flags = [];
-        if (buddy) flags.push('buddy_pairing');
-        if (repeat) flags.push('repeat_pair');
-        const closeA = passesShiftGate(ctx.user, shift).alignment.closeMatchUsed;
-        const closeB = passesShiftGate(other.user, shift).alignment.closeMatchUsed;
-        if (closeA || closeB) flags.push('close_match_alignment_used');
-        pairingId = createProposal(ctx, other, shift, flags, nowMs);
-        if (pairingId) {
-          handled.add(ctx.request.id);
-          handled.add(other.request.id);
-          proposals.push(pairingId);
-          break;
-        }
-      }
-      if (pairingId) break;
-    }
-
-    if (!pairingId) {
-      const reason = noMatchReason(ctx, ctx.shifts);
-      db.prepare('UPDATE availability_requests SET last_reason = ?, last_checked_at = ? WHERE id = ?')
-        .run(reason, new Date(nowMs).toISOString(), ctx.request.id);
-    }
+  for (const ctx of snapshot.contexts) {
+    if (ctx.block || handled.has(ctx.request.id)) continue;
+    setReason(ctx, noMatchReason(ctx, ctx.shifts));
   }
   return { proposals };
+}
+
+function runOnce(nowMs) {
+  const snapshot = buildSnapshot(nowMs);
+  if (snapshot.contexts.length === 0) return { proposals: [] };
+  const plan = planAssignments({ persons: snapshot.persons, shifts: snapshot.shifts, pairFacts: snapshot.pairFacts, nowMs, config: snapshot.cfg });
+  return commitPlan(plan, snapshot, nowMs);
+}
+
+// Read-only: what a run would do right now, with every candidate's score
+// breakdown. Admin-only (routes/admin.js); never shown to volunteers or orgs.
+function previewMatching(nowMs = clock.nowMs()) {
+  const snapshot = buildSnapshot(nowMs);
+  const plan = planAssignments({ persons: snapshot.persons, shifts: snapshot.shifts, pairFacts: snapshot.pairFacts, nowMs, config: snapshot.cfg });
+  return { snapshot, plan };
 }
 
 const runTx = db.transaction((nowMs) => runOnce(nowMs));
@@ -279,4 +302,4 @@ function runMatching(nowMs = clock.nowMs()) {
   return runTx.immediate(nowMs);
 }
 
-module.exports = { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch };
+module.exports = { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch, buildSnapshot, previewMatching };

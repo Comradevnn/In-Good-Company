@@ -111,6 +111,9 @@ ensureColumns('pairings', [
   ['contact_share_a', 'INTEGER NOT NULL DEFAULT 0'],
   ['contact_share_b', 'INTEGER NOT NULL DEFAULT 0'],
 ]);
+// Admin-only explain output for a pairing's fit score; never serialized to clients.
+ensureColumns('pairings', [['score_breakdown', 'TEXT']]);
+
 
 // Pairings created by the old demo matcher point at hardcoded demo shift ids
 // that have no row in shifts. Retire them so they never read as an active
