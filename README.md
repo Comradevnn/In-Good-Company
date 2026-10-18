@@ -2,8 +2,8 @@
 
 A volunteer-pairing app: it matches two verified volunteers to attend the
 same charity shift together, so volunteering doubles as a way to meet
-people. Built as a working prototype of the product described in
-[`specs/`](specs/).
+people. Built as a working prototype of the product described in the project's
+specs (mostly private — see [Specs](#specs)).
 
 - **Frontend:** React Native via Expo (`mobile/`)
 - **Backend:** Node.js + Express (`backend/`)
@@ -31,6 +31,7 @@ backend/
     keyStore.js            KeyManager wiring: registers the PEM key, ESM-interop loader
     hashStore.js            DuplicateDetector wiring: document_hashes table, pepper config
     badgeStore.js            BadgeService wiring: badges/signed_badges tables, D7-D9
+    INTEGRATION.md           This app's own account of the Recryption API it relies on
   seed-demo-users.js     Seeds demo accounts for testing matching
   clear-demo-users.js    Removes seeded demo accounts
   test-recryption-*.js   Standalone test suites for the three Recryption modules
@@ -43,7 +44,7 @@ mobile/
   onboarding/resume.js    Figures out which onboarding step to resume on
   theme/                  Shared colors/styles
 
-specs/                   Source-of-truth product specs (see CLAUDE.md)
+specs/                   plotline.html style reference (other specs are private — see Specs)
 ```
 
 ## Architecture
@@ -159,8 +160,10 @@ hardcodes a handful of demo shifts across the causes selectable in
 
 ## Identity verification & security
 
-The full design is [`specs/identity-verification-encryption-spec.md`](specs/identity-verification-encryption-spec.md).
-It's a substantial pipeline — on-device OCR/MRZ extraction, a one-time
+The original full design spec moved out of this repo and now lives with the
+Recryption library; this app's own account of what it uses from Recryption is
+[`backend/recryption/INTEGRATION.md`](backend/recryption/INTEGRATION.md).
+The full design is a substantial pipeline — on-device OCR/MRZ extraction, a one-time
 liveness-checked selfie/ID face-match, AES-256-GCM envelope encryption of
 retained ID images with an HSM/KMS-held unwrap key, hardware-bound P-256
 device keys for per-event ticket proof-of-possession — most of which
@@ -288,7 +291,7 @@ Tracked in [`CLAUDE.md`](CLAUDE.md):
   never diagnosed, since that code path no longer exists.
 - `AvailabilityScreen`'s resume pre-fill was once observed not showing
   previously-entered values, but hasn't been reproduced — flagged for
-  the dedicated testing pass in `specs/in-good-company-test-prompt.md`
+  the dedicated testing pass in the test plan (private specs repo)
   rather than being chased ad hoc.
 
 ## Running locally
@@ -305,6 +308,19 @@ PORT=3050 node index.js
 npx expo start --port 8090
 ```
 
+### Running on macOS
+
+`scripts/` holds double-clickable `.command` helpers (also runnable from a
+terminal). Each one loads Node via nvm (`nvm install 24`):
+
+| Script | Does |
+|---|---|
+| `setup-mac.command` | Clones + builds `../Recryption`, installs backend/mobile deps, creates `backend/data/` and `backend/.env` (fresh `DOC_PEPPER`) if missing. Re-runnable. |
+| `start-backend.command` | Backend on port 3000 (`PORT=3050 ...` to override) |
+| `start-mobile.command` | Metro for Expo Go on port 8081 (`METRO_PORT=8090 ...` to override) |
+| `seed-demo.command` | Runs `seed-demo-users.js` |
+| `clear-demo.command` | Runs `clear-demo-users.js` |
+
 Demo data: `backend/seed-demo-users.js` seeds test accounts for exercising
 the matching engine end-to-end; `backend/clear-demo-users.js` removes them.
 Don't delete other rows from the shared dev database — see
@@ -315,6 +331,7 @@ Don't delete other rows from the shared dev database — see
 | Spec | Covers |
 |---|---|
 | [`plotline.html`](specs/plotline.html) | Visual reference for screens it covers (style only — see `CLAUDE.md`) |
+| [`INTEGRATION.md`](backend/recryption/INTEGRATION.md) | How this app uses the Recryption identity-verification library (regenerated when the Recryption version changes) |
 
 The master product spec, matching-algorithm spec, and test plan are kept in a
 private repo (not published here, to avoid publishing the matching logic and

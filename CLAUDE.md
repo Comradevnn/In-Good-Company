@@ -1,23 +1,56 @@
 # In Good Company
 
-This app matches volunteers with charity shifts. We're building it as:
-- Frontend: React Native (via Expo)
-- Backend: Node.js + Express
-- Database: SQLite
+This app matches volunteers with charity shifts.
 
-There's a specs folder with the product design already written. Read the
-relevant one before building anything:
-- For the overall product and features: specs/volunteer-pairing-app-master-prompt.md
-- For how matching between users works: specs/in-good-company-matching-prompt.md
-- For ID verification and security: specs/identity-verification-encryption-spec.md
-- For what to test before calling something done: specs/in-good-company-test-prompt.md
-- For what the screens should look like: specs/plotline.html
+The product design is already written. Most specs live in private repos
+checked out as siblings of this one (paths below are relative to this repo's
+root), not in this repo's specs/ folder. Read the relevant one before
+building anything:
+- For the overall product and features: ../In-Good-Company-specs/volunteer-pairing-app-master-prompt.md
+- For how matching between users works: ../In-Good-Company-specs/in-good-company-matching-prompt.md
+- For ID verification and security: backend/recryption/INTEGRATION.md (in
+  this repo; see "Recryption" below)
+- For what to test before calling something done: ../In-Good-Company-specs/in-good-company-test-prompt.md
+- For what the screens should look like: specs/plotline.html (in this repo)
 
-Note: specs/plotline.html is a visual reference for what each screen should
-look like, not literal code to reuse — it's plain HTML/CSS, not React Native.
+If a sibling checkout is missing, ask me rather than building without the spec.
 
 Always read the relevant file above before building that part of the app.
 Ask me before making any big decision that isn't already answered in these files.
+
+## This repo is public
+
+This repo is a public showcase. Its history was rewritten to remove the
+private specs. Never copy private spec content (matching weights,
+thresholds, algorithm details, product-spec text) into anything in this
+repo: code comments, README, commit messages, or specs/. Describe behavior
+at a high level and point to the private repo instead. Don't put private
+spec files under specs/ either.
+
+## Recryption
+
+Recryption (identity-verification library, sibling checkout ../Recryption)
+is an external dependency. It is moving to closed source, so don't rely on
+its source or its internal spec. This app keeps its own understanding of
+the integration in backend/recryption/INTEGRATION.md, built from the
+library's public API plus this backend's wiring code.
+
+Whenever the Recryption version this app uses changes, regenerate
+INTEGRATION.md. That means a new commit in ../Recryption, a new release, or a
+change to the `recryption` entry in backend/package.json. Then re-run the
+backend's Recryption tests. Don't edit Recryption itself from this repo.
+
+## Setup and tests
+
+- First-time setup on a Mac: `scripts/setup-mac.command`. It clones and
+  builds ../Recryption, installs dependencies (mobile needs
+  `npm ci --legacy-peer-deps`), creates backend/data/, and creates
+  backend/.env with a `DOC_PEPPER`. The backend won't start without either
+  of the last two. Node 24 comes from nvm.
+- Backend tests: `node test-recryption-<name>.js` from backend/ (badges,
+  badge-reveal, duplicates, keymanager). They start their own server on
+  port 3050 and clean up their own rows.
+- Recryption's own tests: `npm test` in ../Recryption.
 
 ## Ports for self-verification
 
@@ -28,6 +61,10 @@ the backend and port 8090 for Metro instead:
 - Backend: `PORT=3050 node index.js` (from backend/)
 - Metro: `npx expo start --port 8090` (from mobile/)
 
+The scripts/ helpers default to the user's ports. When you run them, use
+`PORT=3050 scripts/start-backend.command` and
+`METRO_PORT=8090 scripts/start-mobile.command`.
+
 ## Deleting data
 
 Never delete rows from the shared dev database unless certain they're your
@@ -35,36 +72,24 @@ own test data (e.g. rows you just inserted in the same verification pass).
 If there's any chance a table holds data from the user's own manual testing,
 ask before deleting or clearing it — don't assume and wipe it silently.
 
+For demo data, use `scripts/seed-demo.command` and
+`scripts/clear-demo.command`. The clear script removes only
+`demo-N@example.com` accounts and their rows.
+
 ## plotline.html is a style reference, not the spec
 
 specs/plotline.html only covers the screens someone happened to mock up —
 it does not cover every screen or field the product needs, and its flow
 order (e.g. which screen comes first) can be incidental rather than
-intentional. specs/volunteer-pairing-app-master-prompt.md and
-specs/in-good-company-matching-prompt.md are the source of truth for what
-fields and features must exist; plotline.html only governs visual style
-(colors, type, layout) for the screens it does cover.
+intentional. The master spec and matching spec (see above) are the
+source of truth for what fields and features must exist; plotline.html
+only governs visual style (colors, type, layout) for the screens it does
+cover.
 
 If plotline.html and the spec docs seem to disagree, or plotline.html has
 no screen for something the specs require, flag it and ask rather than
 guessing which one wins — the same way the emailCapture/quickProfile
 ordering was flagged before building it.
-
-## Known bugs (fix later)
-
-- **[RESOLVED by replacement, original root cause never diagnosed]
-  Re-verifying with the same document number incorrectly 409'd.** The user
-  hit a 409 resubmitting the identical document on their already-verified
-  account, even though the old duplicate check (`WHERE doc_hmac = ? AND
-  account_id != ?`) looked correct on inspection. That hand-rolled
-  implementation was deleted in Recryption integration module 2: duplicate
-  decisions now go through the library's DuplicateDetector, whose
-  subject-keyed claims treat a same-subject re-check as a refresh by
-  construction — the conflict path no longer exists for that scenario. The
-  exact reported flow (same account, same document, re-check then
-  re-attest) is covered by passing HTTP-level tests in
-  backend/test-recryption-duplicates.js. If a same-document 409 ever
-  reappears, it is a new bug, not this one.
 
 ## Known-unverified items (re-test during the reinforcement/testing phase)
 
@@ -75,4 +100,4 @@ ordering was flagged before building it.
   time found no bug in the pre-fill logic itself. Don't chase this further
   ad hoc — specifically re-test resuming onto this screen (ideally via a
   profile with availability fields partially set) during the dedicated
-  testing pass called for in specs/in-good-company-test-prompt.md.
+  testing pass called for in the test spec (see above).
