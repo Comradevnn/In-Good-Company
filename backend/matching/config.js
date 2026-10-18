@@ -4,12 +4,13 @@
 // README "Specs"), not these numbers. Each weight group sums to 1 so every
 // score stays in 0..1 and two scores compare meaningfully.
 const MATCHING_CONFIG = deepFreeze({
-  version: 'igc-custom-1',
+  version: 'igc-custom-2',
 
-  // Person-to-person fit.
-  pair: { interests: 0.43, age: 0.33, experience: 0.24 },
-  // One person's fit to a shift.
-  shiftFit: { cause: 0.58, travel: 0.42 },
+  // Person-to-person fit. "standing" is how orgs have rated each person's
+  // attendance and contribution; two highly rated volunteers score highest.
+  pair: { interests: 0.36, age: 0.27, experience: 0.19, standing: 0.18 },
+  // One person's fit to a shift; "org" is how well run volunteers rate the org.
+  shiftFit: { cause: 0.52, travel: 0.34, org: 0.14 },
   // How the two halves combine into a pairing's base quality.
   blend: { pair: 0.55, shift: 0.45 },
 
@@ -23,6 +24,13 @@ const MATCHING_CONFIG = deepFreeze({
   orgNoneFactor: 0.85, // cause fit kept when the org's mission doesn't match at all
   travelSlope: 0.75, // travel fit lost going from 0 to the full radius
   travelUnknown: 0.55, // either location or the radius is unknown
+
+  // Org ratings. Both are pulled toward a neutral value until there are a
+  // few ratings, and nobody unrated is treated as low.
+  standingNeutral: 0.62,
+  standingPrior: 3,
+  orgQualityNeutral: 0.62,
+  orgQualityPrior: 4,
 
   // Learned affinity from the user's own private personal-fit ratings.
   affinityPriorOrg: 2,
@@ -47,9 +55,9 @@ const MATCHING_CONFIG = deepFreeze({
 });
 
 const GROUPS = ['pair', 'shiftFit', 'blend'];
-const UNIT_KEYS = ['interestsUnknown', 'mentorValue', 'closeCredit', 'orgNoneFactor', 'travelSlope', 'travelUnknown',
+const UNIT_KEYS = ['standingNeutral', 'orgQualityNeutral', 'interestsUnknown', 'mentorValue', 'closeCredit', 'orgNoneFactor', 'travelSlope', 'travelUnknown',
   'affinityOrgShare', 'affinityMaxBoost', 'affinityMaxPenalty', 'riskWeight', 'newcomerProtection', 'repeatFactor', 'fairnessWeight'];
-const POSITIVE_KEYS = ['ageHalfGapYears', 'experienceSpanLog2', 'mentorMinShiftsInCause', 'affinityPriorOrg', 'affinityPriorCause',
+const POSITIVE_KEYS = ['standingPrior', 'orgQualityPrior', 'ageHalfGapYears', 'experienceSpanLog2', 'mentorMinShiftsInCause', 'affinityPriorOrg', 'affinityPriorCause',
   'lateCancelWeight', 'noShowWeight', 'riskPrior'];
 
 // Returns a list of human-readable problems; [] means the config is usable.

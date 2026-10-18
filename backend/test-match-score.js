@@ -122,6 +122,24 @@ check('a farther shift never scores higher for the same person', travelMonotone)
 check('an unknown location gets the neutral travel value', score.travelFit(person({ home: null }), shift(), cfg) === cfg.travelUnknown && score.travelFit(person(), shift({ location: null }), cfg) === cfg.travelUnknown);
 check('a wider radius makes the same trip fit better', score.travelFit(person({ radiusMiles: 30 }), shift({ location: { lat: SJ.lat + 0.1, lng: SJ.lng } }), cfg) > score.travelFit(person({ radiusMiles: 10 }), shift({ location: { lat: SJ.lat + 0.1, lng: SJ.lng } }), cfg));
 
+// ── Org ratings ──
+const high = score.orgStanding([{ attendance: 5, contribution: 5 }, { attendance: 5, contribution: 4 }, { attendance: 5, contribution: 5 }], cfg);
+const low = score.orgStanding([{ attendance: 2, contribution: 1 }, { attendance: 1, contribution: 2 }, { attendance: 2, contribution: 2 }], cfg);
+check('a volunteer no org has rated yet counts as neutral, not low', score.orgStanding([], cfg) === cfg.standingNeutral && low < cfg.standingNeutral && high > cfg.standingNeutral);
+check('standing stays within 0..1 and more good ratings move it further',
+  inUnit(high) && inUnit(low) && score.orgStanding([{ attendance: 5, contribution: 5 }], cfg) < high);
+const withStanding = (id, s) => person({ userId: id, standing: s });
+const q2 = (x, y) => score.scoreTriple(x, y, s0, {}, cfg).quality;
+check('two highly rated volunteers score higher together than a highly rated and a low rated one',
+  q2(withStanding('a', high), withStanding('b', high)) > q2(withStanding('a', high), withStanding('b', low)));
+check("…and pairing two highly rated volunteers beats splitting them across low-rated partners",
+  q2(withStanding('a', high), withStanding('b', high)) + q2(withStanding('c', low), withStanding('d', low))
+  > q2(withStanding('a', high), withStanding('c', low)) + q2(withStanding('b', high), withStanding('d', low)));
+check('an org nobody has rated yet counts as neutral', score.orgQuality(null, cfg) === cfg.orgQualityNeutral);
+check("a well-run org's shift fits better than a poorly run one",
+  score.shiftFitFor(person(), shift({ org_quality: score.orgQuality({ sum: 50, n: 10 }, cfg) }), cfg).value
+  > score.shiftFitFor(person(), shift({ org_quality: score.orgQuality({ sum: 15, n: 10 }, cfg) }), cfg).value);
+
 // ── Multipliers ──
 check('no reliability history means no penalty', score.scoreTriple(person({ userId: 'a' }), person({ userId: 'b' }), s0, {}, cfg).multipliers.reliability === 1);
 const withEvents = (late, noShow, attended = 4) => person({ userId: 'z', reliability: { attended, late, noShow, habitualLate: false } });

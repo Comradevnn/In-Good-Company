@@ -154,6 +154,19 @@ check('odd capacity leaves the extra spot empty', plan([person('a'), person('b')
   check('with identical profiles the longest waiter is served first', paired(p, 'x', 'y'), pairsOf(p));
 }
 
+// ── Org standing: highly rated volunteers go together ──
+{
+  const { orgStanding } = require('./matching/score');
+  const great = orgStanding(Array.from({ length: 5 }, () => ({ attendance: 5, contribution: 5 })), cfg);
+  const poor = orgStanding(Array.from({ length: 5 }, () => ({ attendance: 2, contribution: 1 })), cfg);
+  const persons = [
+    person('g1', { standing: great, waitedHours: 4 }), person('p1', { standing: poor, waitedHours: 3 }),
+    person('g2', { standing: great, waitedHours: 2 }), person('p2', { standing: poor, waitedHours: 1 }),
+  ];
+  const p = plan(persons, [shift('s1', { capacity_remaining: 4 })]);
+  check('highly rated volunteers are paired together when the pool allows', paired(p, 'g1', 'g2') && paired(p, 'p1', 'p2'), pairsOf(p));
+}
+
 // ── Tiers ──
 {
   // R is a rematch anchored on s1 and fits X less well than Y does.

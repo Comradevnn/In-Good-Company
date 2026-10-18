@@ -21,6 +21,7 @@ const { notify } = require('./notify');
 const { passesShiftGate, safeParseArray } = require('../matching/engine');
 const { MATCHING_CONFIG } = require('../matching/config');
 const { toMatchPerson } = require('../matching/person');
+const { orgQuality } = require('../matching/score');
 const { planAssignments, pairKey, roundBreakdown } = require('../matching/assign');
 const { visibleShifts, getShift, reserveSpots } = require('./shifts');
 const { localDate } = require('./time');
@@ -193,6 +194,10 @@ function poolStats(userIds) {
   `).all(ids)) {
     ratings.get(row.user_id).push({ orgId: row.org_id, personalFit: row.personal_fit, causeTags: safeParseArray(row.cause_tags) });
   }
+  const orgRatings = new Map(userIds.map((id) => [id, []]));
+  for (const row of db.prepare(`
+    SELECT user_id, attendance, contribution FROM org_volunteer_ratings WHERE user_id IN (SELECT value FROM json_each(?))
+  `).all(ids)) orgRatings.get(row.user_id).push({ attendance: row.attendance, contribution: row.contribution });
   const pairSet = (sql) => new Set(db.prepare(sql).all(ids, ids).map((r) => pairKey(r.u1, r.u2)));
   const pairFacts = {
     prior: pairSet(`SELECT user_a_id AS u1, user_b_id AS u2 FROM pairings WHERE status IN ('confirmed', 'completed', 'cancelled')
@@ -204,7 +209,7 @@ function poolStats(userIds) {
     declined: pairSet(`SELECT rater_user_id AS u1, ratee_user_id AS u2 FROM partner_ratings WHERE volunteer_again = 0
       AND rater_user_id IN (SELECT value FROM json_each(?)) AND ratee_user_id IN (SELECT value FROM json_each(?))`),
   };
-  return { attended, events, ratings, pairFacts };
+  return { attended, events, ratings, orgRatings, pairFacts };
 }
 
 // Read: everything the planner needs, once per run.
@@ -230,6 +235,11 @@ function buildSnapshot(nowMs, cfg = MATCHING_CONFIG) {
     for (const shift of ctx.shifts) if (!shiftById.has(shift.id)) shiftById.set(shift.id, shift);
   }
 
+  // How well run volunteers rate each org (the public operational axis).
+  const orgStats = new Map(db.prepare('SELECT org_id, SUM(operational) AS sum, COUNT(*) AS n FROM volunteer_org_ratings GROUP BY org_id')
+    .all().map((r) => [r.org_id, { sum: r.sum, n: r.n }]));
+  const shifts = [...shiftById.values()].map((s) => ({ ...s, org_quality: orgQuality(orgStats.get(s.org_id), cfg) }));
+
   const open = contexts.filter((ctx) => !ctx.block);
   const stats = poolStats([...new Set(open.map((ctx) => ctx.user.id))]);
   const persons = open.map((ctx) => {
@@ -239,12 +249,13 @@ function buildSnapshot(nowMs, cfg = MATCHING_CONFIG) {
       attendedByCause: attended.byCause,
       reliability: stats.events.get(ctx.user.id),
       ratings: stats.ratings.get(ctx.user.id),
+      orgRatings: stats.orgRatings.get(ctx.user.id),
       eligibleShiftIds: ctx.shifts.map((s) => s.id),
       anchorShiftId: anchorShiftId(ctx.request),
     }, cfg);
     return ctx.person;
   });
-  return { nowMs, cfg, contexts, persons, shifts: [...shiftById.values()], pairFacts: stats.pairFacts };
+  return { nowMs, cfg, contexts, persons, shifts, pairFacts: stats.pairFacts };
 }
 
 // Write the plan (planAssignments in matching/assign.js builds it).

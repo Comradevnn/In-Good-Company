@@ -47,6 +47,34 @@ function experienceFit(a, b, shift, cfg) {
   return { value: Math.max(0, 1 - Math.abs(la - lb) / cfg.experienceSpanLog2), mentor: false };
 }
 
+// How orgs have rated this person (attendance and contribution), 0..1,
+// shrunk toward neutral; someone nobody has rated yet is exactly neutral.
+function orgStanding(orgRatings, cfg) {
+  let sum = 0;
+  let n = 0;
+  for (const r of orgRatings ?? []) {
+    const a = Number(r.attendance);
+    const c = Number(r.contribution);
+    if (!Number.isFinite(a) || !Number.isFinite(c)) continue;
+    sum += clamp01(((a + c) / 2 - 1) / 4);
+    n++;
+  }
+  return (sum + cfg.standingPrior * cfg.standingNeutral) / (n + cfg.standingPrior);
+}
+
+// Geometric mean: two highly rated volunteers together score highest.
+function standingFit(a, b) {
+  return Math.sqrt(a * b);
+}
+
+// How well run volunteers rate an org (the public operational axis), 0..1,
+// shrunk toward neutral the same way. stats: { sum, n } of raw 1..5 ratings.
+function orgQuality(stats, cfg) {
+  const n = stats?.n ?? 0;
+  const sum = n ? (stats.sum - n) / 4 : 0;
+  return (sum + cfg.orgQualityPrior * cfg.orgQualityNeutral) / (n + cfg.orgQualityPrior);
+}
+
 // ── One person's fit to a shift ──
 
 // How much of the shift's cause list this person covers (adjacent causes
@@ -79,8 +107,9 @@ function shiftFitFor(person, shift, cfg) {
   const cause = causeFit(person, shift, cfg);
   const travel = travelFit(person, shift, cfg);
   const affinity = shiftAffinity(person.affinity, shift, cfg);
-  const fit = cfg.shiftFit.cause * cause + cfg.shiftFit.travel * travel;
-  return { cause, travel, affinity, value: clamp01((1 - cfg.affinityMaxBoost) * fit + affinity) };
+  const org = shift.org_quality ?? cfg.orgQualityNeutral;
+  const fit = cfg.shiftFit.cause * cause + cfg.shiftFit.travel * travel + cfg.shiftFit.org * org;
+  return { cause, travel, org, affinity, value: clamp01((1 - cfg.affinityMaxBoost) * fit + affinity) };
 }
 
 // ── Multipliers ──
@@ -101,7 +130,9 @@ function scoreTriple(a, b, shift, facts, cfg) {
   const interests = interestOverlap(x.interests, y.interests, cfg);
   const age = ageCloseness(x.age, y.age, cfg);
   const experience = experienceFit(x, y, shift, cfg);
-  const pairFit = cfg.pair.interests * interests + cfg.pair.age * age + cfg.pair.experience * experience.value;
+  const standing = standingFit(x.standing ?? cfg.standingNeutral, y.standing ?? cfg.standingNeutral);
+  const pairFit = cfg.pair.interests * interests + cfg.pair.age * age + cfg.pair.experience * experience.value
+    + cfg.pair.standing * standing;
 
   const fx = shiftFitFor(x, shift, cfg);
   const fy = shiftFitFor(y, shift, cfg);
@@ -129,7 +160,9 @@ function scoreTriple(a, b, shift, facts, cfg) {
       interests,
       age,
       experience: experience.value,
+      standing,
       pair_fit: pairFit,
+      org_quality: fx.org,
       cause: { a: fx.cause, b: fy.cause },
       travel: { a: fx.travel, b: fy.travel },
       affinity: { a: fx.affinity, b: fy.affinity },
@@ -145,6 +178,9 @@ module.exports = {
   interestOverlap,
   ageCloseness,
   experienceFit,
+  orgStanding,
+  standingFit,
+  orgQuality,
   causeFit,
   travelFit,
   shiftFitFor,

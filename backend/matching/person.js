@@ -4,13 +4,16 @@
 // free-text field are left out, so they cannot influence a score. Pure.
 const { safeParseArray } = require('./engine');
 const { learnAffinity } = require('./affinity');
+const { orgStanding } = require('./score');
 
 function normaliseInterest(tag) {
   return String(tag).toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
 // stats: { attendedShifts, attendedByCause, reliability: { attended, late, noShow },
-//          ratings: [{ orgId, personalFit, causeTags }], eligibleShiftIds, anchorShiftId }
+//          ratings: [{ orgId, personalFit, causeTags }] (this user's own ratings of orgs),
+//          orgRatings: [{ attendance, contribution }] (orgs' ratings of this user),
+//          eligibleShiftIds, anchorShiftId }
 function toMatchPerson(userRow, requestRow, stats, cfg) {
   const ratings = stats.ratings ?? [];
   const parseMs = (iso) => (iso ? Date.parse(iso) : NaN);
@@ -35,6 +38,7 @@ function toMatchPerson(userRow, requestRow, stats, cfg) {
     ageMin: requestRow.age_min ?? null,
     ageMax: requestRow.age_max ?? null,
 
+    standing: orgStanding(stats.orgRatings, cfg),
     attendedShifts: stats.attendedShifts ?? 0,
     attendedByCause: { ...(stats.attendedByCause ?? {}) },
     reliability: {
