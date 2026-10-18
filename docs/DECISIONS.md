@@ -4,11 +4,36 @@ Decisions the owner has made that aren't (or aren't yet) in the private
 specs, with what was built for each. Newest first. The private specs
 remain the source of truth for everything else (see README "Specs").
 
-## 2026-10-18 — Iteration 3 (proposed defaults, awaiting owner confirmation)
+## 2026-10-18 — Owner answers to the iteration-3 questions
 
-These were chosen during an orchestrated build pass; none is an owner
-decision yet. Each lives in `backend/lib/rules.js` so it can be changed in
-one place.
+Confirmed as built, no change needed:
+
+- **Resurfacing nudge cadence** and **abuse limits**: the proposed values
+  below are confirmed.
+- **Premium renewal**: a second subscribe while a paid period is running
+  or booked stays refused. Revisit when real billing exists.
+- **The friendship-only toggle (`seeking`)** stays as it is: collected and
+  stored, never a matching input, not shown to partners.
+
+Decided, not built yet:
+
+- **Duplicate-document accounts get no trial Deeds.** An account whose ID
+  matched an existing one can never verify, so it shouldn't be credited
+  value it can't spend.
+- **A safety pause withdraws pending proposals.** When the automatic
+  safety hold starts, any proposal the person hasn't confirmed yet is
+  withdrawn; the would-be partner returns to searching with no penalty and
+  a neutral message. Confirmed bookings are left alone.
+- **The under-18 answer becomes required.** Verification attest refuses a
+  submission with no adulthood answer, not just an explicit no.
+- **A search revived after its time limit starts with no match bar**, since
+  the person has already waited the full time.
+
+## 2026-10-18 — Iteration 3 (proposed defaults; confirmed above)
+
+These were chosen during an orchestrated build pass and later confirmed by
+the owner (see above). Each lives in `backend/lib/rules.js` so it can be
+changed in one place.
 
 - **Resurfacing nudges** (built): a quiet volunteer with no open search or
   upcoming shift gets one in-app notification about open shifts that fit
