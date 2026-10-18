@@ -60,8 +60,9 @@ admin.post('/admin/safety-reports/:id/review', requireAdmin, (req, res) => {
   const result = db.prepare("UPDATE safety_reports SET status = 'reviewed', reviewer_note = ?, reviewed_at = ? WHERE id = ?")
     .run(req.body?.note ?? null, clock.isoNow(), req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Report not found.' });
-  // Staff review lifts the automatic safety hold when too few open reports
-  // remain; other review reasons stay, and staff can still pause manually.
+  // Staff review lifts the automatic safety hold once no open reports about
+  // the person remain; other review reasons stay, and staff can still pause
+  // manually.
   const reported = db.prepare('SELECT reported_user_id FROM safety_reports WHERE id = ?').get(req.params.id)?.reported_user_id;
   social.liftSafetyHoldIfBelowThreshold(reported);
   res.json({ ok: true });

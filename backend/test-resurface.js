@@ -118,6 +118,7 @@ async function main() {
     await h.advance({ days: 4 }); // day 11: past the 10-day cadence, but the only shift has started
     check('three-times-a-month volunteer waits for a shift that fits', (await nudges(byLabel['Three times a month'])).length === 0);
     await h.makeShift(org, { daysAhead: 3, ...sanJose });
+    await h.advance({ hours: 2 }); // the pass runs at most once an hour, so let the next one come round
     check('three-times-a-month volunteer is nudged once a shift fits', (await nudges(byLabel['Three times a month'])).length === 1);
     check('the weekly volunteer is not nudged again mid-period', (await nudges(weekly)).length === 1);
     check('twice-a-month volunteer is still waiting', (await nudges(byLabel['Twice a month'])).length === 0);
@@ -135,6 +136,46 @@ async function main() {
     check('once-a-month volunteer is nudged after a month', (await nudges(byLabel['Once a month'])).length === 1);
     check('a nudge is a notification only: the weekly volunteer has no search or booking from it',
       db.prepare("SELECT COUNT(*) AS n FROM availability_requests WHERE user_id = ?").get(weekly.id).n === 0);
+
+    // ── Recent activity and the hourly throttle ──
+    // Three weekly volunteers long past their cadence since joining: one
+    // control, one whose shift just ended, one whose search just ended.
+    const DAY_MS = 24 * HOUR;
+    await h.makeShift(org, { daysAhead: 5, ...sanJose });
+    const mkWeekly = async (name) => {
+      const vol = await h.makeVolunteer({ name, ...sanJose });
+      await setFrequency(vol, 'Weekly');
+      return vol;
+    };
+    const control = await mkWeekly('Recentcontrol');
+    const justWorked = await mkWeekly('Recentshift');
+    const justSearched = await mkWeekly('Recentsearch');
+    const lateJoin = await mkWeekly('Recentlate');
+    const nowMs = await h.serverNow();
+    const longAgo = new Date(nowMs - 60 * DAY_MS).toISOString();
+    for (const vol of [control, justWorked, justSearched]) setUser(vol, 'created_at', longAgo);
+    setUser(lateJoin, 'created_at', new Date(nowMs).toISOString()); // joined just now on the app clock
+    const endedShift = await h.makeShift(org, { daysAhead: 3, ...sanJose });
+    db.prepare('UPDATE shifts SET starts_at = ?, ends_at = ? WHERE id = ?')
+      .run(new Date(nowMs - 3 * HOUR).toISOString(), new Date(nowMs - 30 * 60 * 1000).toISOString(), endedShift.id);
+    db.prepare(`
+      INSERT INTO bookings (user_id, shift_id, kind, status, confirmed_at, created_at) VALUES (?, ?, 'solo', 'confirmed', ?, ?)
+    `).run(justWorked.id, endedShift.id, longAgo, longAgo);
+    db.prepare(`
+      INSERT INTO availability_requests (user_id, window_start, window_end, status, search_deadline, created_at, ended_at)
+      VALUES (?, ?, ?, 'cancelled', ?, ?, ?)
+    `).run(justSearched.id, '2030-01-01', '2030-01-10', longAgo, longAgo, new Date(nowMs - 30 * 60 * 1000).toISOString());
+    await h.advance({ hours: 2 });
+    check('a long-quiet volunteer is nudged', (await nudges(control)).length === 1);
+    check('a volunteer whose confirmed shift just ended is not nudged', (await nudges(justWorked)).length === 0);
+    check('a volunteer whose search just ended is not nudged', (await nudges(justSearched)).length === 0);
+
+    // Within the hour a due nudge waits; the next hour's pass delivers it.
+    setUser(lateJoin, 'created_at', longAgo);
+    await h.tick();
+    check('a pass inside the same hour is skipped, so a newly due nudge waits', (await nudges(lateJoin)).length === 0);
+    await h.advance({ hours: 2 });
+    check('the throttle does not stop a due nudge at the next hour\'s pass', (await nudges(lateJoin)).length === 1);
 
     // ── Frequency never changes who matching pairs ──
     db.prepare("UPDATE availability_requests SET status = 'cancelled' WHERE status = 'searching'").run();

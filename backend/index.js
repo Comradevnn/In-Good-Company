@@ -489,11 +489,11 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
   const { name_match, dob_match, doc_type_confirmed, dob_is_adult, expiry_date } = req.body ?? {};
 
   // The device decides adulthood from the ID's own date of birth (which never
-  // leaves the device) and sends only this boolean. An explicit false is a
-  // minor's document and is refused before anything is staged or issued. A
+  // leaves the device) and sends only this boolean. Anything present that
+  // isn't exactly true is refused before anything is staged or issued. A
   // missing field is still accepted for older clients and the Recryption
   // suites; see the open question on closing that gap.
-  if (dob_is_adult === false) {
+  if (dob_is_adult !== undefined && dob_is_adult !== true) {
     return res.status(400).json({
       error: 'In Good Company is for adults only, so this document can\'t be used to verify.',
       code: 'underage_document',

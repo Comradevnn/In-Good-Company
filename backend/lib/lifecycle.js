@@ -137,7 +137,6 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   return others.some((o) => {
     if (tagMatchLevel(mine, safeParseArray(o.cause_tags)) === 'none') return false;
     if (isBlockedPair(user.id, o.id)) return false;
-    if (eligibilityBlock(o, { kind: 'standard' }, nowMs)) return false;
     if (!hardFiltersPass(user, o).pass) return false;
     if (!inBand(o.req_age_min, o.req_age_max, user.age) || !inBand(request?.age_min, request?.age_max, o.age)) return false;
     if (user.location_lat != null && user.location_lng != null && o.location_lat != null && o.location_lng != null) {
@@ -145,7 +144,9 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
       if (radius.every((r) => r != null)
         && haversineMiles({ lat: user.location_lat, lng: user.location_lng }, { lat: o.location_lat, lng: o.location_lng }) > Math.max(...radius)) return false;
     }
-    return !unfit.get({ me: user.id, other: o.id });
+    if (unfit.get({ me: user.id, other: o.id })) return false;
+    // The costliest check goes last, after the cheap filters above.
+    return !eligibilityBlock(o, { kind: 'standard' }, nowMs);
   });
 }
 
@@ -848,7 +849,12 @@ function tick() {
     })();
   }
 
-  runResurfacing(nowMs);
+  // Nudges are a nicety: a failure here is logged and must never stop matching.
+  try {
+    runResurfacing(nowMs);
+  } catch (err) {
+    console.error('resurfacing failed', err);
+  }
 
   return runMatching(nowMs);
 }

@@ -1,5 +1,5 @@
 // ID verification hardening over HTTP (own throwaway database, server on
-// :3050 — see test-helpers.js): the explicit under-age refusal, stable error
+// :3050 — see test-helpers.js): the under-age refusal (false or any non-true value), stable error
 // codes on the document-check/attest rejections, and the guarantee that a
 // rejected attempt leaves the account unverified and does not block a later
 // correct attempt by the same account.
@@ -36,6 +36,15 @@ async function main() {
     check('a rejected underage attest leaves the account unverified with no badge', afterMinor.verified === 0 && afterMinor.badges === 0, afterMinor);
     const minorMe = await api('/users/me', { token: minor.token });
     check('the profile reads as unverified after the underage rejection', !minorMe.body?.verified, minorMe.body?.verified);
+
+    // Anything present that isn't exactly true is refused; omitting it stays accepted.
+    for (const [label, value] of [['the string "false"', 'false'], ['0', 0], ['null', null], ['the string "true"', 'true']]) {
+      const odd = await attest(minor, { ...GOOD, dob_is_adult: value });
+      check(`dob_is_adult as ${label} is rejected with 400 underage_document`,
+        odd.status === 400 && odd.body?.code === 'underage_document', odd.body);
+    }
+    const afterOdd = stateOf(minor);
+    check('the non-boolean rejections leave the account unverified with no badge', afterOdd.verified === 0 && afterOdd.badges === 0, afterOdd);
 
     // ── The same account can still complete a correct attempt afterwards ──
     const retry = await attest(minor, GOOD);

@@ -27,8 +27,9 @@ one place.
   library tests keep working — closing that gap is an owner call.
 - **Review reasons** (built): no-show reviews, the automatic safety hold
   and staff pauses are tracked separately; clearing one leaves the others,
-  and staff marking reports reviewed lifts the automatic safety hold once
-  too few open reports remain.
+  and staff marking reports reviewed lifts the automatic safety hold only
+  once no open reports about the person remain. A staff pause has its own
+  control on the admin page.
 
 Open questions raised this pass: should a duplicate-document account get
 the Premium trial's free Deeds at all (it can't spend them); should a

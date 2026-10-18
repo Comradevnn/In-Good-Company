@@ -19,7 +19,7 @@ const KIND = 'resurface';
 const CANDIDATES_SQL = `
   SELECT u.*,
     (SELECT MAX(s.ends_at) FROM bookings b JOIN shifts s ON s.id = b.shift_id
-      WHERE b.user_id = u.id AND b.status IN ('attended', 'unverified')) AS last_shift_end,
+      WHERE b.user_id = u.id AND b.status IN ('attended', 'unverified', 'confirmed') AND s.ends_at <= @now) AS last_shift_end,
     (SELECT MAX(r.ended_at) FROM availability_requests r WHERE r.user_id = u.id) AS last_search_end,
     (SELECT MAX(n.created_at) FROM notifications n WHERE n.user_id = u.id AND n.kind = '${KIND}') AS last_nudge,
     EXISTS (SELECT 1 FROM availability_requests r WHERE r.user_id = u.id AND r.status IN ('searching', 'proposed')) AS has_open_search,
@@ -42,7 +42,14 @@ function fits(user, causes, shift) {
   return haversineMiles({ lat: user.location_lat, lng: user.location_lng }, shift.location) <= user.travel_radius_miles;
 }
 
+// The pass looks at every verified user, so it runs at most once per app-clock
+// hour. If the dev clock is moved backwards the timestamp no longer applies
+// and the next call runs (and re-bases the throttle).
+let lastRunMs = null;
+
 function runResurfacing(nowMs = clock.nowMs()) {
+  if (lastRunMs != null && nowMs >= lastRunMs && nowMs - lastRunMs < clock.HOUR) return 0;
+  lastRunMs = nowMs;
   const nowIso = new Date(nowMs).toISOString();
   const candidates = db.prepare(CANDIDATES_SQL).all({ now: nowIso });
   let upcoming = null; // loaded once, and only if someone is actually due

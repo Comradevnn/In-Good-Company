@@ -224,16 +224,16 @@ function pauseIfRepeatedlyReported(userId) {
     'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
 }
 
-// Staff review lifts the automatic safety hold: once a reported person's
-// open reports (distinct reporters) fall below the pause threshold, only the
+// Staff review lifts the automatic safety hold only once NO open reports
+// about the person remain; while any are still open the hold stays. Only the
 // safety_reports reason is cleared; any other reason stays. Staff can still
 // pause manually.
 function liftSafetyHoldIfBelowThreshold(userId) {
   if (!userId || !reliability.reviewReasons(userId).includes('safety_reports')) return false;
-  const reporters = db.prepare(`
-    SELECT COUNT(DISTINCT reporter_user_id) AS n FROM safety_reports WHERE reported_user_id = ? AND status = 'open'
+  const open = db.prepare(`
+    SELECT COUNT(*) AS n FROM safety_reports WHERE reported_user_id = ? AND status = 'open'
   `).get(userId).n;
-  if (reporters >= rules.SAFETY_PAUSE_DISTINCT_REPORTERS) return false;
+  if (open > 0) return false;
   reliability.clearReviewReason(userId, 'safety_reports');
   return true;
 }

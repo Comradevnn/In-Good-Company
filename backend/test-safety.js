@@ -173,16 +173,24 @@ async function main() {
     const openReports = () => db.prepare("SELECT id FROM safety_reports WHERE reported_user_id = ? AND status = 'open'").all(S.user.id);
     check('two open reports plus a no-show review hold the account for both reasons', reasonsOf(S.user).join() === 'no_shows,safety_reports' && openReports().length === rules.SAFETY_PAUSE_DISTINCT_REPORTERS);
     await api(`/admin/safety-reports/${openReports()[0].id}/review`, { method: 'POST', admin: true, body: { note: 'checked' } });
-    check('reviewing a report so that too few remain open lifts the safety hold but not the no-show review',
+    check('reviewing one of two open reports keeps the safety hold',
+      reasonsOf(S.user).join() === 'no_shows,safety_reports' && openReports().length === rules.SAFETY_PAUSE_DISTINCT_REPORTERS - 1, stateOf(S.user));
+    await api(`/admin/safety-reports/${openReports()[0].id}/review`, { method: 'POST', admin: true, body: { note: 'checked' } });
+    check('reviewing the last open report lifts the safety hold but not the no-show review',
       stateOf(S.user).account_review === 1 && reasonsOf(S.user).join() === 'no_shows', stateOf(S.user));
     const T = await reportedUser('Tess');
     for (const p of T.partners) await T.report(p);
     const tReports = db.prepare("SELECT id FROM safety_reports WHERE reported_user_id = ?").all(T.user.id);
-    await api(`/admin/safety-reports/${tReports[0].id}/review`, { method: 'POST', admin: true });
-    check('a safety hold with no other reason ends when the reports drop below the threshold', stateOf(T.user).account_review === 0 && stateOf(T.user).review_reason === null, stateOf(T.user));
-    await api(`/admin/users/${T.user.id}/suspend`, { method: 'POST', admin: true });
-    await api(`/admin/safety-reports/${tReports[1].id}/review`, { method: 'POST', admin: true });
-    check('a manual staff pause is not lifted by reviewing reports', stateOf(T.user).account_review === 1 && reasonsOf(T.user).join() === 'staff', stateOf(T.user));
+    for (const r of tReports) await api(`/admin/safety-reports/${r.id}/review`, { method: 'POST', admin: true });
+    check('a safety hold with no other reason ends once no reports remain open', stateOf(T.user).account_review === 0 && stateOf(T.user).review_reason === null, stateOf(T.user));
+    const U = await reportedUser('Uma');
+    for (const p of U.partners) await U.report(p);
+    await api(`/admin/users/${U.user.id}/suspend`, { method: 'POST', admin: true });
+    const uReports = db.prepare("SELECT id FROM safety_reports WHERE reported_user_id = ?").all(U.user.id);
+    for (const r of uReports) await api(`/admin/safety-reports/${r.id}/review`, { method: 'POST', admin: true });
+    check('a manual staff pause is not lifted by reviewing reports', stateOf(U.user).account_review === 1 && reasonsOf(U.user).join() === 'staff', stateOf(U.user));
+    await api(`/admin/users/${U.user.id}/clear-review`, { method: 'POST', admin: true, body: { reason: 'staff' } });
+    check('the staff pause is lifted by clearing the staff reason', stateOf(U.user).account_review === 0 && stateOf(U.user).review_reason === null, stateOf(U.user));
   } finally {
     h.cleanup(server);
   }

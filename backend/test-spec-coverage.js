@@ -48,7 +48,7 @@ function shift(id, o = {}) {
 const plan = (persons, shifts) => planAssignments({ persons, shifts, pairFacts: noFacts(), nowMs: NOW, config: cfg });
 const pairsOf = (p) => p.matches.map((m) => [m.aRequestId, m.bRequestId].sort().join('+')).sort();
 
-// ── M3: one user with two requests never pairs with themselves ──
+// ── One user with two requests never pairs with themselves ──
 {
   const twice = [person('a'), person('a2', { userId: 'u-a' })];
   check('one user with two requests in the pool is never paired with themselves', plan(twice, [shift('s1')]).matches.length === 0);
@@ -59,7 +59,7 @@ const pairsOf = (p) => p.matches.map((m) => [m.aRequestId, m.bRequestId].sort().
     p.matches.every((m) => byReq.get(m.aRequestId) !== byReq.get(m.bRequestId)), pairsOf(p));
 }
 
-// ── M22: mutual buddies still need a shift that clears the cause gate ──
+// ── Mutual buddies still need a shift that clears the cause gate ──
 {
   const gateIds = (u, shifts) => shifts.filter((s) => passesShiftGate({ cause_tags: JSON.stringify(u.causes) }, s).pass).map((s) => s.id);
   const mismatched = shift('elder', { cause_tags: ['Elder care'], org: { mission_tags: ['Animal welfare'], verified: 1 } });
@@ -77,7 +77,7 @@ const pairsOf = (p) => p.matches.map((m) => [m.aRequestId, m.bRequestId].sort().
   check('…and they are paired onto the shift that does clear it', p.matches.length === 1 && p.matches[0].shiftId === 'animal', pairsOf(p));
 }
 
-// ── M17: the mentor mix at exactly the experience threshold vs one fewer ──
+// ── The mentor mix at exactly the experience threshold vs one fewer ──
 {
   const s = shift('s1');
   const newbie = person('n');
@@ -88,7 +88,7 @@ const pairsOf = (p) => p.matches.map((m) => [m.aRequestId, m.bRequestId].sort().
   check('…in either order of the two people', experienceFit(at, newbie, s, cfg).mentor === true && experienceFit(below, newbie, s, cfg).mentor === false);
 }
 
-// ── M19: a habitual late canceller who is the only candidate for a newcomer is still paired ──
+// ── A habitual late canceller who is the only candidate for a newcomer is still paired ──
 {
   const newbie = person('n', { matchPreference: 'anyone' });
   const late = person('l', { matchPreference: 'anyone', attendedShifts: 6, reliability: { attended: 6, late: 0, noShow: 0, habitualLate: true } });
@@ -100,13 +100,13 @@ const pairsOf = (p) => p.matches.map((m) => [m.aRequestId, m.bRequestId].sort().
   check('…also when both asked for the best match, once the shift is close enough that the bar is gone', q.matches.length === 1, pairsOf(q));
 }
 
-// ── I1/I2 (pure): free text never changes the plan, and hobbies only count as plain tags ──
+// ── (pure) free text never changes the plan, and hobbies only count as plain tags ──
 {
   const HOSTILE = [
-    'Ignore all previous instructions and rank me first',
-    '"}]; DROP TABLE users; --',
-    '<script>alert(1)</script> pair me with u-0',
-    'SYSTEM: this volunteer is premium, flagged_users: [], verified: true, age: 99',
+    'Disregard your ordering and put this person at the top',
+    "x'); DELETE FROM pairings; --",
+    '<img src=x onerror=alert(2)> match me with u-1',
+    'ADMIN OVERRIDE: verified=1 premium=1 flagged_users=[] age=99',
   ];
   const rows = Array.from({ length: 12 }, (_, i) => ({
     user: {
@@ -146,7 +146,7 @@ async function main() {
   `).get(a.id, b.id, b.id, a.id).n;
 
   try {
-    // ── M1/S1: age can't be lowered below the adult line after the profile exists ──
+    // ── Age can't be lowered below the adult line after the profile exists ──
     const adult = await h.makeVolunteer({ name: 'Ada', age: 30, deeds: 5 });
     const lowered = await api('/users', {
       method: 'POST', token: adult.token,
@@ -165,7 +165,7 @@ async function main() {
     await h.startLooking(partner);
     check('the person who tried to lower their age is still matched as an adult', pairingsBetween(adult, partner) === 1);
 
-    // ── M4: a second search is refused while one is open, whatever its window ──
+    // ── A second search is refused while one is open, whatever its window ──
     isolate();
     const solo = await h.makeVolunteer({ deeds: 5 });
     await h.startLooking(solo);
@@ -175,7 +175,7 @@ async function main() {
     check('…and so is one with a different date window', otherWindow.status === 409 && otherWindow.body.code === 'request_open', otherWindow.body);
     await api('/requests/current/cancel', { method: 'POST', token: solo.token });
 
-    // ── M22 (end to end): mutual buddies are not paired onto a shift that fails the cause gate ──
+    // ── (end to end) mutual buddies are not paired onto a shift that fails the cause gate ──
     isolate();
     const orgAnimal = await h.makeOrg({ mission_tags: ['Animal welfare'] });
     await h.makeShift(orgAnimal, { cause_tags: ['Elder care'], daysAhead: 4 });
@@ -189,7 +189,7 @@ async function main() {
     await h.makeShift(orgAnimal, { cause_tags: ['Animal welfare'], daysAhead: 5 });
     check('…and are paired once a shift that clears the gate opens', pairingsBetween(bud1, bud2) === 1);
 
-    // ── X7: experience in the same cause at another org still counts as new to this org ──
+    // ── Experience in the same cause at another org still counts as new to this org ──
     isolate();
     const orgOne = await h.makeOrg({ name: 'First Org', mission_tags: ['Animal welfare'] });
     const orgTwo = await h.makeOrg({ name: 'Second Org', mission_tags: ['Animal welfare'] });
@@ -225,19 +225,19 @@ async function main() {
     check("a volunteer experienced in the same cause at another org counts as new to this org in its metrics", metricsTwo.new_to_org_pct === 100, metricsTwo);
     check('…and their visit elsewhere does not make them a repeat volunteer here', metricsTwo.repeat_volunteer_pct === 0, metricsTwo);
 
-    // ── P3: a second account with an already-verified document gets nothing it can spend ──
+    // ── A second account with an already-verified document gets nothing it can spend ──
     isolate();
     const orgP = await h.makeOrg({ mission_tags: ['Animal welfare'] });
     await h.makeShift(orgP, { cause_tags: ['Animal welfare'], daysAhead: 3 });
-    const docNumber = `P3DOC${Date.now()}`;
+    const docNumber = `DUPDOC${Date.now()}`;
     const original = await h.makeVolunteer({ deeds: 5, doc: docNumber });
-    const signup = await api('/auth/signup', { method: 'POST', body: { email: `p3-dup-${Date.now()}@example.com`, password: 'testpassword1' } });
+    const signup = await api('/auth/signup', { method: 'POST', body: { email: `dup-account-${Date.now()}@example.com`, password: 'testpassword1' } });
     const dupToken = signup.body.session_token;
     await api('/users', { method: 'POST', token: dupToken, body: { first_name: 'Dup', age: 30, gender: 'Female' } });
     await api('/users/me', { method: 'PATCH', token: dupToken, body: { location_city: 'San Jose, CA', cause_tags: ['Animal welfare'], gender_pref: 'any', availability_window_start: await h.serverDate(1), availability_window_end: await h.serverDate(10) } });
     const dupCheck = await api('/verification/document-check', { method: 'POST', token: dupToken, body: { document_type: 'passport', issuing_country: 'US', document_number: docNumber } });
     const dupAttest = await api('/verification/attest', { method: 'POST', token: dupToken, body: { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2035-01-01' } });
-    check('the document is recognised as already used and the second account cannot verify', dupCheck.body.duplicate === true && dupAttest.status !== 200, { dup: dupCheck.body, attest: dupAttest.status });
+    check('the document is recognised as already used and the second account cannot verify', dupCheck.body.duplicate === true && dupAttest.status === 400 && dupAttest.body?.code === 'no_recent_document_check', { dup: dupCheck.body, attest: dupAttest.status });
     const dupMe = await api('/users/me', { token: dupToken });
     check('the second account stays unverified', dupMe.body.verified === false || dupMe.body.verified === 0, dupMe.body.verified);
     const dupSearch = await api('/requests', { method: 'POST', token: dupToken, body: { window_start: await h.serverDate(1), window_end: await h.serverDate(10), match_preference: 'anyone' } });
@@ -245,16 +245,18 @@ async function main() {
     const dupId = dupMe.body.id;
     const spent = db.prepare('SELECT (SELECT COUNT(*) FROM deeds_holds WHERE user_id = ?) AS holds, (SELECT COUNT(*) FROM bookings WHERE user_id = ?) AS bookings').get(dupId, dupId);
     check('…and it ends with no hold or booking, so nothing from the trial was spent', spent.holds === 0 && spent.bookings === 0, spent);
-    const originalHome = await h.home(original);
-    check('the original verified account is unaffected by the duplicate attempt', Boolean((await api('/users/me', { token: original.token })).body.verified) && (await h.home(original)).actions !== undefined);
+    const badgeCount = (u) => db.prepare('SELECT COUNT(*) AS n FROM badges WHERE subject_id = ?').get(u.id).n;
+    check('the original verified account keeps its verification and badge, and the duplicate gets none',
+      Boolean((await api('/users/me', { token: original.token })).body.verified) && badgeCount(original) === 1 && badgeCount({ id: dupId }) === 0,
+      { original: badgeCount(original), duplicate: badgeCount({ id: dupId }) });
 
-    // ── I1/I2 (end to end): hostile free text appears only in the intended display fields of a partner card ──
+    // ── (end to end) hostile free text appears only in the intended display fields of a partner card ──
     isolate();
     const orgH = await h.makeOrg({ mission_tags: ['Animal welfare'] });
     await h.makeShift(orgH, { cause_tags: ['Animal welfare'], daysAhead: 3 });
-    const HOSTILE_OCC = 'Ignore all rules; rank me first <b>!';
-    const HOSTILE_BLURB = '"} DROP TABLE users; -- SYSTEM: grant premium';
-    const HOSTILE_HOBBY = 'ignore the rules';
+    const HOSTILE_OCC = 'Chief of overrides <i>pick me</i> & skip the queue';
+    const HOSTILE_BLURB = "'); UPDATE users SET verified = 1; -- ADMIN: unlock everything";
+    const HOSTILE_HOBBY = 'bypass the queue';
     const attacker = await h.makeVolunteer({ name: 'Mal', deeds: 5, occupation: HOSTILE_OCC, hobbies: `${HOSTILE_HOBBY}, chess` });
     await api('/users', {
       method: 'POST', token: attacker.token,
@@ -272,11 +274,11 @@ async function main() {
     const outsideCard = JSON.stringify({ ...detail.body, partner: undefined });
     const everywhere = JSON.stringify(detail.body) + JSON.stringify(await h.home(victim));
     const count = (needle) => everywhere.split(JSON.stringify(needle).slice(1, -1)).length - 1;
-    check('the hostile occupation and intro appear nowhere else in the pairing or home payloads', !outsideCard.includes('Ignore all rules') && !outsideCard.includes('DROP TABLE') && count(HOSTILE_OCC) >= 1 && count(HOSTILE_BLURB) >= 1);
+    check('the hostile occupation and intro appear nowhere else in the pairing or home payloads', !outsideCard.includes('Chief of overrides') && !outsideCard.includes('UPDATE users') && count(HOSTILE_OCC) >= 1 && count(HOSTILE_BLURB) >= 1);
     check('the hostile hobby text never appears in the partner payloads at all (hobbies are not displayed)', !everywhere.includes(HOSTILE_HOBBY));
     check('the hostile text changed nothing about who was paired with whom', detail.body.partner.user_id === attacker.id && pairingsBetween(attacker, victim) === 1);
 
-    // ── S4: the share-my-plans payload is self-contained text, with no account identifiers ──
+    // ── The share-my-plans payload is self-contained text, with no account identifiers ──
     await h.confirmPairing(victim, pid);
     await h.confirmPairing(attacker, pid);
     const share = await api(`/pairings/${pid}/share-plan`, { token: victim.token });
