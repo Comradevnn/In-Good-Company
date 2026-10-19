@@ -504,6 +504,7 @@ terminal). Each one loads Node via nvm (`nvm install 24`):
 | `setup-mac.command` | Clones + builds `../Recryption`, installs backend/mobile deps, creates `backend/data/` and `backend/.env` (fresh `DOC_PEPPER`) if missing. Re-runnable. |
 | `start-backend.command` | Backend on port 3000 (`PORT=3050 ...` to override) |
 | `start-mobile.command` | Metro for Expo Go on port 8081 (`METRO_PORT=8090 ...` to override) |
+| `start-all.command` | Both in one window: backend in the background (log in `backend/data/backend.log`), Metro in the foreground. Ctrl+C or closing the window stops both (`PORT=3050 METRO_PORT=8090 ...` to override) |
 | `seed-demo.command` | Runs `seed-demo-orgs.js` then `seed-demo-users.js` (pass `--searching` to open a search for each demo volunteer) |
 | `clear-demo.command` | Runs `clear-demo-users.js` then `clear-demo-orgs.js` |
 
