@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import PrimaryButton from '../components/PrimaryButton';
+import DateField from '../components/DateField';
 import { BACKEND_URL } from '../config/api';
 import { nameMatches, dobMatchesAge, dobIsAdult, expiryIsValid } from '../verification/localChecks';
 
@@ -34,6 +34,10 @@ import { nameMatches, dobMatchesAge, dobIsAdult, expiryIsValid } from '../verifi
 // device or the server caught it. Kept kind: a minor did nothing wrong.
 const UNDERAGE_MESSAGE =
   'In Good Company is for adults 18 and over, so we can\'t verify this ID. Thanks for your interest. We\'d love to have you back once you\'re 18.';
+
+// The date-of-birth wheel opens on a plausible adult birthday rather than
+// today, so nobody has to scroll back decades from the current year.
+const DOB_PICKER_START = new Date(new Date().getFullYear() - 30, 0, 1);
 
 const DOC_TYPES = ["Driver's license", 'Passport', 'State ID'];
 
@@ -229,7 +233,7 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={s.container} behavior="padding">
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
         <Text style={s.eyebrow}>Verify your ID</Text>
         <Text style={s.h2}>Confirm it's really you</Text>
@@ -292,23 +296,19 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
 
         <View style={[s.field, s.row]}>
           <View style={{ flex: 1 }}>
-            <Text style={s.label}>Date of birth</Text>
-            <TextInput
-              style={s.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.inkSoft}
+            <DateField
+              label="Date of birth"
               value={dob}
-              onChangeText={setDob}
+              onChange={(value) => { setDob(value); setError(null); }}
+              initialDate={DOB_PICKER_START}
+              maximumDate={new Date()}
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.label}>Expiry date</Text>
-            <TextInput
-              style={s.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.inkSoft}
+            <DateField
+              label="Expiry date"
               value={expiry}
-              onChangeText={setExpiry}
+              onChange={(value) => { setExpiry(value); setError(null); }}
             />
           </View>
         </View>

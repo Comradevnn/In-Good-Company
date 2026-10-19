@@ -1,0 +1,53 @@
+import { useState } from 'react';
+import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { colors } from '../theme/colors';
+import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { formatDate, parseDate } from '../screens/dates';
+
+// A form field that picks a calendar day with the native date picker instead
+// of free typing, so the value is always a real YYYY-MM-DD date. Android opens
+// its dialog; iOS shows a wheel under the field (better than the inline
+// calendar for dates years away, like a date of birth) with a Done link.
+// `value` is a YYYY-MM-DD string, or '' when nothing is picked yet; the wheel
+// then starts at `initialDate`.
+export default function DateField({ label, value, onChange, placeholder = 'Choose a date', initialDate, minimumDate, maximumDate }) {
+  const [open, setOpen] = useState(false);
+  const current = value ? parseDate(value) : (initialDate ?? new Date());
+
+  return (
+    <View>
+      <Text style={s.label}>{label}</Text>
+      <TouchableOpacity style={s.input} onPress={() => setOpen((wasOpen) => !wasOpen)} accessibilityRole="button" accessibilityLabel={`${label}: ${value || placeholder}`}>
+        <Text style={{ fontFamily: 'Inter_400Regular', color: value ? colors.ink : colors.inkSoft }}>
+          {value || placeholder}
+        </Text>
+      </TouchableOpacity>
+      {open ? (
+        <>
+          <DateTimePicker
+            value={current}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            minimumDate={minimumDate}
+            maximumDate={maximumDate}
+            onValueChange={(_, date) => {
+              if (Platform.OS !== 'ios') setOpen(false);
+              if (date) onChange(formatDate(date));
+            }}
+            onDismiss={() => setOpen(false)}
+          />
+          {Platform.OS === 'ios' ? (
+            <Text style={[s.rationale, { textAlign: 'right', color: colors.mossDark, fontFamily: 'Inter_600SemiBold' }]} onPress={() => {
+              // A wheel left untouched never fires onValueChange; Done keeps the date it shows.
+              if (!value) onChange(formatDate(current));
+              setOpen(false);
+            }}>
+              Done
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  );
+}
