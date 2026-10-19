@@ -28,6 +28,11 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
   const [isOrg, setIsOrg] = useState(false);
   const [showReferral, setShowReferral] = useState(false);
   const [referralCode, setReferralCode] = useState('');
+  // Set once sign-in finds no account for this email; the next Continue
+  // creates one. Asking first means a typo (or a backend with a different
+  // database) can't quietly start a second, empty account.
+  const [newAccountEmail, setNewAccountEmail] = useState(null);
+  const confirmingNewAccount = newAccountEmail !== null && newAccountEmail === email.trim().toLowerCase();
 
   const emailValid = EMAIL_RE.test(email.trim());
   const canSubmit = emailValid && password.length >= 8 && !submitting;
@@ -36,8 +41,8 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
     setError(null);
     setSubmitting(true);
     try {
-      // Try login first — if the email doesn't have an account yet, fall
-      // through to signup. One form, no separate login/signup toggle.
+      // Try login first. If the email has no account yet, ask before
+      // creating one (see newAccountEmail). One form, no login/signup toggle.
       const loginResponse = await fetch(`${BACKEND_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,6 +51,10 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
 
       let data;
       if (loginResponse.status === 404) {
+        if (!confirmingNewAccount) {
+          setNewAccountEmail(email.trim().toLowerCase());
+          return;
+        }
         const signupResponse = await fetch(`${BACKEND_URL}/auth/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -83,7 +92,7 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
     >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
-        <Text style={styles.eyebrow}>Get started</Text>
+        <Text style={styles.eyebrow}>Sign in or get started</Text>
         <Text style={styles.h2}>What's your email?</Text>
         <Text style={styles.rationale}>
           We'll use this for shift confirmations, receipts, and getting back into your account.
@@ -113,7 +122,7 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
             onChangeText={setPassword}
             secureTextEntry
             autoCapitalize="none"
-            autoComplete="new-password"
+            autoComplete={confirmingNewAccount ? 'new-password' : 'password'}
           />
         </View>
 
@@ -138,6 +147,12 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
           {isOrg ? '← Signing up to volunteer instead' : 'Signing up an organization? Tap here'}
         </Text>
 
+        {confirmingNewAccount ? (
+          <Text style={[styles.noticeText, { marginTop: 16 }]}>
+            There's no account for {email.trim()} yet. Tap Create account to make a new one, or
+            check the email if you meant to sign in.
+          </Text>
+        ) : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </ScrollView>
 
@@ -150,7 +165,7 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
           {submitting ? (
             <ActivityIndicator color={colors.surface} />
           ) : (
-            <Text style={styles.btnPrimaryText}>Continue</Text>
+            <Text style={styles.btnPrimaryText}>{confirmingNewAccount ? 'Create account' : 'Continue'}</Text>
           )}
         </TouchableOpacity>
       </View>
