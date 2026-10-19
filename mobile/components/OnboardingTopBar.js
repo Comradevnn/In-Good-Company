@@ -5,8 +5,8 @@ import { colors } from '../theme/colors';
 // dots, matching specs/plotline.html's .topbar/.progress styling.
 //
 // Two modes:
-// - Linear onboarding: pass step/total, back button is decorative (no
-//   onBack — there's nowhere to go back to in the linear flow yet).
+// - Linear onboarding: pass step/total and onBack (a step back, or from
+//   the first step back to sign-in).
 // - Reopened from Settings to edit one section: pass title + onBack
 //   instead of step/total — shows a plain title and a working back button
 //   that returns to Settings, rather than a step-progress readout that
@@ -16,7 +16,7 @@ export default function OnboardingTopBar({ step, total, title, onBack }) {
 
   return (
     <View style={styles.topbar}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack} disabled={!onBack}>
+      <TouchableOpacity style={styles.backBtn} onPress={onBack} disabled={!onBack} accessibilityRole="button" accessibilityLabel="Back">
         <Text style={styles.backBtnText}>←</Text>
       </TouchableOpacity>
       {isEditMode ? (

@@ -244,6 +244,18 @@ export default function App() {
     setStepIndex((i) => i + 1);
   }
 
+  // The onboarding back arrow: a step back, or from the first step back to
+  // the sign-in screen (a wrong or second account otherwise had no way out).
+  // Answers already saved stay on the account, so signing back in resumes.
+  function leaveOnboardingStep() {
+    if (stepIndex > 0) {
+      setStepIndex((i) => i - 1);
+      return;
+    }
+    handleLogOut();
+    setSignedOutNotice('Signed out. Sign in again any time to pick up where you left off.');
+  }
+
   // Returning to Settings after editing one section.
   function finishEditing(updatedProfile) {
     if (updatedProfile) setProfile(updatedProfile);
@@ -333,6 +345,7 @@ export default function App() {
             sessionToken={sessionToken}
             step={step}
             total={total}
+            onBack={leaveOnboardingStep}
             onNext={goNext}
             initialValues={profile}
           />
@@ -343,6 +356,7 @@ export default function App() {
             sessionToken={sessionToken}
             step={step}
             total={total}
+            onBack={leaveOnboardingStep}
             onNext={goNext}
             initialValues={profile}
           />
@@ -353,6 +367,7 @@ export default function App() {
             sessionToken={sessionToken}
             step={step}
             total={total}
+            onBack={leaveOnboardingStep}
             onKnowsOrg={choseOrgPath}
             onBrowseByCause={choseCausePath}
             initialValues={profile}
@@ -364,6 +379,7 @@ export default function App() {
             sessionToken={sessionToken}
             step={step}
             total={total}
+            onBack={leaveOnboardingStep}
             onNext={goNext}
             initialValues={profile}
           />
@@ -374,6 +390,7 @@ export default function App() {
             sessionToken={sessionToken}
             step={step}
             total={total}
+            onBack={leaveOnboardingStep}
             onNext={goNext}
             initialValues={profile}
           />
@@ -384,6 +401,7 @@ export default function App() {
             sessionToken={sessionToken}
             step={step}
             total={total}
+            onBack={leaveOnboardingStep}
             onNext={goNext}
             initialValues={profile}
           />
