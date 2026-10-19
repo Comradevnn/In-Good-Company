@@ -4,6 +4,35 @@ Decisions the owner has made that aren't (or aren't yet) in the private
 specs, with what was built for each. Newest first. The private specs
 remain the source of truth for everything else (see README "Specs").
 
+## 2026-10-18 — Owner feedback from testing on an Android phone
+
+Fixed: fields no longer hide behind the Android keyboard, and the ID
+form's dates use the native date picker instead of typed text (typed
+dates only worked in one exact format). Date inputs should use a date
+picker from now on.
+
+Decided, not built yet (next build pass):
+
+- **Weekdays I'm free.** When starting a search, a person can pick the
+  days of the week they're free (e.g. Fridays and weekends). This is a
+  hard filter: within their date window they're only matched to shifts on
+  those days.
+- **"Any day, soonest first"** is the alternative to picking weekdays:
+  matching tries the earliest dates in their window first. Open: how this
+  sits with the match bar, which deliberately waits on early bookings for
+  a better partner.
+- **Availability calendar.** The date picker for a search shows a coloured
+  dot under each day: green when there are open, compatible spots and a
+  compatible partner is likely searching that day; yellow when there are
+  spots but the shift is nearly full or no partner is likely yet; red when
+  there's nothing compatible. Like the "anyone" toggle, a day's colour is
+  the only thing revealed about other people — never who or how many.
+  Open: what counts as "nearly full".
+
+Later (not scheduled): more animation in screen transitions, and a simple
+animated graphic (such as a turning hourglass) on the waiting-for-a-match
+screen.
+
 ## 2026-10-18 — Owner answers to the iteration-3 questions
 
 Confirmed as built, no change needed:
