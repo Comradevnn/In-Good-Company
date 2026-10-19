@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
@@ -72,7 +72,7 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
   }
 
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView style={s.container} behavior="padding">
       <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
         {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
@@ -109,6 +109,6 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
         {error ? <Text style={s.errorText}>{error}</Text> : null}
       </ScrollView>
       <PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }

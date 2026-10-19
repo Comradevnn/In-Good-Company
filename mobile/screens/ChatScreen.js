@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { app } from '../theme/appStyles';
@@ -67,7 +67,7 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
   const writable = pairing?.chat_open;
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={s.container} behavior="padding">
       <OnboardingTopBar title="Chat" onBack={onBack} />
       <ScrollView
         ref={scrollRef}

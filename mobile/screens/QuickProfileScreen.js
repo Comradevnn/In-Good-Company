@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
@@ -91,7 +91,7 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={s.container} behavior="padding">
       <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>

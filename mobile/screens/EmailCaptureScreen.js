@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -80,7 +79,7 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}

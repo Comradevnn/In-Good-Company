@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
@@ -35,7 +35,7 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
   }
 
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView style={s.container} behavior="padding">
       <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
         {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
@@ -98,6 +98,6 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
           loading={submitting}
         />
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   );
 }

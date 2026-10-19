@@ -1,4 +1,4 @@
-import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { app, RATING_SCALE } from '../theme/appStyles';
@@ -8,11 +8,13 @@ import OnboardingTopBar from './OnboardingTopBar';
 // screen file stays about its own flow.
 
 // Standard screen frame: plotline topbar (title + back), scroll body, and an
-// optional footer (usually a PrimaryButton). The scroll body insets itself for
-// the iOS keyboard so a focused field lower in a form isn't hidden behind it.
+// optional footer (usually a PrimaryButton). A focused field lower in a form
+// mustn't end up behind the keyboard: on iOS the scroll body insets itself; on
+// Android (edge-to-edge, so the window no longer shrinks for the keyboard) the
+// frame pads itself and the scroll view brings the focused field into view.
 export function Screen({ title, onBack, children, footer, refreshing, onRefresh, scrollRef }) {
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'android' ? 'padding' : undefined}>
       {title || onBack ? <OnboardingTopBar title={title ?? ''} onBack={onBack} /> : null}
       <ScrollView
         ref={scrollRef}
@@ -26,7 +28,7 @@ export function Screen({ title, onBack, children, footer, refreshing, onRefresh,
         {children}
       </ScrollView>
       {footer}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
