@@ -93,6 +93,40 @@ no screen for something the specs require, flag it and ask rather than
 guessing which one wins — the same way the emailCapture/quickProfile
 ordering was flagged before building it.
 
+## UI work uses the Impeccable design skill
+
+UI design work (new screens, redesigns, critiques, polish) goes through the
+Impeccable skill (https://github.com/pbakaus/impeccable), installed
+project-scoped at .claude/skills/impeccable/ (skill only, no hooks). Invoke it
+as `/impeccable <command> <target>`; examples: `shape`, `critique`, `audit`,
+`polish`, `typeset`, `layout`, `harden`, `adapt`. Refresh with
+`npx impeccable install -y --no-hooks --providers=claude --scope=project`.
+
+How it fits with the rest of this file:
+- The skill refines; it doesn't override. For screens plotline.html covers,
+  the existing look is the brief: use refinement commands (`polish`,
+  `critique`, `audit`, `layout`, `typeset`), not a replacement visual world.
+  Anything that would replace the app's visual identity is a big decision:
+  ask first.
+- The specs and plotline.html rules above still apply: the master and
+  matching specs say what fields and features exist, and the skill must not
+  add, remove or reword product claims on its own.
+- This is an Expo / React Native app. Use the skill's native references
+  (ios.md, android.md, the `.native` command variants), not its web-browser
+  workflows. The owner tests on Android, so check Android layout and keyboard
+  behavior, and use `components/DateField.js` for date inputs.
+- Animation and motion work is deferred (see the owner's preferences); don't
+  run `animate`, `delight` or `overdrive` unless asked.
+- Any dev server the skill's live or verification modes need follows the
+  ports rule above (Metro on 8090, backend on 3050).
+- `/impeccable init` writes PRODUCT.md and `/impeccable document` writes
+  DESIGN.md. Both are committed to this public repo, so keep them high-level
+  (audience, tone, visual language taken from plotline.html and the code).
+  Nothing from the private specs: no matching details, weights, thresholds
+  or product-spec text. Point to the private repo instead.
+- The skill's engine binary is gitignored (.claude/.gitignore); the launcher
+  downloads it on first run.
+
 ## Known-unverified items (re-test during the reinforcement/testing phase)
 
 - **AvailabilityScreen resume pre-fill**: the user once observed the
