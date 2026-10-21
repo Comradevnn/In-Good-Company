@@ -1,0 +1,70 @@
+{
+  "recommendation": {
+    "title": "Recommended: Moss. Runner-up for energy: Warm",
+    "points": [
+      "<strong>Moss answers the \"green but still lively\" question.</strong> It is the app's own green identity pushed to B's boldness: a vivid leaf-green field, a deep forest ink, marigold for the partner and the Deeds badge, a deep peacock disc for you. It reads as the same app grown up, not a new brand.",
+      "<strong>It keeps B's structure intact.</strong> Field, then discs, then ink, with the overlap still reading as two inks (peacock over marigold makes an olive lens). Ink on the field is 6.2:1, the best of the green options.",
+      "<strong>It is safer than B for colour-blind users.</strong> 0 contrast failures and 0 colour-blind flags, against 5 flags for the control. After review, success moved off green so \"Photo captured\" no longer reads as a fourth green.",
+      "<strong>Watch:</strong> the olive lens is a little dull against the green field. If more punch is wanted there, it is a one-token change.",
+      "<strong>Choose Warm</strong> if energy matters more than continuity: the tangerine field against a deep sea-blue disc is the only scheme that rebuilds B's complementary punch, with the best contrast of all six.",
+      "<strong>Choose Moss Linen</strong> only if continuity with today's beige ground matters most; it bends B's no-cream rule. <strong>Calm</strong> suits a quieter product, <strong>Cool</strong> is closest to B's own overprint but the coolest in temperature."
+    ]
+  },
+  "adopt": "<p>Copy the <code>colors.js</code> export from the chosen scheme's <code>scheme.md</code> into <code>mobile/theme/colors.js</code>, keeping the palette as swappable role tokens, and keep <code>design-candidates/B/direction.md</code> for everything else (read its colour names through the mapping table at the end of each <code>scheme.md</code>). For the overnight redesign run: \"adopt design-candidates/B/direction.md with the palette from design-candidates/B-schemes/&lt;scheme&gt;/scheme.md\". That run starts from <code>main</code>, so merge this branch first or copy those files onto <code>main</code>.</p>",
+  "schemes": [
+    {
+      "slug": "control", "name": "Control (B)",
+      "mood": "Party poster: hot pink field, ink blue, yellow and a clean green lens. The benchmark for energy.",
+      "ground": "White",
+      "contrast": "Passes AA everywhere; text on the pink field is the tightest pair (4.83).",
+      "colorblind": "<strong>5 flags</strong>: the violet lens nearly matches your blue disc under red-green deficiency; success is the same green as the main lens; mint and pink merge under deuteranopia.",
+      "critique": "Strongest hierarchy and the most intuitive overprint (blue + yellow = green). Hot pink reads more event than trust.",
+      "risk": "Weakest colour-blind safety of the six."
+    },
+    {
+      "slug": "moss", "name": "Moss",
+      "mood": "Community garden on a sunny Saturday: vivid green, marigold, peacock.",
+      "ground": "Faintly green white",
+      "contrast": "0 failures; ink on field 6.2; white on the olive lens is the tightest (about 4.5, large text there).",
+      "colorblind": "0 flags, 9 mild warnings (covered by initials and the person icon).",
+      "critique": "The most direct continuation of the app's green identity at B's boldness. Green had too many jobs; success was moved off green after review.",
+      "risk": "Green for brand, field and selection can blur meanings on dense screens; the olive lens is dull on green."
+    },
+    {
+      "slug": "moss-linen", "name": "Moss Linen",
+      "mood": "Moss's liveliness on today's familiar linen ground.",
+      "ground": "Linen (deliberate exception to B's no-cream rule)",
+      "contrast": "0 failures; ink, edge, placeholder and disabled retuned for linen.",
+      "colorblind": "0 flags, 9 warnings (same people and lenses as Moss).",
+      "critique": "Reads most like the same app as today while keeping B's field, discs and type. Card separation from the linen ground was weak; retuned after review.",
+      "risk": "Dilutes B's crisp white world toward the old beige look; cards rely on small tonal steps."
+    },
+    {
+      "slug": "warm", "name": "Warm",
+      "mood": "Food-bank day poster: tangerine, marigold, deep sea-blue, wine ink. Appetizing and sociable.",
+      "ground": "White",
+      "contrast": "0 failures; best contrast stack of the six (ink on field 6.6, ink on white 16.5).",
+      "colorblind": "0 flags, 8 warnings; the olive lens and orange field are close under protanopia.",
+      "critique": "The most energetic after the control; orange against the sea-blue disc rebuilds B's complementary punch. Moved off a plum disc in review to avoid a Halloween read.",
+      "risk": "The olive lens on tangerine can look muddy."
+    },
+    {
+      "slug": "cool", "name": "Cool",
+      "mood": "Beach clean-up morning: aqua field, navy-teal ink, cobalt, sunny yellow, coral.",
+      "ground": "White",
+      "contrast": "0 failures; ink on field 7.1, the strongest field text.",
+      "colorblind": "0 flags, 8 warnings (lens-3 close to you and its disc).",
+      "critique": "Closest to B's own overprint: a saturated cobalt disc with yellow and a clean green lens, on a less hot field.",
+      "risk": "The loudest region is the coolest hue, so it can read like a travel or banking app."
+    },
+    {
+      "slug": "calm", "name": "Calm",
+      "mood": "Riso on soft stock: heather field, aubergine ink, dusty slate, mustard, clay.",
+      "ground": "White",
+      "contrast": "0 failures; ink on field 6.7.",
+      "colorblind": "0 flags, 11 mild warnings; your disc was lifted away from the ink after review.",
+      "critique": "The quietest; reads as a safe, unpressured way to meet someone. Hierarchy holds by value rather than chroma.",
+      "risk": "Least energetic; the pale field lets the darker discs pull the eye. Dusty tints can feel muted on a dim phone."
+    }
+  ]
+}
