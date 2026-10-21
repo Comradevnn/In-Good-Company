@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<title>In Good Company Directions</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one reading column for the decision, then a full-width viewer for the comps. Neutral shell so the candidates carry the colour. */
+:root{
+  --bg:#F5F5F2; --panel:#FFFFFF; --fg:#1D1F24; --fg-2:#4D525C; --line:#D9DAD6; --accent:#2C4BD6; --accent-fg:#FFFFFF; --rec:#EEF1FC;
+  --body:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#16171A; --panel:#1F2125; --fg:#ECEDEF; --fg-2:#A9AEB8; --line:#33363C; --accent:#8EA2FF; --accent-fg:#101114; --rec:#22263A; color-scheme:dark } }
+:root[data-theme="dark"]{ --bg:#16171A; --panel:#1F2125; --fg:#ECEDEF; --fg-2:#A9AEB8; --line:#33363C; --accent:#8EA2FF; --accent-fg:#101114; --rec:#22263A; color-scheme:dark }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:32px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1{font-size:2rem;line-height:1.15;margin:0 0 8px;text-wrap:balance}
+h2{font-size:1.35rem;line-height:1.25;margin:0 0 12px;text-wrap:balance}
+h3{font-size:1.05rem;margin:0 0 6px}
+p{margin:0 0 10px;max-width:68ch}
+.lede{color:var(--fg-2)}
+a{color:var(--accent);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rec{background:var(--rec);border:1px solid var(--line);border-radius:10px;padding:20px 22px}
+.rec .tag{display:inline-block;font-size:.8rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-2);margin-bottom:6px}
+.rec ul{margin:6px 0 0;padding-left:20px;max-width:72ch}
+.rec li{margin-bottom:6px}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:820px;font-size:.92rem}
+th,td{text-align:left;vertical-align:top;padding:12px 14px;border-bottom:1px solid var(--line)}
+tr:last-child td,tr:last-child th{border-bottom:0}
+thead th{font-size:1rem;background:var(--panel);position:sticky;top:0}
+tbody th{width:150px;color:var(--fg-2);font-weight:700}
+td{width:calc((100% - 150px)/3)}
+td ul{margin:0;padding-left:18px}
+.sw{display:flex;flex-wrap:wrap;gap:6px}
+.sw span{width:26px;height:26px;border-radius:4px;border:1px solid rgba(0,0,0,.15)}
+.score{font-variant-numeric:tabular-nums;font-weight:700}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{font:inherit;font-weight:700;min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.viewer{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.viewer .bar{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-size:.92rem}
+.viewer .bar strong{margin-right:auto}
+iframe{display:block;width:100%;height:82vh;min-height:560px;border:0;background:#E9EAEE}
+.note{font-size:.9rem;color:var(--fg-2)}
+.grid3{display:flex;flex-wrap:wrap;gap:16px}
+.grid3 > div{flex:1 1 300px;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Three directions for In Good Company</h1>
+    <p class="lede">Three visual directions for the app-wide revamp. Each one draws the same five screens with identical copy: Sign in, Verify your ID, Home, Shift proposal, and Proposal expired. The copy comes from the current app and the people and organizations are made up, so only the design differs. Pick one; its <code>direction.md</code> becomes the contract for the revamp.</p>
+  </header>
+
+  <section class="rec" aria-labelledby="rec-h">
+    <span class="tag">Recommendation, not a decision</span>
+    <h2 id="rec-h">Recommended: C, Carbon Copy, with A as the safe alternative</h2>
+    <ul>
+      <li><strong>It is the only one whose look encodes how the product works.</strong> A shift is a ticket; a proposal is unstamped because nothing is held yet; an expired one comes back stamped. "Confirm before anything is held" becomes something you can see.</li>
+      <li><strong>It has the best form grammar for an app that is mostly forms</strong> (onboarding, availability, verification): labels inside ruled boxes, dense but calm.</li>
+      <li><strong>It scored highest in the critique</strong> (31/40, against 29 for A and 27 for B), and it is middle on build effort: no shadows, signature move made of plain Views, two font packages and react-native-svg for icons.</li>
+      <li><strong>Conditions if you choose it:</strong> keep tickets and stamps to shift screens and use the plain stocks elsewhere (settings, chat, org screens), so the metaphor never becomes a costume; give errors and stamps two distinct reds; decide whether a stamp word like "Expired" counts as new copy.</li>
+      <li><strong>Choose A instead</strong> if build speed and scaling to every screen matter more than warmth: it is the easiest to build and the most systematic, but it reads cool and close to a generic civic app.</li>
+      <li><strong>Choose B</strong> if delight is the priority: it has the most memorable screen (the proposal hero), but it is the hardest to build and the least likely to survive dense screens and large font sizes.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="cmp-h">
+    <h2 id="cmp-h">Side by side</h2>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th scope="col"></th><th scope="col">A · Field Day</th><th scope="col">B · Overprint</th><th scope="col">C · Carbon Copy</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Thesis</th>
+            <td>A calm, civic public-information system for doing good: colour is a code and every shift is a block on the day.</td>
+            <td>A community print-shop poster on a risograph: two bright inks and round shapes, so finding a partner feels like an invitation.</td>
+            <td>The sign-up sheet and the paper ticket: coloured form stocks, deep carbon ink, a serif voice, and a shift you hold like a ticket.</td></tr>
+          <tr><th scope="row">Register</th>
+            <td>Calm and trustworthy</td><td>Energetic and youthful</td><td>Editorial, warm community</td></tr>
+          <tr><th scope="row">Fonts</th>
+            <td>Archivo 400–800 (one grotesque)</td>
+            <td>Gabarito 700–900 (display) + Figtree 500–700 (body)</td>
+            <td>Besley 400/700 (serif) + Barlow Condensed 600/700 (labels, buttons)</td></tr>
+          <tr><th scope="row">Palette</th>
+            <td><div class="sw" aria-label="Ink, ground, sky, meadow, violet, aqua, signal">
+              <span style="background:#0F2A4A"></span><span style="background:#F1F4F8"></span><span style="background:#2F8FD8"></span><span style="background:#2E9E55"></span><span style="background:#6A5BD0"></span><span style="background:#1E9C94"></span><span style="background:#B8400A"></span></div>
+              <p class="note">Cool, light, mid-saturation; colours are codes (cause, Deeds, verified).</p></td>
+            <td><div class="sw" aria-label="Ink, pink, blue, yellow, green lens, violet lens">
+              <span style="background:#0E1280"></span><span style="background:#FF4F9A"></span><span style="background:#2E3BF0"></span><span style="background:#FFE23D"></span><span style="background:#0A7A48"></span><span style="background:#7B2CD6"></span></div>
+              <p class="note">Hot and saturated; pink owns whole regions, ink blue replaces black.</p></td>
+            <td><div class="sw" aria-label="Ink, canary, pink, paper, stamp">
+              <span style="background:#261A5E"></span><span style="background:#F6E381"></span><span style="background:#F2B9AE"></span><span style="background:#F8F8FB"></span><span style="background:#A32109"></span></div>
+              <p class="note">Warm, muted paper stocks with a deep violet ink; vermilion for state only.</p></td></tr>
+          <tr><th scope="row">Density · shape</th>
+            <td>Compact · crisp 2–6px corners, hairline lists</td>
+            <td>Airy · pills, circles, 24–32px cards</td>
+            <td>Medium · square corners, 2px ink rules, perforated tickets</td></tr>
+          <tr><th scope="row">Signature move</th>
+            <td>The day strip: every shift drawn as a block on a 6 AM–10 PM scale in its cause colour.</td>
+            <td>The overlap: you and your partner as two discs; where they overlap, the shift.</td>
+            <td>The ticket stub: a perforated coupon whose settled state is stamped on, never removed.</td></tr>
+          <tr><th scope="row">React Native build</th>
+            <td>Easiest. One font package, one small shadow, the day strip is plain Views. Needs react-native-svg for icons only.</td>
+            <td>Hardest. The overlap art needs react-native-svg; upward footer shadow and focus ring need rework; the hero's fixed-position text is fragile at large font sizes.</td>
+            <td>Middle. No shadows; rotations and notches are plain Views; the perforation needs a small dashed-border trick. Needs react-native-svg for icons.</td></tr>
+          <tr><th scope="row">Contrast</th>
+            <td>All text pairs pass AA (lowest 4.80).</td>
+            <td>All text pairs in use pass (ink on pink 4.83). Hero text must stay inside the lens: white on the yellow disc is 1.30.</td>
+            <td>All pairs in use pass. Stamp red and placeholder grey must stay off pink (4.44 and 4.05).</td></tr>
+          <tr><th scope="row">Critique</th>
+            <td><span class="score">29/40</span>. Systematic, honest colour code, cheapest to scale. Cool for a social product; sign-in and expired screens feel empty.</td>
+            <td><span class="score">27/40</span>. Most delight; the proposal hero is the most memorable screen. Loud on every screen; the hero pushes the shift details below the fold.</td>
+            <td><span class="score">31/40</span>. Most product-specific; best forms and eyebrow handling. Heavy rules; the stamp red is shared with errors.</td></tr>
+          <tr><th scope="row">Biggest risk</th>
+            <td>Runs out of distinct cool hues for causes, and the signage tone makes meeting a stranger feel like filling in a government form.</td>
+            <td>Big type, saturated fields and 56–64px rows don't survive dense lists, chat, org screens or 1.3× font scale; the three-colour person pool breaks at the fourth buddy.</td>
+            <td>Tickets and stamps turn into a costume on settings, chat and org screens, and one red means both "error" and "done".</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="view-h">
+    <h2 id="view-h">The comps</h2>
+    <p class="note">Each candidate shows the five required 390 × 844 frames first, then optional full-scroll frames. Scroll inside the viewer, or open the comp on its own.</p>
+    <div class="tabs" role="tablist" aria-label="Candidate">
+      <button role="tab" id="t-a" aria-controls="viewer" aria-selected="true" data-c="A">A · Field Day</button>
+      <button role="tab" id="t-b" aria-controls="viewer" aria-selected="false" data-c="B">B · Overprint</button>
+      <button role="tab" id="t-c" aria-controls="viewer" aria-selected="false" data-c="C">C · Carbon Copy</button>
+    </div>
+    <div class="viewer" id="viewer" role="tabpanel">
+      <div class="bar"><strong id="v-name">A · Field Day</strong>
+        <a id="v-open" href="A/index.html" target="_blank" rel="noopener">Open full size</a>
+        <a id="v-dir" href="A/direction.md" target="_blank" rel="noopener">direction.md</a></div>
+      <iframe id="v-frame" src="A/index.html" title="Candidate comps"></iframe>
+    </div>
+  </section>
+
+  <section aria-labelledby="how-h">
+    <h2 id="how-h">How to proceed</h2>
+    <div class="grid3">
+      <div><h3>1. Pick a letter</h3><p>Compare the comps above. Each <code>direction.md</code> has the full token set, type scale, component anatomy, states and rules for screens not drawn here.</p></div>
+      <div><h3>2. Hand it to the revamp</h3><p>Tell the overnight redesign run: "adopt design-candidates/&lt;X&gt;/direction.md as the direction contract".</p></div>
+      <div><h3>3. Get it onto main</h3><p>That run starts from <code>main</code>. Merge the <code>explore/design-candidates</code> branch first, or copy the chosen <code>direction.md</code> onto main.</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var names={A:"A · Field Day",B:"B · Overprint",C:"C · Carbon Copy"};
+  var tabs=document.querySelectorAll('[role="tab"]');
+  function show(c){
+    tabs.forEach(function(t){t.setAttribute('aria-selected', String(t.dataset.c===c));});
+    document.getElementById('v-name').textContent=names[c];
+    document.getElementById('v-open').href=c+'/index.html';
+    document.getElementById('v-dir').href=c+'/direction.md';
+    document.getElementById('v-frame').src=c+'/index.html';
+  }
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.dataset.c); try{history.replaceState(null,'','#'+t.dataset.c.toLowerCase());}catch(e){}});});
+  var h=(location.hash||'').slice(1).toUpperCase();
+  if(names[h]) show(h);
+})();
+</script>
+
+</html>
