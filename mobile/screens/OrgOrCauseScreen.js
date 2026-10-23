@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
+import { ErrorLine, Headline, Input, KeyboardScroll, LinkButton, ListRow, Tag } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 
-// Matches the "orgOrCause" screen in specs/plotline.html. Per the lead-
+// The org-or-cause choice. Per the lead-
 // capture-stub decision: there's no real org directory/search backend yet
 // (org accounts are a separate deliverable — master prompt section 2), so
 // "I know an org" just captures a free-text name into prospective_org_name
@@ -35,46 +35,47 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior="padding">
-      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
-        <Text style={s.h2}>Do you already know where you want to volunteer?</Text>
+    <View style={s.container}>
+      <KeyboardScroll
+        header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
+        footer={
+          showOrgInput ? (
+            <PrimaryButton
+              label="Continue"
+              onPress={handleSubmitOrgName}
+              disabled={!orgName.trim() || submitting}
+              loading={submitting}
+            />
+          ) : null
+        }
+      >
+        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
+        <Headline>Do you already know where you want to volunteer?</Headline>
         <Text style={s.rationale}>
           Either way you'll end up in the same place — we just use this to skip straight to
           what's useful for you.
         </Text>
 
         {!showOrgInput ? (
-          <>
-            <TouchableOpacity style={s.optionCard} onPress={() => setShowOrgInput(true)}>
-              <View style={s.optionIcon}>
-                <Text style={s.optionIconText}>🔎</Text>
-              </View>
-              <View style={s.optionTextWrap}>
-                <Text style={s.optionTitle}>I know an org</Text>
-                <Text style={s.optionSubtitle}>Tell us the name directly</Text>
-              </View>
-              <Text style={s.optionArrow}>→</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.optionCard} onPress={onBrowseByCause}>
-              <View style={s.optionIcon}>
-                <Text style={s.optionIconText}>🌱</Text>
-              </View>
-              <View style={s.optionTextWrap}>
-                <Text style={s.optionTitle}>Not sure — show me by cause</Text>
-                <Text style={s.optionSubtitle}>Browse by what you care about</Text>
-              </View>
-              <Text style={s.optionArrow}>→</Text>
-            </TouchableOpacity>
-          </>
+          <View style={styles.options}>
+            <ListRow
+              icon="search"
+              label="I know an org"
+              sublabel="Tell us the name directly"
+              onPress={() => setShowOrgInput(true)}
+            />
+            <ListRow
+              icon="heart"
+              label="Not sure — show me by cause"
+              sublabel="Browse by what you care about"
+              onPress={onBrowseByCause}
+            />
+          </View>
         ) : (
           <View style={s.field}>
-            <Text style={s.label}>Organization name</Text>
-            <TextInput
-              style={s.input}
+            <Input
+              label="Organization name"
               placeholder="e.g. Second Harvest of Silicon Valley"
-              placeholderTextColor={colors.inkSoft}
               value={orgName}
               onChangeText={setOrgName}
             />
@@ -82,22 +83,19 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
               We don't have a searchable directory yet — we'll pass this along to our team and
               match you with something close in the meantime.
             </Text>
-            <Text style={[s.label, { marginTop: 16, color: colors.mossDark }]} onPress={onBrowseByCause}>
-              Choose causes instead ›
-            </Text>
+            <LinkButton label="Choose causes instead" align="right" onPress={onBrowseByCause} style={styles.causeLink} />
           </View>
         )}
 
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-      </ScrollView>
-      {showOrgInput ? (
-        <PrimaryButton
-          label="Continue"
-          onPress={handleSubmitOrgName}
-          disabled={!orgName.trim() || submitting}
-          loading={submitting}
-        />
-      ) : null}
-    </KeyboardAvoidingView>
+        {error ? <ErrorLine message={error} style={styles.error} /> : null}
+      </KeyboardScroll>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  stepTag: { marginBottom: 12 },
+  options: { marginTop: 16 },
+  causeLink: { marginTop: 8, justifyContent: 'flex-start' },
+  error: { marginTop: 16 },
+});

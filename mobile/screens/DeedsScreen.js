@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
-import OnboardingTopBar from '../components/OnboardingTopBar';
+import { type } from '../theme/tokens';
+import { Card, Display, ErrorText, Headline, Icon, ListRow, Screen, SectionHeader, Tag } from '../components/AppParts';
 import { BACKEND_URL } from '../config/api';
 import { api } from '../api/client';
 
@@ -70,151 +70,96 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
     : FALLBACK_PACKS;
 
   return (
-    <View style={s.container}>
-      <OnboardingTopBar title="Deeds (demo)" onBack={onBack} />
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Demo only — no real payment</Text>
-        <Text style={s.h2}>Your Deeds balance</Text>
-        <Text style={s.rationale}>
-          Confirming a matched shift holds Deeds; show up and they come back. Tapping "Buy" adds
-          to your balance — no money changes hands, nothing is actually charged.
+    <Screen title="Deeds (demo)" onBack={onBack}>
+      <Headline>Your Deeds balance</Headline>
+      <Text style={styles.body}>
+        Confirming a matched shift holds Deeds; show up and they come back. Tapping "Buy" adds
+        to your balance — no money changes hands, nothing is actually charged.
+      </Text>
+
+      <Card tone="ink" style={{ marginTop: 20 }}>
+        <Tag label="Demo only — no real payment" tone="accent" />
+        <Text
+          style={[type.display, { color: colors.accent, marginTop: 16 }]}
+          maxFontSizeMultiplier={1.3}
+          accessibilityLabel={`${balance ?? 0} Deeds`}
+        >
+          {balance ?? 0}
         </Text>
-
-        <View style={balanceCard}>
-          <Text style={balanceNumber}>{balance ?? 0}</Text>
-          <Text style={balanceLabel}>Deeds</Text>
-          {justPurchased ? (
-            <Text style={purchasedNote}>+{justPurchased.deeds} added ✓</Text>
-          ) : null}
-          {ledger?.held ? <Text style={heldNote}>{ledger.held} more held for upcoming shifts</Text> : null}
-        </View>
-
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-
-        <Text style={[s.label, { marginTop: 22 }]}>Buy Deeds</Text>
-        {packs.map((pack) => (
-          <TouchableOpacity
-            key={pack.deeds}
-            style={packRow}
-            onPress={() => handlePurchase(pack)}
-            disabled={purchasing}
-          >
-            <View>
-              <Text style={packDeeds}>{pack.deeds} Deeds</Text>
-              <Text style={packPrice}>${pack.price}</Text>
-            </View>
-            <View style={buyPill}>
-              <Text style={buyPillText}>Buy</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-
-        {onPremium ? (
-          <Text style={[s.label, { marginTop: 18, color: colors.mossDark }]} onPress={onPremium}>
-            Premium includes free Deeds every week ›
+        <Text style={[type.subtitle, { color: colors.onInk }]}>Deeds</Text>
+        {justPurchased || ledger?.held ? <View style={styles.divider} /> : null}
+        {justPurchased ? (
+          <View style={styles.noteLine}>
+            <Icon name="check" size={20} color={colors.accent} />
+            <Text style={[type.label, { color: colors.accent }]}>+{justPurchased.deeds} added</Text>
+          </View>
+        ) : null}
+        {ledger?.held ? (
+          <Text style={[type.bodyS, { color: colors.onInk2, marginTop: justPurchased ? 4 : 0 }]}>
+            {ledger.held} more held for upcoming shifts
           </Text>
         ) : null}
+      </Card>
 
-        {ledger?.history?.length ? (
-          <>
-            <Text style={[s.label, { marginTop: 22 }]}>Recent activity</Text>
-            {ledger.history.slice(0, 15).map((entry, i) => {
-              const delta = entry.available_delta;
-              return (
-                <View key={i} style={historyRow}>
-                  <Text style={historyLabel}>{ENTRY_LABELS[entry.entry_type] ?? entry.entry_type}</Text>
-                  <Text style={historyValue}>
+      <ErrorText error={error} />
+
+      <SectionHeader title="Buy Deeds" />
+      {packs.map((pack) => (
+        <ListRow
+          key={pack.deeds}
+          label={`${pack.deeds} Deeds`}
+          sublabel={`$${pack.price}`}
+          onPress={purchasing ? undefined : () => handlePurchase(pack)}
+          trailing={(
+            <View style={[styles.buyPill, purchasing && { backgroundColor: colors.offBg }]}>
+              <Text style={[type.button, { color: purchasing ? colors.offFg : colors.onInk }]} maxFontSizeMultiplier={1.3}>Buy</Text>
+            </View>
+          )}
+        />
+      ))}
+
+      {onPremium ? (
+        <ListRow
+          icon="star"
+          label="Premium includes free Deeds every week"
+          onPress={onPremium}
+          style={{ marginTop: 16 }}
+        />
+      ) : null}
+
+      {ledger?.history?.length ? (
+        <>
+          <SectionHeader title="Recent activity" />
+          {ledger.history.slice(0, 15).map((entry, i) => {
+            const delta = entry.available_delta;
+            return (
+              <ListRow
+                key={i}
+                label={ENTRY_LABELS[entry.entry_type] ?? entry.entry_type}
+                trailing={(
+                  <Text style={[type.subtitle, { color: colors.ink }]}>
                     {entry.entry_type === 'forfeit' ? `−${-entry.held_delta}` : delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : '±0'}
                   </Text>
-                </View>
-              );
-            })}
-          </>
-        ) : null}
-      </ScrollView>
-    </View>
+                )}
+              />
+            );
+          })}
+        </>
+      ) : null}
+    </Screen>
   );
 }
 
-const balanceCard = {
-  marginTop: 18,
-  borderRadius: 18,
-  paddingVertical: 26,
-  alignItems: 'center',
-  backgroundColor: colors.ink,
-};
-const balanceNumber = {
-  fontFamily: 'Fraunces_600SemiBold',
-  fontSize: 40,
-  color: '#F2EFE4',
-};
-const balanceLabel = {
-  fontFamily: 'IBMPlexMono_500Medium',
-  fontSize: 12,
-  letterSpacing: 1,
-  textTransform: 'uppercase',
-  color: colors.ochre,
-  marginTop: 2,
-};
-const purchasedNote = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 12.5,
-  color: '#7ECB9B',
-  marginTop: 8,
-};
-const heldNote = {
-  fontFamily: 'Inter_500Medium',
-  fontSize: 12,
-  color: '#C9C6B8',
-  marginTop: 6,
-};
-const historyRow = {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  paddingVertical: 8,
-  borderBottomWidth: 1,
-  borderBottomColor: colors.line,
-};
-const historyLabel = {
-  fontFamily: 'Inter_400Regular',
-  fontSize: 13,
-  color: colors.ink,
-};
-const historyValue = {
-  fontFamily: 'IBMPlexMono_500Medium',
-  fontSize: 13,
-  color: colors.inkSoft,
-};
-const packRow = {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  borderWidth: 1.5,
-  borderColor: colors.line,
-  borderRadius: 14,
-  padding: 14,
-  marginTop: 10,
-  backgroundColor: colors.surface,
-};
-const packDeeds = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 14.5,
-  color: colors.ink,
-};
-const packPrice = {
-  fontFamily: 'Inter_400Regular',
-  fontSize: 12.5,
-  color: colors.inkSoft,
-  marginTop: 2,
-};
-const buyPill = {
-  borderRadius: 999,
-  paddingVertical: 8,
-  paddingHorizontal: 18,
-  backgroundColor: colors.moss,
-};
-const buyPillText = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 13,
-  color: '#F6F4EA',
-};
+const styles = StyleSheet.create({
+  body: { ...type.bodyS, color: colors.ink2, marginTop: 8 },
+  divider: { marginTop: 16, marginBottom: 12, borderTopWidth: 2, borderStyle: 'dashed', borderColor: colors.onInkLine },
+  noteLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  buyPill: {
+    height: 40,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

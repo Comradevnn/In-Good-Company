@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { ErrorText, InfoCard, Loading, PillButton, Screen } from '../components/AppParts';
+import { Button, ErrorText, Headline, InfoCard, Loading, Screen, Toggle } from '../components/AppParts';
 
 // Cancel a booking (plotline "cancelShift"). The backend computes exactly
 // what cancelling costs right now — grace window, Premium's free late
@@ -34,7 +34,7 @@ export default function CancelScreen({ sessionToken, bookingId, navigate, onBack
   if (done) {
     return (
       <Screen key="done" title="Cancelled" footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
-        <Text style={s.h2}>{keepSolo ? "You're going solo" : 'Your shift is cancelled'}</Text>
+        <Headline style={{ marginBottom: 8 }}>{keepSolo ? "You're going solo" : 'Your shift is cancelled'}</Headline>
         <Text style={s.rationale}>
           {done.deeds_outcome === 'released' ? `Your ${done.amount} Deeds are back in your balance. ` : ''}
           {done.deeds_outcome === 'forfeited' ? `Your ${done.amount} Deeds went to the org. ` : ''}
@@ -52,25 +52,19 @@ export default function CancelScreen({ sessionToken, bookingId, navigate, onBack
       onBack={onBack}
       footer={<PrimaryButton label="Confirm cancellation" onPress={confirm} disabled={busy} loading={busy} />}
     >
-      <Text style={s.eyebrow}>Cancel shift</Text>
-      <Text style={s.h2}>{preview.partner_name ? `Cancel your shift with ${preview.partner_name}?` : 'Cancel your spot?'}</Text>
+      <Headline style={{ marginBottom: 8 }}>{preview.partner_name ? `Cancel your shift with ${preview.partner_name}?` : 'Cancel your spot?'}</Headline>
       <Text style={s.rationale}>{preview.hours_before_shift} hours before the shift starts.</Text>
       <InfoCard
         tone={free ? 'ok' : 'warn'}
-        title={free ? (preview.deeds_outcome === 'none' ? 'No Deeds involved' : "✓ You'll get your Deeds back") : '⚠ Your Deeds go to the org'}
+        title={free ? (preview.deeds_outcome === 'none' ? 'No Deeds involved' : "You'll get your Deeds back") : 'Your Deeds go to the org'}
         body={preview.message}
       />
       {preview.partner_message ? <InfoCard body={preview.partner_message} /> : null}
       {preview.can_keep_spot_solo ? (
-        <TouchableOpacity style={[s.toggleRow, { marginTop: 16 }]} onPress={() => setKeepSolo((v) => !v)}>
-          <Text style={s.toggleLabel}>Keep my spot and go solo instead</Text>
-          <View style={[s.switchTrack, keepSolo && s.switchTrackOn]}>
-            <View style={[s.switchThumb, keepSolo && s.switchThumbOn]} />
-          </View>
-        </TouchableOpacity>
+        <Toggle style={{ marginTop: 16 }} label="Keep my spot and go solo instead" value={keepSolo} onValueChange={setKeepSolo} />
       ) : null}
       <ErrorText error={error} />
-      <PillButton label="Never mind, keep it" ghost onPress={onBack} style={{ marginTop: 18 }} />
+      <Button label="Never mind, keep it" ghost onPress={onBack} style={{ marginTop: 24 }} />
     </Screen>
   );
 }

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { radii, type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { ErrorText, InfoCard, Loading, PillButton, Screen } from '../components/AppParts';
+import {
+  Card, ErrorText, Field, Headline, Icon, InfoCard, Input, LinkButton, Loading, Screen, SectionTitle, Toggle,
+} from '../components/AppParts';
 
 // "Find your next shift": confirms the dates/distance from the user's saved
 // availability (editable via the existing AvailabilityScreen), lets them
@@ -68,89 +70,129 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
       onBack={onBack}
       footer={<PrimaryButton label="Start looking" onPress={handleStart} disabled={submitting || datesStale} loading={submitting} />}
     >
-      <Text style={s.eyebrow}>Next availability</Text>
-      <Text style={s.h2}>When can you go?</Text>
-      <Text style={s.rationale}>We'll look for a partner and a shift that fits both of you in this window.</Text>
+      <Headline>When can you go?</Headline>
+      <Text style={[s.rationale, { marginTop: 8 }]}>We'll look for a partner and a shift that fits both of you in this window.</Text>
 
-      <TouchableOpacity style={[app.depositBox]} onPress={() => navigate('editAvailability')}>
-        <View style={app.depositLine}>
-          <Text style={app.depositLabel}>Dates</Text>
-          <Text style={app.depositTotal}>{start && end ? `${start} → ${end}` : 'Not set'}</Text>
-        </View>
-        <View style={app.depositLine}>
-          <Text style={app.depositLabel}>Travel distance</Text>
-          <Text style={app.depositTotal}>{profile?.travel_radius_miles ?? '—'} mi</Text>
-        </View>
-        <Text style={[app.finetext, { color: colors.mossDark, fontFamily: 'Inter_600SemiBold' }]}>Change dates or distance ›</Text>
-      </TouchableOpacity>
+      <Pressable
+        onPress={() => navigate('editAvailability')}
+        accessibilityRole="button"
+        accessibilityLabel="Change dates or distance"
+        style={{ marginTop: 24 }}
+      >
+        {({ pressed }) => (
+          <Card style={pressed && { backgroundColor: colors.tintPressed }}>
+            <View style={styles.line}>
+              <Text style={styles.lineLabel}>Dates</Text>
+              <Text style={styles.lineValue}>{start && end ? `${start} to ${end}` : 'Not set'}</Text>
+            </View>
+            <View style={styles.line}>
+              <Text style={styles.lineLabel}>Travel distance</Text>
+              <Text style={styles.lineValue}>{profile?.travel_radius_miles ?? '—'} mi</Text>
+            </View>
+            <Text style={styles.changeLink}>Change dates or distance</Text>
+          </Card>
+        )}
+      </Pressable>
       {datesStale ? <InfoCard tone="warn" title="Pick new dates" body="Your saved dates have passed — tap above to choose new ones." /> : null}
 
       {home.buddies.length ? (
         <>
-          <Text style={[s.label, { marginTop: 22 }]}>Who with?</Text>
+          <SectionTitle title="Who with?" />
           {[{ user_id: null, display_name: 'Meet someone new' }, ...home.buddies].map((b) => {
             const selected = buddyId === b.user_id;
+            const title = b.user_id ? `Go with ${b.display_name}` : b.display_name;
+            const subtitle = b.user_id ? `We'll pair you once ${b.display_name} picks overlapping dates too.` : 'Open to a new volunteer partner.';
             return (
-              <TouchableOpacity key={b.user_id ?? 'new'} style={[s.optionCard, selected && { borderColor: colors.moss, backgroundColor: colors.mossTint }]} onPress={() => setBuddyId(b.user_id)}>
-                <View style={s.optionTextWrap}>
-                  <Text style={s.optionTitle}>{b.user_id ? `Go with ${b.display_name}` : b.display_name}</Text>
-                  <Text style={s.optionSubtitle}>
-                    {b.user_id ? `We'll pair you once ${b.display_name} picks overlapping dates too.` : 'Open to a new volunteer partner.'}
-                  </Text>
+              <Pressable
+                key={b.user_id ?? 'new'}
+                style={({ pressed }) => [
+                  styles.option,
+                  selected && styles.optionSelected,
+                  pressed && { backgroundColor: selected ? colors.fieldPressed : colors.tintPressed },
+                ]}
+                onPress={() => setBuddyId(b.user_id)}
+                accessibilityRole="radio"
+                accessibilityLabel={`${title}. ${subtitle}`}
+                accessibilityState={{ selected }}
+              >
+                <View style={styles.optionText}>
+                  <Text style={styles.optionTitle}>{title}</Text>
+                  <Text style={styles.optionSubtitle}>{subtitle}</Text>
                 </View>
-                <Text style={s.optionArrow}>{selected ? '●' : '○'}</Text>
-              </TouchableOpacity>
+                <View style={[styles.radio, selected && styles.radioOn]}>
+                  {selected ? <Icon name="check" size={18} color={colors.onInk} /> : null}
+                </View>
+              </Pressable>
             );
           })}
         </>
       ) : null}
 
       {home.match_options?.anyone_available && !buddyId ? (
-        <View style={s.field}>
-          <TouchableOpacity style={s.toggleRow} onPress={() => setAnyone((v) => !v)}>
-            <Text style={s.toggleLabel}>Match me with anyone available</Text>
-            <View style={[s.switchTrack, anyone && s.switchTrackOn]}>
-              <View style={[s.switchThumb, anyone && s.switchThumbOn]} />
-            </View>
-          </TouchableOpacity>
-          <Text style={s.rationale}>
-            {anyone
-              ? "We'll pair you with the first good partner who fits your dates — usually sooner."
-              : "Off: we take our time to find you a really good match. Booking early gives us the most time."}
-          </Text>
-        </View>
+        <Toggle
+          style={{ marginTop: 24 }}
+          value={anyone}
+          onValueChange={setAnyone}
+          label="Match me with anyone available"
+          description={anyone
+            ? "We'll pair you with the first good partner who fits your dates — usually sooner."
+            : "Off: we take our time to find you a really good match. Booking early gives us the most time."}
+        />
       ) : null}
 
       {home.premium.tier === 'premium' ? (
-        <View style={s.field}>
-          <Text style={s.label}>Partner age range (Premium, optional)</Text>
-          <View style={s.row}>
-            <TextInput style={[s.input, { flex: 1 }]} placeholder="Min" keyboardType="number-pad" value={ageMin} onChangeText={setAgeMin} placeholderTextColor={colors.inkSoft} />
-            <TextInput style={[s.input, { flex: 1 }]} placeholder="Max" keyboardType="number-pad" value={ageMax} onChangeText={setAgeMax} placeholderTextColor={colors.inkSoft} />
+        <Field label="Partner age range (Premium, optional)" style={{ marginTop: 24 }}>
+          <View style={[s.row, { marginTop: 8 }]}>
+            <Input wrapperStyle={styles.flex} placeholder="Min" accessibilityLabel="Minimum age" keyboardType="number-pad" value={ageMin} onChangeText={setAgeMin} />
+            <Input wrapperStyle={styles.flex} placeholder="Max" accessibilityLabel="Maximum age" keyboardType="number-pad" value={ageMax} onChangeText={setAgeMax} />
           </View>
-          <Text style={s.rationale}>Only narrows your own matches — it never moves you ahead of anyone.</Text>
-        </View>
+          <Text style={[s.rationale, { marginTop: 8 }]}>Only narrows your own matches — it never moves you ahead of anyone.</Text>
+        </Field>
       ) : null}
 
-      <View style={app.depositBox}>
-        <View style={app.depositLine}>
-          <Text style={app.depositLabel}>Deeds available</Text>
-          <Text style={app.depositTotal}>{home.deeds.available}</Text>
+      <Card tone="ink" style={{ marginTop: 24 }}>
+        <View style={styles.line}>
+          <Text style={styles.inkLabel}>Deeds available</Text>
+          <Text style={styles.inkValue}>{home.deeds.available}</Text>
         </View>
-        <View style={app.depositLine}>
-          <Text style={app.depositLabel}>Held when you confirm a shift</Text>
-          <Text style={app.depositTotal}>{home.deeds.shift_price}</Text>
+        <View style={styles.line}>
+          <Text style={styles.inkLabel}>Held when you confirm a shift</Text>
+          <Text style={styles.inkValue}>{home.deeds.shift_price}</Text>
         </View>
-        <Text style={app.finetext}>
+        <Text style={styles.inkFine}>
           Nothing is held until you've seen the exact shift and said yes. Show up and they come straight back.
         </Text>
-      </View>
+      </Card>
       {home.deeds.available < home.deeds.shift_price ? (
-        <PillButton label="Get Deeds" ghost onPress={() => navigate('deeds')} style={{ marginTop: 12 }} />
+        <LinkButton label="Get Deeds" align="left" onPress={() => navigate('deeds')} style={{ marginTop: 8 }} />
       ) : null}
 
       <ErrorText error={error} />
-      {action ? <PillButton label={action[0]} onPress={() => navigate(action[1])} style={{ marginTop: 12 }} /> : null}
+      {action ? <LinkButton label={action[0]} align="left" onPress={() => navigate(action[1])} style={{ marginTop: 8 }} /> : null}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingVertical: 6 },
+  lineLabel: { ...type.bodyS, color: colors.ink2, flexShrink: 1 },
+  lineValue: { ...type.label, color: colors.ink, flexShrink: 1, textAlign: 'right' },
+  changeLink: { ...type.body, fontFamily: type.label.fontFamily, color: colors.ink, textDecorationLine: 'underline', marginTop: 8 },
+  option: {
+    minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, padding: 16,
+    borderRadius: radii.notice, borderWidth: 2, borderColor: 'transparent', backgroundColor: colors.tint,
+  },
+  optionSelected: { borderColor: colors.ink, backgroundColor: colors.selected },
+  optionText: { flex: 1 },
+  optionTitle: { ...type.subtitle, color: colors.ink },
+  optionSubtitle: { ...type.bodyS, color: colors.ink, marginTop: 2 },
+  radio: {
+    width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: colors.edge, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioOn: { borderColor: colors.ink, backgroundColor: colors.ink },
+  inkLabel: { ...type.bodyS, color: colors.onInk2, flexShrink: 1 },
+  inkValue: { ...type.titleS, color: colors.accent },
+  inkFine: { ...type.bodyS, color: colors.onInk2, marginTop: 8 },
+});

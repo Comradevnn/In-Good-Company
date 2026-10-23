@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { radii, touch, type } from '../theme/tokens';
 import { api } from '../api/client';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { Avatar, ErrorText, Loading } from '../components/AppParts';
+import { Chip, ErrorText, Footer, Icon, Input, Loading, PersonDisc, Toggle } from '../components/AppParts';
 
 // Per-pairing chat (plotline "chat"): text only, polled. Opens with each
 // side's auto-sent introduction of the other person; conversation starters
@@ -65,83 +65,126 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
   const name = pairing?.partner.display_name ?? '';
   const share = pairing?.contact_share;
   const writable = pairing?.chat_open;
+  const partnerId = pairing ? (pairing.partner.user_id ?? pairing.partner.id ?? name) : null;
+  const [whenLabel, orgName] = pairing ? [pairing.shift.when_label, pairing.shift.org_name] : [];
 
+  // The input row is the footer, so it rides above the keyboard on both platforms.
   return (
     <KeyboardAvoidingView style={s.container} behavior="padding">
       <OnboardingTopBar title="Chat" onBack={onBack} />
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: 6 }]}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: 16 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         {!pairing && !error ? <Loading /> : null}
         {pairing ? (
-          <TouchableOpacity style={chatHeader} onPress={() => navigate('pairing', { pairingId })}>
-            <Avatar name={name} size={40} />
+          <Pressable
+            style={({ pressed }) => [styles.header, pressed && { backgroundColor: colors.tintPressed }]}
+            onPress={() => navigate('pairing', { pairingId })}
+            accessibilityRole="button"
+            accessibilityLabel={`${name}, ${whenLabel}, ${orgName}`}
+          >
+            <PersonDisc size={48} userId={partnerId} initial={name} />
             <View style={{ flex: 1 }}>
-              <Text style={[app.h3, { fontSize: 15 }]}>{name}</Text>
-              <Text style={[s.rationale, { marginTop: 0 }]}>{pairing.shift.when_label} · {pairing.shift.org_name}</Text>
+              <Text style={[type.subtitle, { color: colors.ink }]}>{name}</Text>
+              <Text style={[type.bodyS, { color: colors.ink2 }]}>{whenLabel}</Text>
+              <Text style={[type.bodyS, { color: colors.ink2 }]}>{orgName}</Text>
             </View>
-            <Text style={{ color: colors.inkSoft, fontSize: 16 }}>›</Text>
-          </TouchableOpacity>
+            <Icon name="chevron-right" size={24} color={colors.ink} />
+          </Pressable>
         ) : null}
 
         <View style={{ gap: 12, paddingTop: 16 }}>
           {messages.map((m) => {
             if (m.kind === 'starter') {
-              return <View key={m.id} style={app.starterChip}><Text style={app.starterChipText}>💡 {m.body}</Text></View>;
+              return (
+                <View key={m.id} style={styles.starter} accessible accessibilityRole="text" accessibilityLabel={m.body}>
+                  <Chip label={m.body} style={{ flexShrink: 1 }} />
+                </View>
+              );
             }
             if (m.from === 'system') {
-              return <View key={m.id} style={app.msgSystem}><Text style={app.msgSystemText}>{m.body}</Text></View>;
+              return <Text key={m.id} style={styles.system}>{m.body}</Text>;
             }
             const mine = m.from === 'me';
             return (
-              <View key={m.id} style={mine ? app.msgMe : app.msgThem}>
-                <Text style={[app.msgText, mine && app.msgTextMe]}>{m.body}</Text>
+              <View key={m.id} style={mine ? styles.mine : styles.theirs}>
+                <Text style={[type.body, { color: mine ? colors.onInk : colors.ink }]}>{m.body}</Text>
               </View>
             );
           })}
         </View>
 
         {share && writable ? (
-          <TouchableOpacity style={[s.toggleRow, { marginTop: 18 }]} onPress={toggleContactShare}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.toggleLabel}>Share contact details</Text>
-              <Text style={[s.rationale, { marginTop: 2 }]}>
-                {share.me && share.partner ? 'You both opted in — numbers and handles can be shared.'
-                  : share.me ? `Waiting for ${name} to opt in too.` : 'Phone numbers, emails and socials stay hidden until you both opt in.'}
-              </Text>
-            </View>
-            <View style={[s.switchTrack, share.me && s.switchTrackOn]}>
-              <View style={[s.switchThumb, share.me && s.switchThumbOn]} />
-            </View>
-          </TouchableOpacity>
+          <Toggle
+            style={{ marginTop: 20 }}
+            label="Share contact details"
+            description={share.me && share.partner ? 'You both opted in — numbers and handles can be shared.'
+              : share.me ? `Waiting for ${name} to opt in too.` : 'Phone numbers, emails and socials stay hidden until you both opt in.'}
+            value={share.me}
+            onValueChange={toggleContactShare}
+          />
         ) : null}
         <ErrorText error={error} />
       </ScrollView>
       {writable ? (
-        <View style={app.chatInputRow}>
-          <TextInput
-            style={app.chatInput}
+        <Footer style={styles.inputRow}>
+          <Input
+            wrapperStyle={{ flex: 1 }}
+            accessibilityLabel={`Message ${name}`}
             placeholder={`Message ${name}…`}
-            placeholderTextColor={colors.inkSoft}
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={send}
             returnKeyType="send"
           />
-          <TouchableOpacity style={app.sendBtn} onPress={send} accessibilityLabel="Send">
-            <Text style={app.sendBtnText}>→</Text>
-          </TouchableOpacity>
-        </View>
+          <Pressable
+            style={({ pressed }) => [styles.send, pressed && { backgroundColor: colors.inkPressed }]}
+            onPress={send}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+          >
+            <Icon name="send" size={24} color={colors.onInk} />
+          </Pressable>
+        </Footer>
       ) : pairing ? (
-        <Text style={[s.rationale, { textAlign: 'center', padding: 18 }]}>
-          {pairing.chat_closed_reason === 'pairing_ended' ? 'This chat is closed because the pairing was cancelled.' : 'This chat is closed.'}
-        </Text>
+        <Footer>
+          <Text style={[type.bodyS, { color: colors.ink2 }]}>
+            {pairing.chat_closed_reason === 'pairing_ended' ? 'This chat is closed because the pairing was cancelled.' : 'This chat is closed.'}
+          </Text>
+        </Footer>
       ) : null}
     </KeyboardAvoidingView>
   );
 }
 
-const chatHeader = { flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.line };
+const bubble = { maxWidth: '82%', borderRadius: radii.field, paddingVertical: 12, paddingHorizontal: 16 };
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    minHeight: touch.navRow,
+    padding: 12,
+    borderRadius: radii.notice,
+    backgroundColor: colors.tint,
+  },
+  theirs: { ...bubble, alignSelf: 'flex-start', backgroundColor: colors.tint },
+  mine: { ...bubble, alignSelf: 'flex-end', backgroundColor: colors.ink },
+  system: { ...type.bodyS, color: colors.ink2, textAlign: 'center', paddingHorizontal: 8 },
+  starter: { alignSelf: 'center', maxWidth: '92%' },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  send: {
+    width: touch.back,
+    height: touch.back,
+    borderRadius: touch.back / 2,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

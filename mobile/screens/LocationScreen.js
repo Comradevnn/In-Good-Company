@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { type } from '../theme/tokens';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
+import { ErrorLine, Headline, Icon, Input, KeyboardScroll, Tag } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 import { detectLocation, geocodePlace } from '../location/geocode';
 
-// Matches the "location" screen in specs/plotline.html: locate-card +
-// manual fallback. Auto-detect uses device geolocation (expo-location) and
+// Locate card + manual fallback. Auto-detect uses device geolocation (expo-location) and
 // stores lat/lng plus the reverse-geocoded city. The manual fallback is a
 // plain city field (not plotline's full state/city dropdown dataset); a typed
 // city is geocoded to coordinates too, so the travel-distance limit applies.
@@ -72,43 +73,70 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior="padding">
-      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
-        <Text style={s.h2}>Where are you volunteering?</Text>
+    <View style={s.container}>
+      <KeyboardScroll
+        header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />}
+      >
+        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
+        <Headline>Where are you volunteering?</Headline>
         <Text style={s.rationale}>
           We use this to find nearby shifts and match you with someone close enough that
           getting there is easy — nothing else.
         </Text>
 
-        <View style={s.locateCard}>
-          <Text style={s.pin}>📍</Text>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', marginTop: 6, color: colors.ink }}>
-            {detected ? detected.label : detecting ? 'Detecting…' : 'Use my current location'}
-          </Text>
-          <Text style={[s.rationale, { marginTop: 2 }]} onPress={handleDetect}>
-            {detected ? 'Tap to re-detect' : 'Tap to detect from your device'}
-          </Text>
-        </View>
+        <Pressable
+          onPress={handleDetect}
+          disabled={detecting}
+          accessibilityRole="button"
+          accessibilityLabel={`${detected ? detected.label : detecting ? 'Detecting…' : 'Use my current location'}, ${detected ? 'Tap to re-detect' : 'Tap to detect from your device'}`}
+          accessibilityState={{ busy: detecting }}
+          style={({ pressed }) => [styles.locateCard, pressed && { backgroundColor: colors.tintPressed }]}
+        >
+          <View style={styles.iconWell}>
+            <Icon name="map-pin" size={24} color={colors.ink} />
+          </View>
+          <View style={styles.locateText}>
+            <Text style={[type.subtitle, { color: colors.ink }]}>
+              {detected ? detected.label : detecting ? 'Detecting…' : 'Use my current location'}
+            </Text>
+            <Text style={[type.bodyS, { color: colors.ink2 }]}>
+              {detected ? 'Tap to re-detect' : 'Tap to detect from your device'}
+            </Text>
+          </View>
+        </Pressable>
 
-        <View style={s.field}>
-          <Text style={s.label}>Or enter your city manually</Text>
-          <TextInput
-            style={s.input}
-            placeholder="San Jose, CA"
-            placeholderTextColor={colors.inkSoft}
-            value={manualCity}
-            onChangeText={(text) => {
-              setManualCity(text);
-              if (text) setDetected(null);
-            }}
-          />
-        </View>
+        <Input
+          wrapperStyle={s.field}
+          label="Or enter your city manually"
+          placeholder="San Jose, CA"
+          value={manualCity}
+          onChangeText={(text) => {
+            setManualCity(text);
+            if (text) setDetected(null);
+          }}
+        />
 
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-      </ScrollView>
-      <PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />
-    </KeyboardAvoidingView>
+        {error ? <ErrorLine message={error} style={styles.error} /> : null}
+      </KeyboardScroll>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  stepTag: { marginBottom: 12 },
+  locateCard: {
+    marginTop: 24,
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    backgroundColor: colors.tint,
+  },
+  iconWell: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  locateText: { flex: 1 },
+  error: { marginTop: 16 },
+});

@@ -1,7 +1,7 @@
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Text } from 'react-native';
 import { colors } from '../theme/colors';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
-import OnboardingTopBar from '../components/OnboardingTopBar';
+import { type } from '../theme/tokens';
+import { Headline, LinkButton, ListRow, Screen } from '../components/AppParts';
 
 // Account settings: lets a signed-in user reopen and resubmit any
 // onboarding screen via the existing PATCH /users/me / POST /users routes,
@@ -53,73 +53,26 @@ function summarize(profile) {
   };
 }
 
-function Row({ label, value, onPress }) {
-  return (
-    <TouchableOpacity style={rowStyle} onPress={onPress} disabled={!onPress}>
-      <View style={{ flex: 1 }}>
-        <Text style={rowLabel}>{label}</Text>
-        <Text style={rowValue}>{value}</Text>
-      </View>
-      {onPress ? <Text style={s.optionArrow}>→</Text> : null}
-    </TouchableOpacity>
-  );
-}
-
 export default function SettingsScreen({ profile, onBack, onEditSection, onVerify, onLogOut }) {
   const summary = summarize(profile ?? {});
 
   return (
-    <View style={s.container}>
-      <OnboardingTopBar title="Account settings" onBack={onBack} />
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.h2}>Account settings</Text>
-        <Text style={[s.rationale, { marginBottom: 8 }]}>
-          Edit anything below — changes save the same way they did during onboarding.
-        </Text>
+    <Screen title="Account settings" onBack={onBack}>
+      <Headline>Account settings</Headline>
+      <Text style={[type.bodyS, { color: colors.ink2, marginTop: 8, marginBottom: 16 }]}>
+        Edit anything below — changes save the same way they did during onboarding.
+      </Text>
 
-        <Row label="Basic profile" value={summary.basicProfile} onPress={() => onEditSection('quickProfile')} />
-        <Row label="Location" value={summary.location} onPress={() => onEditSection('location')} />
-        <Row label="Causes / org" value={summary.causeOrOrg} onPress={() => onEditSection('orgOrCause')} />
-        <Row label="Partner preferences" value={summary.partnerPrefs} onPress={() => onEditSection('partnerPrefs')} />
-        <Row label="Availability" value={summary.availability} onPress={() => onEditSection('availability')} />
-        <Row label="Verification" value={summary.verification} onPress={onVerify} />
+      <ListRow icon="person" label="Basic profile" sublabel={summary.basicProfile} onPress={() => onEditSection('quickProfile')} />
+      <ListRow icon="map-pin" label="Location" sublabel={summary.location} onPress={() => onEditSection('location')} />
+      <ListRow icon="heart" label="Causes / org" sublabel={summary.causeOrOrg} onPress={() => onEditSection('orgOrCause')} />
+      <ListRow icon="people" label="Partner preferences" sublabel={summary.partnerPrefs} onPress={() => onEditSection('partnerPrefs')} />
+      <ListRow icon="calendar" label="Availability" sublabel={summary.availability} onPress={() => onEditSection('availability')} />
+      <ListRow icon="shield-check" label="Verification" sublabel={summary.verification} onPress={onVerify} />
 
-        {/* Testing convenience (multi-account demo prep) — no confirmation
-            dialog, per the ask; just clears the token and drops to signup. */}
-        <Text style={logOutLink} onPress={onLogOut}>
-          Log out
-        </Text>
-      </ScrollView>
-    </View>
+      {/* Testing convenience (multi-account demo prep) — no confirmation
+          dialog, per the ask; just clears the token and drops to signup. */}
+      <LinkButton label="Log out" danger onPress={onLogOut} style={{ marginTop: 24 }} />
+    </Screen>
   );
 }
-
-const logOutLink = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 13.5,
-  color: colors.danger,
-  textAlign: 'center',
-  marginTop: 24,
-};
-
-const rowStyle = {
-  flexDirection: 'row',
-  alignItems: 'center',
-  borderWidth: 1.5,
-  borderColor: colors.line,
-  borderRadius: 14,
-  padding: 14,
-  marginTop: 10,
-  backgroundColor: colors.surface,
-};
-const rowLabel = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 13,
-  color: colors.inkSoft,
-};
-const rowValue = {
-  fontFamily: 'Inter_400Regular',
-  fontSize: 14.5,
-  color: colors.ink,
-  marginTop: 3,
-};

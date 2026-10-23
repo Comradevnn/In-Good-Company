@@ -1,20 +1,14 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { font, radii, touch } from '../theme/tokens';
+import { DiscPair, DisplayS, ErrorLine, Headline, HeroField, Icon, InfoCard, Input, KeyboardScroll, LinkButton, Tag } from '../components/AppParts';
+import PrimaryButton from '../components/PrimaryButton';
 import { BACKEND_URL } from '../config/api';
 import { saveSessionToken } from '../auth/session';
 
-// Matches the "emailCapture" screen in specs/plotline.html (the first screen
-// after the intro), with a password field added since accounts need one —
+// The sign-in screen (the first screen after the intro), with a password field added since accounts need one —
 // the spec screen leans on social sign-in, which we don't have yet.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -86,192 +80,115 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior="padding"
-    >
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
-        <Text style={styles.eyebrow}>Sign in or get started</Text>
-        <Text style={styles.h2}>What's your email?</Text>
-        <Text style={styles.rationale}>
-          We'll use this for shift confirmations, receipts, and getting back into your account.
-        </Text>
+    <View style={s.container}>
+      <KeyboardScroll
+        contentContainerStyle={styles.scrollContent}
+        footer={
+          <PrimaryButton
+            label={confirmingNewAccount ? 'Create account' : 'Continue'}
+            onPress={handleContinue}
+            disabled={!canSubmit}
+            loading={submitting}
+          />
+        }
+      >
+        <HeroField>
+          <View style={styles.heroBody}>
+            <DiscPair r={58} d={64} style={styles.brandMark} />
+            <Tag label="Sign in or get started" style={styles.heroTag} />
+            <DisplayS style={styles.wordmark}>{'In Good\nCompany'}</DisplayS>
+          </View>
+        </HeroField>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
+        <View style={styles.sheet}>
+          {notice ? <InfoCard body={notice} /> : null}
+          <Headline style={notice ? styles.headlineAfterNotice : null}>What's your email?</Headline>
+          <Text style={s.rationale}>
+            We'll use this for shift confirmations, receipts, and getting back into your account.
+          </Text>
+
+          <Input
+            wrapperStyle={styles.firstField}
+            label="Email"
             placeholder="you@gmail.com"
-            placeholderTextColor={colors.inkSoft}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
           />
-        </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            wrapperStyle={s.field}
+            label="Password"
             placeholder="At least 8 characters"
-            placeholderTextColor={colors.inkSoft}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
             autoCapitalize="none"
             autoComplete={confirmingNewAccount ? 'new-password' : 'password'}
           />
-        </View>
 
-        {!isOrg ? (
-          showReferral ? (
-            <View style={styles.field}>
-              <Text style={styles.label}>Referral code (optional)</Text>
-              <TextInput
-                style={styles.input}
+          {!isOrg ? (
+            showReferral ? (
+              <Input
+                wrapperStyle={s.field}
+                label="Referral code (optional)"
                 placeholder="From a friend"
-                placeholderTextColor={colors.inkSoft}
                 value={referralCode}
                 onChangeText={setReferralCode}
                 autoCapitalize="characters"
               />
-            </View>
+            ) : (
+              <LinkButton label="Have a referral code?" align="left" onPress={() => setShowReferral(true)} style={styles.link} />
+            )
+          ) : null}
+          {isOrg ? (
+            <Pressable
+              onPress={() => setIsOrg(false)}
+              accessibilityRole="link"
+              accessibilityLabel="Signing up to volunteer instead"
+              style={[styles.link, styles.backLink]}
+            >
+              <Icon name="arrow-left" size={20} color={colors.ink} />
+              <Text style={styles.linkText}>Signing up to volunteer instead</Text>
+            </Pressable>
           ) : (
-            <Text style={styles.altLink} onPress={() => setShowReferral(true)}>Have a referral code?</Text>
-          )
-        ) : null}
-        <Text style={styles.altLink} onPress={() => setIsOrg((v) => !v)}>
-          {isOrg ? '← Signing up to volunteer instead' : 'Signing up an organization? Tap here'}
-        </Text>
-
-        {confirmingNewAccount ? (
-          <Text style={[styles.noticeText, { marginTop: 16 }]}>
-            There's no account for {email.trim()} yet. Tap Create account to make a new one, or
-            check the email if you meant to sign in.
-          </Text>
-        ) : null}
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.btnPrimary, !canSubmit && styles.btnPrimaryDisabled]}
-          disabled={!canSubmit}
-          onPress={handleContinue}
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.surface} />
-          ) : (
-            <Text style={styles.btnPrimaryText}>{confirmingNewAccount ? 'Create account' : 'Continue'}</Text>
+            <LinkButton label="Signing up an organization? Tap here" align="left" onPress={() => setIsOrg(true)} style={styles.link} />
           )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+
+          {confirmingNewAccount ? (
+            <View style={styles.gap}>
+              <InfoCard
+                body={`There's no account for ${email.trim()} yet. Tap Create account to make a new one, or check the email if you meant to sign in.`}
+              />
+            </View>
+          ) : null}
+          {error ? <ErrorLine message={error} style={styles.gap} /> : null}
+        </View>
+      </KeyboardScroll>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  noticeText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: '#8A5A18',
-    backgroundColor: '#F6E3C7',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+  scrollContent: { paddingBottom: 24 },
+  heroBody: { height: 243, overflow: 'hidden' },
+  heroTag: { position: 'absolute', left: touch.pageMargin, top: 12 },
+  wordmark: { position: 'absolute', left: touch.pageMargin, top: 103, lineHeight: 48 },
+  brandMark: { position: 'absolute', right: -24, top: 45 },
+  sheet: {
+    marginTop: -28,
+    paddingTop: 26,
+    paddingHorizontal: touch.pageMargin,
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: radii.hero,
+    borderTopRightRadius: radii.hero,
   },
-  altLink: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: colors.mossDark,
-    marginTop: 18,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 22,
-    paddingTop: 32,
-  },
-  eyebrow: {
-    fontFamily: 'IBMPlexMono_500Medium',
-    fontSize: 11,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: colors.mossDark,
-    marginBottom: 8,
-  },
-  h2: {
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 24,
-    lineHeight: 29,
-    color: colors.ink,
-    marginBottom: 6,
-  },
-  rationale: {
-    fontFamily: 'Inter_400Regular',
-    color: colors.inkSoft,
-    fontSize: 12.5,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  field: {
-    marginTop: 18,
-  },
-  label: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: colors.inkSoft,
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14.5,
-    color: colors.ink,
-    backgroundColor: colors.surface,
-  },
-  errorText: {
-    fontFamily: 'Inter_400Regular',
-    color: colors.danger,
-    fontSize: 13,
-    marginTop: 16,
-  },
-  footer: {
-    paddingHorizontal: 22,
-    paddingTop: 14,
-    paddingBottom: 22,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.surface,
-  },
-  btnPrimary: {
-    borderRadius: 999,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    backgroundColor: colors.moss,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimaryDisabled: {
-    backgroundColor: '#C8CCC1',
-  },
-  btnPrimaryText: {
-    fontFamily: 'Inter_600SemiBold',
-    color: '#F6F4EA',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  headlineAfterNotice: { marginTop: 16 },
+  firstField: { marginTop: 20 },
+  link: { marginTop: 4, justifyContent: 'flex-start' },
+  backLink: { minHeight: touch.link, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  linkText: { fontFamily: font.textBold, fontSize: 16, lineHeight: 22, color: colors.ink, textDecorationLine: 'underline' },
+  gap: { marginTop: 16 },
 });

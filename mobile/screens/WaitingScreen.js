@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { colors } from '../theme/colors';
+import { type } from '../theme/tokens';
 import { api } from '../api/client';
-import { ErrorText, Loading, PillButton, Screen, SectionTitle } from '../components/AppParts';
+import { Card, EmptyState, ErrorText, Headline, LinkButton, Loading, PillButton, Screen, SectionTitle, Tag } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
 
 // The waiting period (plotline "waiting"): a visible, honest status that
@@ -33,12 +33,12 @@ function Converge() {
   ));
   return (
     <View style={{ width: 260, height: 140 }}>
-      <View style={{ position: 'absolute', left: 15, top: 15, width: 10, height: 10, borderRadius: 5, backgroundColor: '#4F6F52' }} />
-      <View style={{ position: 'absolute', right: 15, top: 15, width: 10, height: 10, borderRadius: 5, backgroundColor: '#D98E3F' }} />
-      {dots('#4F6F52', true)}
-      {dots('#D98E3F', false)}
-      <Animated.View style={{ position: 'absolute', left: 117, top: 102, width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: 'rgba(32,41,31,0.4)', alignItems: 'center', justifyContent: 'center', transform: [{ scale: pulse }] }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#20291F' }} />
+      <View style={{ position: 'absolute', left: 15, top: 15, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.you }} />
+      <View style={{ position: 'absolute', right: 15, top: 15, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.person1, borderWidth: 2, borderColor: colors.ink2 }} />
+      {dots(colors.you, true)}
+      {dots(colors.edge, false)}
+      <Animated.View style={{ position: 'absolute', left: 117, top: 102, width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.ink3, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pulse }] }}>
+        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: colors.lens1 }} />
       </Animated.View>
     </View>
   );
@@ -93,9 +93,12 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
   if (!request) {
     return (
       <Screen title="Matching" onBack={onBack}>
-        <Text style={s.h2}>You're not looking right now</Text>
-        <Text style={s.rationale}>Tell us when you're free and we'll start looking for a partner and a shift.</Text>
-        <PillButton label="Find a shift" onPress={() => navigate('startMatching', {}, { replace: true })} style={{ marginTop: 18 }} />
+        <EmptyState
+          title="You're not looking right now"
+          body="Tell us when you're free and we'll start looking for a partner and a shift."
+        >
+          <PillButton label="Find a shift" onPress={() => navigate('startMatching', {}, { replace: true })} style={{ marginTop: 24, alignSelf: 'stretch' }} />
+        </EmptyState>
       </Screen>
     );
   }
@@ -106,21 +109,23 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
 
   return (
     <Screen title={noMatch ? 'No match yet' : 'Matching'} onBack={onBack}>
-      <View style={app.waitWrap}>
+      <View style={styles.wait}>
         {!noMatch ? <Converge /> : null}
-        <Text style={app.waitStatus}>{request.headline}</Text>
-        <Text style={app.waitSub}>{request.detail}</Text>
+        <Headline style={{ marginTop: 24 }}>{request.headline}</Headline>
+        <Text style={styles.waitSub}>{request.detail}</Text>
         {!noMatch ? (
-          <Text style={[app.finetext, { textAlign: 'center' }]}>
-            Searching for {waited} · {request.window_start} → {request.window_end} · {request.travel_radius_miles} mi
-            {request.buddy_name ? ` · with ${request.buddy_name}` : ''}
-          </Text>
+          <View style={styles.facts}>
+            <Text style={styles.fact}>Searching for {waited}</Text>
+            <Text style={styles.fact}>{request.window_start} to {request.window_end}</Text>
+            <Text style={styles.fact}>{request.travel_radius_miles} mi</Text>
+            {request.buddy_name ? <Text style={styles.fact}>with {request.buddy_name}</Text> : null}
+          </View>
         ) : null}
         {request.taking_longer && !noMatch ? (
-          <Text style={[app.finetext, { textAlign: 'center' }]}>This is taking longer than usual. Any of the options below can speed it up.</Text>
+          <Text style={styles.fine}>This is taking longer than usual. Any of the options below can speed it up.</Text>
         ) : null}
         {!noMatch ? (
-          <Text style={[app.finetext, { textAlign: 'center' }]}>
+          <Text style={styles.fine}>
             We'll stop by {new Date(request.search_deadline).toLocaleDateString()} rather than leave you hanging, and suggest what to try next.
           </Text>
         ) : null}
@@ -130,17 +135,17 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
 
       {request.alternatives.length ? <SectionTitle title={noMatch ? 'Ways to get matched' : 'While you wait'} /> : null}
       {request.alternatives.map((alt) => (
-        <View key={alt.type} style={app.discoverCard}>
-          <Text style={app.discoverTitle}>{alt.title}</Text>
-          <Text style={app.discoverMeta}>{alt.body}</Text>
+        <Card key={alt.type} style={{ marginTop: 8 }}>
+          <Text style={styles.altTitle}>{alt.title}</Text>
+          <Text style={styles.altBody}>{alt.body}</Text>
           {alt.type === 'solo_rsvp'
             ? alt.shifts.map((shift) => (
-              <View key={shift.id} style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={app.buddyName}>{shift.title}</Text>
-                  <Text style={app.buddySub}>{shift.org_name} · {shift.when_label}{shift.daytime ? ' · ☀︎ Daytime' : ''}</Text>
-                </View>
-                <PillButton label="RSVP solo" ghost disabled={busy} onPress={() => rsvp(shift.id)} />
+              <View key={shift.id} style={styles.shiftBlock}>
+                <Text style={styles.shiftTitle}>{shift.title}</Text>
+                <Text style={styles.altBody}>{shift.org_name}</Text>
+                <Text style={styles.altBody}>{shift.when_label}</Text>
+                {shift.daytime ? <Tag label="Daytime" tone="accent" icon="sun" style={{ alignSelf: 'flex-start', marginTop: 8 }} /> : null}
+                <PillButton label="RSVP solo" ghost disabled={busy} style={{ marginTop: 12 }} onPress={() => rsvp(shift.id)} />
               </View>
             ))
             : (
@@ -156,7 +161,7 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
                 )}
               />
             )}
-        </View>
+        </Card>
       ))}
       {request.anyone_available && request.match_preference !== 'anyone' ? (
         <PillButton label="Match me with anyone available" ghost style={{ marginTop: 14 }} disabled={busy} onPress={() => adjust({ match_preference: 'anyone' })} />
@@ -171,25 +176,28 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
         <PillButton label="Verify your ID" style={{ marginTop: 14 }} onPress={() => navigate('verify')} />
       ) : null}
 
-      <View style={{ marginTop: 26, gap: 14 }}>
+      <View style={{ marginTop: 24, gap: 8 }}>
         {noMatch ? (
           <>
             <PillButton label="Search new dates" onPress={() => run(async () => {
               await api(sessionToken, '/requests/current/dismiss', { method: 'POST' });
               navigate('startMatching', {}, { replace: true });
             })} />
-            <Text style={app.quietLink} onPress={() => run(async () => {
+            <LinkButton label="Not now" align="left" onPress={() => run(async () => {
               await api(sessionToken, '/requests/current/dismiss', { method: 'POST' });
               onBack();
-            })}>Not now</Text>
+            })} />
           </>
         ) : (
-          <Text style={app.dangerLink} onPress={() => run(async () => {
-            await api(sessionToken, '/requests/current/cancel', { method: 'POST' });
-            onBack();
-          })}>
-            {request.kind === 'rematch' ? 'Stop looking and give me my Deeds back' : request.kind === 'solo_rsvp' ? "Stop looking — I'll go solo" : 'Stop looking'}
-          </Text>
+          <LinkButton
+            danger
+            align="left"
+            label={request.kind === 'rematch' ? 'Stop looking and give me my Deeds back' : request.kind === 'solo_rsvp' ? "Stop looking — I'll go solo" : 'Stop looking'}
+            onPress={() => run(async () => {
+              await api(sessionToken, '/requests/current/cancel', { method: 'POST' });
+              onBack();
+            })}
+          />
         )}
       </View>
 
@@ -197,3 +205,15 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  wait: { paddingTop: 12 },
+  waitSub: { ...type.body, color: colors.ink2, marginTop: 8 },
+  facts: { marginTop: 16 },
+  fact: { ...type.bodyS, color: colors.ink2 },
+  fine: { ...type.bodyS, color: colors.ink2, marginTop: 8 },
+  altTitle: { ...type.titleS, color: colors.ink },
+  altBody: { ...type.bodyS, color: colors.ink2, marginTop: 4 },
+  shiftBlock: { marginTop: 16 },
+  shiftTitle: { ...type.subtitle, color: colors.ink },
+});

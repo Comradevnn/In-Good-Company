@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { colors } from '../theme/colors';
+import { font, radii, touch } from '../theme/tokens';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { BACKEND_URL } from '../config/api';
 import OnboardingTopBar from '../components/OnboardingTopBar';
+import { ErrorLine, Field, Headline, InfoCard, Input, KeyboardScroll, Tag } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 
-// Matches the "quickProfile" screen in specs/plotline.html — the first real
-// onboarding screen a new user hits (intro -> emailCapture -> quickProfile).
+// The first real onboarding screen a new user hits (intro -> emailCapture -> quickProfile).
 // Includes personal_values, which 3.1's "basic profile" step asks for but no
 // plotline screen actually has a field for. Saves against the logged-in
 // account (session token from signup). Fields not collected here (location,
@@ -91,123 +92,112 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior="padding">
-      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
-
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
-        <Text style={s.h2}>Build a quick profile</Text>
+    <View style={s.container}>
+      <KeyboardScroll
+        header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />}
+      >
+        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
+        <Headline>Build a quick profile</Headline>
         <Text style={s.rationale}>
           This is what your future volunteer partner sees — keep it real, not polished.
         </Text>
 
         {isVerified ? (
-          <View style={verifiedNotice}>
-            <Text style={verifiedNoticeText}>
-              Changing your name or age will remove your Verified badge until you verify again.
-            </Text>
+          <View style={styles.notice}>
+            <InfoCard body="Changing your name or age will remove your Verified badge until you verify again." />
           </View>
         ) : null}
 
-        <View style={s.field}>
-          <Text style={s.label}>First name</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Jordan"
-            placeholderTextColor={colors.inkSoft}
-            value={firstName}
-            onChangeText={setFirstName}
+        <Input
+          wrapperStyle={s.field}
+          label="First name"
+          placeholder="Jordan"
+          value={firstName}
+          onChangeText={setFirstName}
+        />
+
+        <View style={[s.field, s.row]}>
+          <Input
+            wrapperStyle={styles.ageCol}
+            label="Age"
+            placeholder="29"
+            value={age}
+            onChangeText={setAge}
+            keyboardType="number-pad"
+          />
+          <Input
+            wrapperStyle={styles.occupationCol}
+            label="Occupation or school"
+            placeholder="Nurse, SJSU..."
+            value={occupation}
+            onChangeText={setOccupation}
           />
         </View>
 
-        <View style={[s.field, s.row]}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.label}>Age</Text>
-            <TextInput
-              style={s.input}
-              placeholder="29"
-              placeholderTextColor={colors.inkSoft}
-              value={age}
-              onChangeText={setAge}
-              keyboardType="number-pad"
-            />
-          </View>
-          <View style={{ flex: 2 }}>
-            <Text style={s.label}>Occupation or school</Text>
-            <TextInput
-              style={s.input}
-              placeholder="Nurse, SJSU..."
-              placeholderTextColor={colors.inkSoft}
-              value={occupation}
-              onChangeText={setOccupation}
-            />
-          </View>
-        </View>
-
-        <View style={s.field}>
-          <Text style={s.label}>Gender</Text>
-          <View style={{ borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, overflow: 'hidden' }}>
-            <Picker selectedValue={gender} onValueChange={setGender}>
+        <Field label="Gender" style={s.field}>
+          <View style={styles.pickerBox}>
+            <Picker
+              selectedValue={gender}
+              onValueChange={setGender}
+              accessibilityLabel="Gender"
+              style={styles.picker}
+              itemStyle={styles.pickerItem}
+              dropdownIconColor={colors.ink}
+            >
               {GENDER_OPTIONS.map((option) => (
                 <Picker.Item key={option} label={option} value={option} />
               ))}
             </Picker>
           </View>
-        </View>
+        </Field>
 
-        <View style={s.field}>
-          <Text style={s.label}>1–3 hobbies outside volunteering</Text>
-          <TextInput
-            style={s.input}
-            placeholder="hiking, ceramics, trivia nights"
-            placeholderTextColor={colors.inkSoft}
-            value={hobbies}
-            onChangeText={setHobbies}
-          />
-        </View>
+        <Input
+          wrapperStyle={s.field}
+          label="1–3 hobbies outside volunteering"
+          placeholder="hiking, ceramics, trivia nights"
+          value={hobbies}
+          onChangeText={setHobbies}
+        />
 
-        <View style={s.field}>
-          <Text style={s.label}>One or two values that matter to you</Text>
-          <TextInput
-            style={s.input}
-            placeholder="e.g. leaving things better than I found them"
-            placeholderTextColor={colors.inkSoft}
-            value={personalValues}
-            onChangeText={setPersonalValues}
-          />
-        </View>
+        <Input
+          wrapperStyle={s.field}
+          label="One or two values that matter to you"
+          placeholder="e.g. leaving things better than I found them"
+          value={personalValues}
+          onChangeText={setPersonalValues}
+        />
 
-        <View style={s.field}>
-          <Text style={s.label}>What's bringing you to your volunteering journey?</Text>
-          <TextInput
-            style={[s.input, s.textarea]}
-            placeholder="A sentence or two is plenty."
-            placeholderTextColor={colors.inkSoft}
-            value={blurb}
-            onChangeText={setBlurb}
-            multiline
-          />
-        </View>
+        <Input
+          wrapperStyle={s.field}
+          label="What's bringing you to your volunteering journey?"
+          placeholder="A sentence or two is plenty."
+          value={blurb}
+          onChangeText={setBlurb}
+          multiline
+        />
 
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-      </ScrollView>
-
-      <PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />
-    </KeyboardAvoidingView>
+        {error ? <ErrorLine message={error} style={styles.error} /> : null}
+      </KeyboardScroll>
+    </View>
   );
 }
 
-const verifiedNotice = {
-  marginTop: 18,
-  borderWidth: 1.5,
-  borderColor: colors.ochre,
-  borderRadius: 14,
-  padding: 13,
-  backgroundColor: colors.ochreTint,
-};
-const verifiedNoticeText = {
-  fontFamily: 'Inter_500Medium',
-  fontSize: 12.5,
-  lineHeight: 18,
-  color: '#8A5A18',
-};
+const styles = StyleSheet.create({
+  stepTag: { marginBottom: 12 },
+  notice: { marginTop: 16 },
+  ageCol: { flex: 1 },
+  occupationCol: { flex: 2 },
+  pickerBox: {
+    minHeight: touch.field,
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.edge,
+    borderRadius: radii.field,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  picker: { color: colors.ink, fontFamily: font.textSemiBold },
+  pickerItem: { color: colors.ink, fontFamily: font.textSemiBold },
+  error: { marginTop: 16 },
+});

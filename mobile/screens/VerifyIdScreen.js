@@ -1,17 +1,11 @@
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { colors } from '../theme/colors';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { radii, type } from '../theme/tokens';
 import PrimaryButton from '../components/PrimaryButton';
+import { Chip, ErrorText, Headline, HeroField, Icon, Input, LinkButton, Screen, TopBar } from '../components/AppParts';
 import DateField from '../components/DateField';
 import { BACKEND_URL } from '../config/api';
 import { nameMatches, dobMatchesAge, dobIsAdult, expiryIsValid } from '../verification/localChecks';
@@ -191,232 +185,231 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
     }
   }
 
+  async function cancel() {
+    await discardPhoto();
+    onCancel();
+  }
+
   if (phase === 'review') {
+    const rows = [
+      ['Name on ID', 'Matches profile', true],
+      ['Date of birth', 'Consistent with profile', true],
+      ['Document type', docType, true],
+      ['Not expired', 'Confirmed', true],
+      ['Selfie live-match', 'Skipped at this stage', false],
+    ];
     return (
-      <View style={s.container}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-          <Text style={s.eyebrow}>Before we send anything</Text>
-          <Text style={s.h2}>Here's what matched</Text>
-          <Text style={s.rationale}>
-            These checks ran on your device. This summary and your document details — never
-            your ID photo — are what get sent.
-          </Text>
+      <Screen
+        hero={<HeroField><TopBar title="Before we send anything" onField style={styles.bar} /></HeroField>}
+        footer={(
+          <PrimaryButton
+            label="Submit for verification"
+            onPress={handleSubmit}
+            disabled={submitting}
+            loading={submitting}
+          />
+        )}
+      >
+        <Headline>Here's what matched</Headline>
+        <Text style={styles.body}>
+          These checks ran on your device. This summary and your document details — never
+          your ID photo — are what get sent.
+        </Text>
 
-          <View style={reviewBox}>
-            <ReviewRow label="Name on ID" value="✓ Matches profile" />
-            <ReviewRow label="Date of birth" value="✓ Consistent with profile" />
-            <ReviewRow label="Document type" value={`✓ ${docType}`} />
-            <ReviewRow label="Not expired" value="✓ Confirmed" />
-            <ReviewRow label="Selfie live-match" value="— Skipped at this stage" muted />
-          </View>
+        <View style={styles.rows}>
+          {rows.map(([label, value, ok]) => (
+            <View key={label} style={styles.reviewRow} accessible accessibilityLabel={`${label}: ${value}`}>
+              <Text style={styles.reviewLabel}>{label}</Text>
+              <View style={styles.reviewValueLine}>
+                {ok ? <Icon name="check" size={20} color={colors.success} /> : null}
+                <Text style={[styles.reviewValue, !ok && { color: colors.ink2 }]}>{value}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
 
-          <Text style={[s.rationale, { marginTop: 14 }]}>
-            Your document number is sent securely and checked so one document can't verify
-            two accounts. We store only a scrambled, irreversible check-value — never the
-            number itself. Your ID photo is deleted from this device the moment you submit.
-          </Text>
-          <Text style={[s.rationale, { marginTop: 8, fontFamily: 'Inter_600SemiBold' }]}>
-            Prototype note: document details are typed, not scanned, so your badge will show
-            as "Verified (preview)" until real document scanning ships.
-          </Text>
+        <Text style={[styles.body, { marginTop: 16 }]}>
+          Your document number is sent securely and checked so one document can't verify
+          two accounts. We store only a scrambled, irreversible check-value — never the
+          number itself. Your ID photo is deleted from this device the moment you submit.
+        </Text>
+        <Text style={[styles.body, { marginTop: 8, fontFamily: type.fieldValue.fontFamily }]}>
+          Prototype note: document details are typed, not scanned, so your badge will show
+          as "Verified (preview)" until real document scanning ships.
+        </Text>
 
-          {error ? <Text style={s.errorText}>{error}</Text> : null}
-        </ScrollView>
-        <PrimaryButton
-          label="Submit for verification"
-          onPress={handleSubmit}
-          disabled={submitting}
-          loading={submitting}
-        />
-      </View>
+        <ErrorText error={error} />
+      </Screen>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior="padding">
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        <Text style={s.eyebrow}>Verify your ID</Text>
-        <Text style={s.h2}>Confirm it's really you</Text>
-        <Text style={s.rationale}>
-          Checked instantly. We never receive or keep your ID photo, and we store only an
-          irreversible check-value of your document number — never the number itself.
-        </Text>
+    <Screen
+      hero={<HeroField><TopBar title="Verify your ID" onBack={cancel} onField style={styles.bar} /></HeroField>}
+      footer={(
+        <PrimaryButton
+          label="Review & submit"
+          onPress={runLocalChecks}
+          disabled={!docType || !photoUri || !idName.trim() || !dob.trim() || !docNumber.trim() || !issuingCountry.trim() || !expiry.trim()}
+        />
+      )}
+    >
+      <Headline>Confirm it's really you</Headline>
+      <Text style={styles.body}>
+        Checked instantly. We never receive or keep your ID photo, and we store only an
+        irreversible check-value of your document number — never the number itself.
+      </Text>
 
-        <View style={s.field}>
-          <Text style={s.label}>What are you verifying with?</Text>
-          <View style={s.chipGrid}>
-            {DOC_TYPES.map((type) => {
-              const isSelected = docType === type;
-              return (
-                <TouchableOpacity
-                  key={type}
-                  style={[s.chip, isSelected && s.chipSelected]}
-                  onPress={() => setDocType(type)}
-                >
-                  <Text style={[s.chipText, isSelected && s.chipTextSelected]}>{type}</Text>
-                </TouchableOpacity>
-              );
-            })}
+      <View style={styles.block}>
+        <Text style={styles.label}>What are you verifying with?</Text>
+        <View style={styles.chipRow}>
+          {DOC_TYPES.map((docLabel) => (
+            <Chip
+              key={docLabel}
+              label={docLabel}
+              selected={docType === docLabel}
+              onPress={() => setDocType(docLabel)}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.label}>Photo of your ID</Text>
+        <Pressable
+          style={[styles.upload, photoUri && styles.uploadDone]}
+          onPress={() => capturePhoto(false)}
+          accessibilityRole="button"
+          accessibilityLabel={photoUri ? 'Photo captured' : 'Tap to photograph your ID'}
+        >
+          <View style={[styles.uploadDisc, photoUri && { backgroundColor: colors.success }]}>
+            <Icon name={photoUri ? 'check' : 'camera'} size={24} color={photoUri ? colors.onSuccess : colors.ink} />
           </View>
-        </View>
-
-        <View style={s.field}>
-          <Text style={s.label}>Photo of your ID</Text>
-          <TouchableOpacity style={uploadCard} onPress={() => capturePhoto(false)}>
-            <Text style={s.pin}>{photoUri ? '✓' : '🪪'}</Text>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', marginTop: 6, color: colors.ink }}>
-              {photoUri ? 'Photo captured' : 'Tap to photograph your ID'}
-            </Text>
-            <Text style={[s.rationale, { marginTop: 2, textAlign: 'center' }]}>
-              Deleted from this device as soon as verification completes — never uploaded.
-            </Text>
-          </TouchableOpacity>
-          <Text style={[s.rationale, { textAlign: 'center', marginTop: 6 }]} onPress={() => capturePhoto(true)}>
-            or choose from your library
+          <Text style={styles.uploadTitle}>
+            {photoUri ? 'Photo captured' : 'Tap to photograph your ID'}
           </Text>
-        </View>
-
-        <View style={stubNotice}>
-          <Text style={stubNoticeText}>
-            Prototype stage: we don't read the document automatically yet — type the details
-            below exactly as printed. Automatic scanning replaces this step later.
+          <Text style={[styles.body, { marginTop: 2, textAlign: 'center' }]}>
+            Deleted from this device as soon as verification completes — never uploaded.
           </Text>
-        </View>
+        </Pressable>
+        <LinkButton label="or choose from your library" onPress={() => capturePhoto(true)} />
+      </View>
 
-        <View style={s.field}>
-          <Text style={s.label}>Full name, as printed on the ID</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Jordan Michael Smith"
-            placeholderTextColor={colors.inkSoft}
-            value={idName}
-            onChangeText={setIdName}
+      <View style={styles.notice}>
+        <View style={styles.noticeIcon}>
+          <Icon name="info" size={20} color={colors.ink} />
+        </View>
+        <Text style={[styles.noticeText]}>
+          Prototype stage: we don't read the document automatically yet — type the details
+          below exactly as printed. Automatic scanning replaces this step later.
+        </Text>
+      </View>
+
+      <Input
+        label="Full name, as printed on the ID"
+        placeholder="Jordan Michael Smith"
+        value={idName}
+        onChangeText={setIdName}
+        wrapperStyle={styles.block}
+      />
+
+      <View style={[styles.block, styles.row]}>
+        <View style={styles.flex}>
+          <DateField
+            label="Date of birth"
+            value={dob}
+            onChange={(value) => { setDob(value); setError(null); }}
+            initialDate={DOB_PICKER_START}
+            maximumDate={new Date()}
           />
         </View>
-
-        <View style={[s.field, s.row]}>
-          <View style={{ flex: 1 }}>
-            <DateField
-              label="Date of birth"
-              value={dob}
-              onChange={(value) => { setDob(value); setError(null); }}
-              initialDate={DOB_PICKER_START}
-              maximumDate={new Date()}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <DateField
-              label="Expiry date"
-              value={expiry}
-              onChange={(value) => { setExpiry(value); setError(null); }}
-            />
-          </View>
+        <View style={styles.flex}>
+          <DateField
+            label="Expiry date"
+            value={expiry}
+            onChange={(value) => { setExpiry(value); setError(null); }}
+          />
         </View>
+      </View>
 
-        <View style={[s.field, s.row]}>
-          <View style={{ flex: 2 }}>
-            <Text style={s.label}>Document number</Text>
-            <TextInput
-              style={s.input}
-              placeholder="As printed on the document"
-              placeholderTextColor={colors.inkSoft}
-              value={docNumber}
-              onChangeText={setDocNumber}
-              autoCapitalize="characters"
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.label}>Issuing country</Text>
-            <TextInput
-              style={s.input}
-              placeholder="US"
-              placeholderTextColor={colors.inkSoft}
-              value={issuingCountry}
-              onChangeText={setIssuingCountry}
-              autoCapitalize="characters"
-            />
-          </View>
-        </View>
-        <Text style={[s.rationale, { marginTop: 6 }]}>
-          Sent securely to check that one document can't verify two accounts. We keep only a
-          scrambled, irreversible check-value — never the number itself.
-        </Text>
+      <View style={[styles.block, styles.row]}>
+        <Input
+          label="Document number"
+          placeholder="As printed on the document"
+          value={docNumber}
+          onChangeText={setDocNumber}
+          autoCapitalize="characters"
+          wrapperStyle={{ flex: 2 }}
+        />
+        <Input
+          label="Issuing country"
+          placeholder="US"
+          value={issuingCountry}
+          onChangeText={setIssuingCountry}
+          autoCapitalize="characters"
+          wrapperStyle={styles.flex}
+        />
+      </View>
+      <Text style={[styles.body, { marginTop: 12 }]}>
+        Sent securely to check that one document can't verify two accounts. We keep only a
+        scrambled, irreversible check-value — never the number itself.
+      </Text>
 
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
+      <ErrorText error={error} />
 
-        <Text
-          style={[s.rationale, { textAlign: 'center', marginTop: 20 }]}
-          onPress={async () => {
-            await discardPhoto();
-            onCancel();
-          }}
-        >
-          Not now — go back
-        </Text>
-      </ScrollView>
-      <PrimaryButton
-        label="Review & submit"
-        onPress={runLocalChecks}
-        disabled={!docType || !photoUri || !idName.trim() || !dob.trim() || !docNumber.trim() || !issuingCountry.trim() || !expiry.trim()}
-      />
-    </KeyboardAvoidingView>
+      <LinkButton label="Not now — go back" onPress={cancel} style={{ marginTop: 12 }} />
+    </Screen>
   );
 }
 
-function ReviewRow({ label, value, muted }) {
-  return (
-    <View style={reviewRow}>
-      <Text style={reviewLabel}>{label}</Text>
-      <Text style={[reviewValue, muted && { color: colors.inkSoft }]}>{value}</Text>
-    </View>
-  );
-}
-
-const reviewBox = {
-  marginTop: 16,
-  borderWidth: 1.5,
-  borderColor: colors.line,
-  borderRadius: 14,
-  paddingVertical: 6,
-  paddingHorizontal: 16,
-  backgroundColor: colors.surface,
-};
-const reviewRow = {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  paddingVertical: 8,
-};
-const reviewLabel = {
-  fontFamily: 'Inter_400Regular',
-  fontSize: 13.5,
-  color: colors.inkSoft,
-};
-const reviewValue = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 13.5,
-  color: colors.mossDark,
-};
-const uploadCard = {
-  borderWidth: 1.5,
-  borderStyle: 'dashed',
-  borderColor: colors.line,
-  borderRadius: 16,
-  padding: 20,
-  alignItems: 'center',
-  backgroundColor: colors.tealTint,
-  marginTop: 4,
-};
-const stubNotice = {
-  marginTop: 18,
-  borderWidth: 1.5,
-  borderColor: colors.ochre,
-  borderRadius: 14,
-  padding: 13,
-  backgroundColor: colors.ochreTint,
-};
-const stubNoticeText = {
-  fontFamily: 'Inter_500Medium',
-  fontSize: 12.5,
-  lineHeight: 18,
-  color: '#8A5A18',
-};
+// The Deeds badge floats top-right under the status bar, so the bar leaves that corner clear.
+const styles = StyleSheet.create({
+  bar: { paddingRight: 84 },
+  flex: { flex: 1 },
+  row: { flexDirection: 'row', gap: 12 },
+  block: { marginTop: 20 },
+  body: { ...type.bodyS, color: colors.ink2, marginTop: 8 },
+  label: { ...type.label, color: colors.ink, marginBottom: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rows: { marginTop: 16, gap: 8 },
+  reviewRow: { backgroundColor: colors.tint, borderRadius: radii.field, paddingVertical: 12, paddingHorizontal: 16 },
+  reviewLabel: { ...type.bodyS, color: colors.ink2 },
+  reviewValueLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  reviewValue: { ...type.fieldValue, color: colors.ink, flexShrink: 1 },
+  upload: {
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: radii.card,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.edge,
+    backgroundColor: colors.tint,
+  },
+  uploadDone: { backgroundColor: colors.successTint, borderColor: colors.success },
+  uploadDisc: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadTitle: { ...type.subtitle, color: colors.ink, marginTop: 8 },
+  notice: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    padding: 16,
+    borderRadius: radii.notice,
+    backgroundColor: colors.accentTint,
+  },
+  noticeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeText: { ...type.bodyS, color: colors.ink, flex: 1 },
+});

@@ -1,7 +1,8 @@
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
-import OnboardingTopBar from '../components/OnboardingTopBar';
+import { type } from '../theme/tokens';
+import PrimaryButton from '../components/PrimaryButton';
+import { Card, Heading, LinkButton, ListRow, PersonDisc, Screen } from '../components/AppParts';
 
 // Profile summary, reachable from the home dashboard (HomeScreen). Just
 // displays what GET /users/me already returns.
@@ -16,9 +17,9 @@ function parseJsonArray(json) {
 
 function Field({ label, value }) {
   return (
-    <View style={fieldRow}>
-      <Text style={fieldLabel}>{label}</Text>
-      <Text style={fieldValue}>{value}</Text>
+    <View style={styles.fieldRow} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldValue}>{value}</Text>
     </View>
   );
 }
@@ -28,87 +29,45 @@ export default function ProfileScreen({ profile, onVerify, onFindMatch, onDeeds,
   const interestTags = profile?.interest_tags ? parseJsonArray(profile.interest_tags) : [];
 
   return (
-    <View style={s.container}>
-      {onBack ? <OnboardingTopBar title="Your profile" onBack={onBack} /> : null}
-      <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingTop: 30 }]}>
-        <Text style={s.h2}>Hi, {profile?.display_name ?? 'there'}</Text>
-        <Text style={[s.rationale, { marginBottom: 8 }]}>Your profile so far.</Text>
+    <Screen
+      title={onBack ? 'Your profile' : undefined}
+      onBack={onBack}
+      footer={<PrimaryButton label="Find a shift" onPress={onFindMatch} />}
+    >
+      <PersonDisc personKey="you" size={64} accessibilityLabel="You" />
+      <Heading level="titleL" style={{ marginTop: 16 }} accessibilityRole="header">
+        Hi, {profile?.display_name ?? 'there'}
+      </Heading>
+      <Text style={[type.bodyS, { color: colors.ink2, marginTop: 4 }]}>Your profile so far.</Text>
 
-        <View style={card}>
-          <Field label="Name" value={profile?.display_name || 'Not set'} />
-          <Field label="Age" value={profile?.age ?? 'Not set'} />
-          <Field label="Occupation" value={profile?.occupation || 'Not set'} />
-          <Field label="Verified" value={profile?.verified ? 'Verified (preview)' : 'Not verified'} />
-          <Field label="Causes" value={causeTags.length ? causeTags.join(', ') : 'Not set'} />
-          <Field label="Interests" value={interestTags.length ? interestTags.join(', ') : 'Not set'} />
-          <Field
-            label="Gender preference"
-            value={profile?.gender_pref === 'same_gender_only' ? 'Same gender only' : 'Any'}
-          />
-          <Field label="Deeds balance" value={`${profile?.deeds_balance ?? 0} Deeds`} />
-        </View>
+      <Card style={{ marginTop: 16, gap: 12 }}>
+        <Field label="Name" value={profile?.display_name || 'Not set'} />
+        <Field label="Age" value={profile?.age ?? 'Not set'} />
+        <Field label="Occupation" value={profile?.occupation || 'Not set'} />
+        <Field label="Verified" value={profile?.verified ? 'Verified (preview)' : 'Not verified'} />
+        <Field label="Causes" value={causeTags.length ? causeTags.join(', ') : 'Not set'} />
+        <Field label="Interests" value={interestTags.length ? interestTags.join(', ') : 'Not set'} />
+        <Field
+          label="Gender preference"
+          value={profile?.gender_pref === 'same_gender_only' ? 'Same gender only' : 'Any'}
+        />
+        <Field label="Deeds balance" value={`${profile?.deeds_balance ?? 0} Deeds`} />
+      </Card>
 
-        <TouchableOpacity style={actionBtn} onPress={onVerify}>
-          <Text style={actionBtnText}>{profile?.verified ? 'Verification' : 'Verify your ID'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={actionBtn} onPress={onFindMatch}>
-          <Text style={actionBtnText}>Find a shift</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={actionBtn} onPress={onDeeds}>
-          <Text style={actionBtnText}>Deeds</Text>
-        </TouchableOpacity>
-        <Text style={settingsLink} onPress={onSettings}>
-          Account settings
-        </Text>
-      </ScrollView>
-    </View>
+      <ListRow
+        icon="shield-check"
+        label={profile?.verified ? 'Verification' : 'Verify your ID'}
+        onPress={onVerify}
+        style={{ marginTop: 16 }}
+      />
+      <ListRow icon="coin" label="Deeds" onPress={onDeeds} />
+      <LinkButton label="Account settings" onPress={onSettings} style={{ marginTop: 8 }} />
+    </Screen>
   );
 }
 
-const card = {
-  marginTop: 8,
-  borderWidth: 1.5,
-  borderColor: colors.line,
-  borderRadius: 16,
-  padding: 4,
-  backgroundColor: colors.surface,
-};
-const fieldRow = {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  paddingVertical: 10,
-  paddingHorizontal: 14,
-  borderBottomWidth: 1,
-  borderBottomColor: colors.line,
-};
-const fieldLabel = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 12.5,
-  color: colors.inkSoft,
-};
-const fieldValue = {
-  fontFamily: 'Inter_400Regular',
-  fontSize: 13.5,
-  color: colors.ink,
-  flexShrink: 1,
-  textAlign: 'right',
-};
-const actionBtn = {
-  borderRadius: 999,
-  paddingVertical: 12,
-  alignItems: 'center',
-  backgroundColor: colors.moss,
-  marginTop: 14,
-};
-const actionBtnText = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 14,
-  color: '#F6F4EA',
-};
-const settingsLink = {
-  fontFamily: 'Inter_600SemiBold',
-  fontSize: 13.5,
-  color: '#354E37',
-  textAlign: 'center',
-  marginTop: 18,
-};
+const styles = StyleSheet.create({
+  fieldRow: {},
+  fieldLabel: { ...type.bodyS, color: colors.ink2 },
+  fieldValue: { ...type.fieldValue, color: colors.ink, marginTop: 2 },
+});
