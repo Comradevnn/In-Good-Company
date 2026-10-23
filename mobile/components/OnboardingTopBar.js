@@ -32,7 +32,9 @@ export default function OnboardingTopBar({ step, total, title, onBack, insetTop 
         ) : (
           <View
             style={styles.progress}
+            accessible
             accessibilityRole="progressbar"
+            accessibilityLabel={`Step ${step} of ${total}`}
             accessibilityValue={{ min: 1, max: total, now: step }}
           >
             {Array.from({ length: total }).map((_, i) => (

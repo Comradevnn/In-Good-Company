@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { app } from '../theme/appStyles';
 import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { BACKEND_URL } from '../config/api';
 import { verifySignedBadge } from '../verification/badgeVerify';
-import { Avatar, Icon, TagPill } from './AppParts';
+import { Avatar, Icon, Tag, TagPill } from './AppParts';
 
 // Brief partner profile (direction B partner card: person-tint card, 64 person disc, Title L name). The verified badge is shown
 // only when BOTH checks agree (D10, see backend/recryption/badgeStore.js):
@@ -55,18 +55,17 @@ export default function PartnerCard({ sessionToken, pairingId, partner, onPress,
           {metaLines.map((line, i) => (
             <Text key={i} style={app.partnerMeta}>{line}</Text>
           ))}
-          {badge === null ? (
-            <ActivityIndicator size="small" color={colors.ink} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
-          ) : badge ? (
-            <View style={app.badgeVerified}>
-              <Icon name="shield-check" size={18} color={colors.ink} />
-              <Text style={app.badgeVerifiedText}>Verified</Text>
-            </View>
-          ) : (
-            <Text style={[app.partnerMeta, { marginTop: 8 }]}>Verification badge not confirmed</Text>
-          )}
         </View>
         {onPress ? <Icon name="chevron-right" size={24} color={colors.ink} /> : null}
+      </View>
+      <View style={app.partnerBadgeRow}>
+        {badge === null ? (
+          <View style={app.badgeChecking} accessible accessibilityLabel="Checking verification" />
+        ) : badge ? (
+          <Tag tone="outline" icon="shield-check" label="Verified" />
+        ) : (
+          <Text style={app.partnerMeta}>Verification badge not confirmed</Text>
+        )}
       </View>
       {partner.bio && !compact ? <Text style={app.blurb}>{`\u201C${partner.bio}\u201D`}</Text> : null}
       <View style={app.historyRow}>

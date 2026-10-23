@@ -17,7 +17,9 @@ function resolveKey({ personKey, userId, meId }) {
 }
 
 // A solid disc: your own shows a person icon, everyone else an ink initial. ring draws a 3px ring.
-export function PersonDisc({ size = 48, personKey, userId, meId, initial, ring = false, style, accessibilityLabel }) {
+// onLight (default true) draws a 2px edge border when there is no ring, so a pale person colour reads
+// on paper or a tint; heroes and fields, where the disc sits on colour, pass onLight={false}.
+export function PersonDisc({ size = 48, personKey, userId, meId, initial, ring = false, onLight = true, style, accessibilityLabel }) {
   const key = resolveKey({ personKey, userId, meId });
   const label = accessibilityLabel ? { accessible: true, accessibilityRole: 'image', accessibilityLabel } : decorative;
   return (
@@ -27,6 +29,7 @@ export function PersonDisc({ size = 48, personKey, userId, meId, initial, ring =
         styles.disc,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: colors[key] },
         ring && { borderWidth: 3, borderColor: colors.ring },
+        !ring && onLight && { borderWidth: 2, borderColor: colors.edge },
         style,
       ]}
     >
@@ -113,9 +116,11 @@ export function DiscPair({
 }
 
 // The expired state: the same two discs pushed apart (A top left, B bottom right), with a dashed ring
-// where the shift was. dx and dy default to the comp's proportions.
+// where the shift was. dx and dy default to the comp's proportions. youIcon puts a person icon on disc A
+// and initial an ink initial on disc B (both about 0.7 r, decorative).
 export function DiscPairApart({
-  r = 80, dx = r * 2.17, dy = r * 1.52, colourA, colourB, meId, partnerId, emptyRing = true, ringColor, style, accessibilityLabel,
+  r = 80, dx = r * 2.17, dy = r * 1.52, colourA, colourB, meId, partnerId, emptyRing = true, ringColor, youIcon = false, initial,
+  style, accessibilityLabel,
 }) {
   let a = colourA;
   let b = colourB;
@@ -128,6 +133,7 @@ export function DiscPairApart({
   const width = dx + 2 * r;
   const height = dy + 2 * r;
   const label = accessibilityLabel ? { accessible: true, accessibilityRole: 'image', accessibilityLabel } : decorative;
+  const mark = Math.round(r * 0.7);
   return (
     <View style={[{ width, height }, style]} {...label}>
       <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
@@ -146,6 +152,18 @@ export function DiscPairApart({
           />
         ) : null}
       </Svg>
+      {youIcon ? (
+        <View style={[styles.slot, { left: 0, top: 0, width: 2 * r, height: 2 * r }]}>
+          <Icon name="person" size={mark} color={colors.onYou} />
+        </View>
+      ) : null}
+      {initial ? (
+        <View style={[styles.slot, { left: dx, top: dy, width: 2 * r, height: 2 * r }]}>
+          <Text allowFontScaling={false} style={[styles.initial, { fontSize: mark, lineHeight: Math.round(mark * 1.2), color: colors.ink }]}>
+            {String(initial).slice(0, 1).toUpperCase()}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

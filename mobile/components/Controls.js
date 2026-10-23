@@ -18,11 +18,12 @@ import { DiscPairApart } from './Discs';
 
 const HEADING_LEVELS = new Set(['display', 'displayS', 'headline']);
 
-// level is a key of the type scale. Display, Display S and Headline stop growing at 1.3x.
+// level is a key of the type scale. Display, Display S and Headline stop growing at 1.3x. Headings
+// announce as headers; pass accessibilityRole to override.
 export function Heading({ level = 'headline', style, children, ...rest }) {
   const capped = HEADING_LEVELS.has(level) ? HEAD_TEXT : null;
   return (
-    <Text {...capped} {...rest} style={[type[level], { color: colors.ink }, style]}>
+    <Text accessibilityRole="header" {...capped} {...rest} style={[type[level], { color: colors.ink }, style]}>
       {children}
     </Text>
   );
@@ -48,19 +49,31 @@ export function ErrorLine({ message, style }) {
 // Android is edge-to-edge (the window no longer shrinks for the keyboard), so the frame pads itself
 // with KeyboardAvoidingView and the footer rides above the keyboard; on iOS the scroll body insets
 // itself. header sits above the scroll body, footer below it.
+// Without a footer the content's bottom padding also takes the bottom safe-area inset, so the last
+// row clears the system bar. The children sit in a column capped at 560 wide and centred, so
+// tablets and foldables do not stretch the fields; `fullBleed` skips that column for a screen whose
+// children must run edge to edge (a hero field inside the scroll body). `bounces` and `scrollProps`
+// (any other ScrollView props) pass to the ScrollView; a hero screen passes bounces={false} to stop
+// the iOS top overscroll from showing the ground above the field.
 export function KeyboardScroll({
   children, header, footer, scrollRef, refreshing, onRefresh, style, scrollStyle, contentContainerStyle,
+  fullBleed = false, bounces, scrollProps,
 }) {
+  const insets = useSafeAreaInsets();
+  const base = contentContainerStyle ?? s.scrollContent;
+  const bottomPad = footer ? null : { paddingBottom: (StyleSheet.flatten(base)?.paddingBottom ?? 0) + insets.bottom };
   return (
     <KeyboardAvoidingView style={[styles.flex, style]} behavior={Platform.OS === 'android' ? 'padding' : undefined}>
       {header}
       <ScrollView
         ref={scrollRef}
         style={[s.scroll, scrollStyle]}
-        contentContainerStyle={contentContainerStyle ?? s.scrollContent}
+        contentContainerStyle={[base, bottomPad]}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
+        {...scrollProps}
+        {...(bounces === undefined ? null : { bounces })}
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -73,7 +86,7 @@ export function KeyboardScroll({
           ) : undefined
         }
       >
-        {children}
+        {fullBleed ? children : <View style={styles.column}>{children}</View>}
       </ScrollView>
       {footer}
     </KeyboardAvoidingView>
@@ -95,12 +108,19 @@ function useKeyboardVisible() {
 }
 
 // The white bar at the bottom of a screen: the one shadow in the app, padded by the bottom inset
-// (or just above the keyboard while it is open).
-export function Footer({ children, style }) {
+// (or just above the keyboard while it is open). `error` (a string or an Error) shows as an
+// ErrorLine above the button, so a failed primary action is visible next to the button.
+export function Footer({ children, style, error }) {
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardVisible();
   const bottom = keyboard ? 16 : Math.max(insets.bottom, 16);
-  return <View style={[styles.footer, footerShadow, { paddingBottom: bottom }, style]}>{children}</View>;
+  const message = typeof error === 'string' ? error : error?.message;
+  return (
+    <View style={[styles.footer, footerShadow, { paddingBottom: bottom }, style]}>
+      {message ? <ErrorLine message={message} style={styles.footerError} /> : null}
+      {children}
+    </View>
+  );
 }
 
 export function BackButton({ onPress, style }) {
@@ -216,16 +236,22 @@ export function Tag({ label, tone = 'surface', icon, style }) {
   );
 }
 
-// Single-select chip: 48 pill. Selected = selected fill, 2px ink border and a check.
-export function Chip({ label, selected = false, onPress, disabled, style }) {
+// Chip: 48 pill. Selected = selected fill, 2px ink border and a check. role says what it is to a
+// screen reader: 'radio' (one of a single-select set), 'checkbox' (multi-select) or 'button'.
+export function Chip({ label, selected = false, onPress, disabled, style, role = 'button' }) {
   const fg = disabled ? colors.offFg : colors.ink;
+  const checkable = role === 'radio' || role === 'checkbox';
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      accessibilityRole="button"
+      accessibilityRole={checkable ? role : 'button'}
       accessibilityLabel={label}
-      accessibilityState={{ selected: Boolean(selected), disabled: Boolean(disabled) }}
+      accessibilityState={
+        checkable
+          ? { checked: Boolean(selected), disabled: Boolean(disabled) }
+          : { selected: Boolean(selected), disabled: Boolean(disabled) }
+      }
       style={({ pressed }) => [
         styles.chip,
         selected && styles.chipSelected,
@@ -274,13 +300,16 @@ export function Toggle({ value, onValueChange, label, description, disabled, sty
 // Rows, headers, cards
 
 // Nav row: 64 tall, radius 24, tint fill, 40 surface icon circle, 24 chevron. Rows sit 8 apart.
-export function ListRow({ label, sublabel, icon, onPress, trailing, style }) {
+// accessibilityLabel replaces the default "label, sublabel"; accessibilityState (e.g. { disabled: true,
+// busy: true } while a purchase runs) passes through.
+export function ListRow({ label, sublabel, icon, onPress, trailing, style, accessibilityLabel, accessibilityState }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={sublabel ? `${label}, ${sublabel}` : label}
+      accessibilityLabel={accessibilityLabel ?? (sublabel ? `${label}, ${sublabel}` : label)}
+      accessibilityState={accessibilityState}
       style={({ pressed }) => [styles.listRow, pressed && { backgroundColor: colors.tintPressed }, style]}
     >
       {icon ? (
@@ -351,7 +380,7 @@ export function Input({ label, error, style, multiline, onFocus, onBlur, editabl
   const borderColor = !editable ? colors.offBg : hasError ? colors.danger : focused ? colors.ink : colors.edge;
   return (
     <Field label={label} error={error} style={wrapperStyle}>
-      <View style={[styles.ring, focused && !hasError && { backgroundColor: colors.selected }]}>
+      <View style={[styles.ring, { backgroundColor: focused && !hasError ? colors.selected : 'transparent' }]}>
         <View>
           <TextInput
             accessibilityLabel={rest.accessibilityLabel ?? label}
@@ -421,9 +450,11 @@ export function ErrorState({ title, body, onRetry, retryLabel, style }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  column: { width: '100%', maxWidth: 560, alignSelf: 'center', flexGrow: 1 },
   errorLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   errorLineText: { ...type.bodyS, fontFamily: font.textBold, color: colors.danger, flex: 1 },
 
+  footerError: { marginBottom: 16 },
   footer: {
     paddingTop: 16,
     paddingHorizontal: touch.pageMargin,
@@ -515,7 +546,9 @@ const styles = StyleSheet.create({
   sectionLink: { minHeight: touch.link, justifyContent: 'center' },
   card: { borderRadius: radii.card, padding: 20 },
 
-  ring: { padding: 4, margin: -4, borderRadius: radii.notice },
+  // Always a rounded, filled (transparent when idle) box so Android applies the radius from the first
+  // frame; the 4px ring then sits concentric around the 20 radius field.
+  ring: { padding: 4, margin: -4, borderRadius: radii.notice, overflow: 'hidden' },
   errorIcon: { position: 'absolute', right: 16, top: 0, bottom: 0, justifyContent: 'center' },
 
   empty: { paddingTop: 24 },

@@ -7,7 +7,7 @@ import { Gabarito_700Bold, Gabarito_800ExtraBold, Gabarito_900Black } from '@exp
 import { Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
 import { colors } from './theme/colors';
 import { font, radii, type } from './theme/tokens';
-import { Icon, Loading } from './components/AppParts';
+import { DeedsBadge, Loading } from './components/AppParts';
 import { BACKEND_URL } from './config/api';
 import { loadSessionToken, clearSessionToken } from './auth/session';
 import { installAuthInterceptor, setUnauthorizedHandler } from './api/client';
@@ -580,15 +580,17 @@ function AppContent() {
     return renderOnboardingStep();
   }
 
+  // Home draws the Deeds badge itself, inline beside its bell, so the floating one steps aside there:
+  // onboarding done, none of the full-screen flags up, and the stack on its home entry.
+  const onHomeScreen =
+    currentScreen === 'done' && !showSettings && !showVerify && !showDeeds && stack[stack.length - 1].name === 'home';
+
   return (
     <View style={styles.container}>
       {renderApp()}
       {__DEV__ ? <Text style={[styles.debugBar, { top: insets.top }]}>{backendStatus}</Text> : null}
-      {sessionToken && profile && accountKind !== 'org' ? (
-        <View style={[styles.deedsBadge, { top: insets.top + 4 }]}>
-          <Icon name="coin" size={24} color={colors.ink} />
-          <Text style={styles.deedsBadgeText}>{profile.deeds_balance ?? 0}</Text>
-        </View>
+      {sessionToken && profile && accountKind !== 'org' && !onHomeScreen ? (
+        <DeedsBadge count={profile.deeds_balance ?? 0} style={[styles.deedsBadge, { top: insets.top + 4 }]} />
       ) : null}
       <StatusBar style={colors.statusBar} />
     </View>
@@ -643,22 +645,10 @@ const styles = StyleSheet.create({
     color: colors.ink,
     textAlign: 'center',
   },
+  // Position only; the pill itself is DeedsBadge in components/AppParts.js.
   deedsBadge: {
     position: 'absolute',
     right: 12,
     zIndex: 10,
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.accent,
-    borderRadius: radii.pill,
-    paddingHorizontal: 16,
-  },
-  deedsBadgeText: {
-    fontFamily: font.black,
-    fontSize: 22,
-    lineHeight: 26,
-    color: colors.ink,
   },
 });

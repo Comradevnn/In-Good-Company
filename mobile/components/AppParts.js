@@ -20,14 +20,25 @@ export * from './Controls';
 // Standard screen frame: white ground, top bar (title + back) below the status bar, scroll body,
 // and an optional footer (usually a PrimaryButton). Without a top bar the frame applies the top
 // inset itself; `hero` (a HeroField) replaces the bar and pads for the inset on its own. Keyboard
-// handling lives in KeyboardScroll.
-export function Screen({ title, onBack, children, footer, refreshing, onRefresh, scrollRef, hero }) {
+// handling lives in KeyboardScroll; `fullBleed`, `bounces` and `scrollProps` pass straight to it.
+export function Screen({
+  title, onBack, children, footer, refreshing, onRefresh, scrollRef, hero, fullBleed, bounces, scrollProps,
+}) {
   const insets = useSafeAreaInsets();
   const hasBar = Boolean(title || onBack);
   const header = hero ?? (hasBar ? <OnboardingTopBar title={title ?? ''} onBack={onBack} /> : null);
   return (
     <View style={[s.container, !header && { paddingTop: insets.top }]}>
-      <KeyboardScroll header={header} footer={footer} scrollRef={scrollRef} refreshing={refreshing} onRefresh={onRefresh}>
+      <KeyboardScroll
+        header={header}
+        footer={footer}
+        scrollRef={scrollRef}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        fullBleed={fullBleed}
+        bounces={bounces}
+        scrollProps={scrollProps}
+      >
         {children}
       </KeyboardScroll>
     </View>
@@ -51,13 +62,15 @@ export function Loading({ label }) {
   );
 }
 
-// A person disc: userId and meId pick the person's fixed colour, and none gives person1.
-export function Avatar({ name, size = 56, userId, meId }) {
+// A person disc: userId and meId pick the person's fixed colour, and none gives person1. onLight
+// (default true) gives it an edge border for paper and tint; pass false on a field or hero.
+export function Avatar({ name, size = 56, userId, meId, onLight = true }) {
   return (
     <PersonDisc
       size={size}
       userId={userId}
       meId={meId}
+      onLight={onLight}
       personKey={userId == null ? 'person1' : undefined}
       initial={(name ?? '?').slice(0, 1)}
     />
@@ -72,14 +85,49 @@ export function TagPill({ label }) {
   return <Tag label={label} tone="outline" />;
 }
 
-export function PillButton({ label, onPress, disabled, ghost, style }) {
-  return <Button label={label} onPress={onPress} disabled={disabled} ghost={ghost} style={style} />;
+export function PillButton({ label, onPress, disabled, ghost, style, accessibilityLabel }) {
+  return (
+    <Button label={label} onPress={onPress} disabled={disabled} ghost={ghost} style={style} accessibilityLabel={accessibilityLabel} />
+  );
+}
+
+// A list item with a drawn 6px ink dot and a hanging indent: wrapped lines return under the text, not
+// the dot. Body S ink.
+export function Bullet({ children, style }) {
+  return (
+    <View style={[app.bullet, style]}>
+      <View style={app.bulletDot} />
+      <Text style={app.bulletText}>{children}</Text>
+    </View>
+  );
+}
+
+// A small pill showing the Deeds balance (accent fill, coin icon, count). App.js floats one top right
+// on volunteer screens (pass `style` to position it) and Home draws the same one inline beside its bell.
+export function DeedsBadge({ count, style }) {
+  return (
+    <View style={[app.deedsBadge, style]} accessible accessibilityLabel={`${count} Deeds`}>
+      <Icon name="coin" size={24} color={colors.ink} />
+      <Text style={app.deedsBadgeText} maxFontSizeMultiplier={1.3}>{count}</Text>
+    </View>
+  );
+}
+
+// Splits "Wed, Nov 12 · 6:00 PM" into one fact per line, so no line ends on a separator. Each ' · '
+// becomes a line break; the pieces are trimmed and empty ones dropped.
+export function factLines(text) {
+  return String(text ?? '')
+    .split(' · ')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 const SHIFT_ROW_ICONS = { Cause: 'heart', When: 'calendar', Where: 'map-pin', Task: 'flag' };
 
-// B shift card: tint card, ink "The shift" tag with the accent Daytime tag, org name, one fact per row.
-export function ShiftCard({ shift, eyebrow = 'The shift' }) {
+// B shift card: tint card, ink "The shift" tag with the accent Daytime tag, org name, one fact per row,
+// and an optional `description` paragraph (Body S ink) after the rows.
+export function ShiftCard({ shift, eyebrow = 'The shift', description }) {
   if (!shift) return null;
   const rows = [
     ['Cause', (shift.cause_tags ?? []).join(', ')],
@@ -105,6 +153,7 @@ export function ShiftCard({ shift, eyebrow = 'The shift' }) {
           </View>
         </View>
       ))}
+      {description ? <Text style={app.shiftDescription}>{description}</Text> : null}
     </View>
   );
 }
@@ -112,9 +161,9 @@ export function ShiftCard({ shift, eyebrow = 'The shift' }) {
 // B Home status card: field fill (tint when waiting), tag on top, Title M, Body, and a 48 ink circle
 // with a chevron when it can be tapped. `pair` (optional, off by default) draws the small cropped
 // disc pair in the corner: { meId, partnerId, icon = 'clock' }, or { partnerKey, icon } with a person
-// key ('person1' to 'person3') when no partner id is known.
+// key ('person1' to 'person3') when no partner id is known. The title breaks into one fact per line
+// at each ' · ' (see factLines).
 export function StatusCard({ eyebrow, title, body, onPress, waiting, pair }) {
-  const pairR = 40;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -129,21 +178,20 @@ export function StatusCard({ eyebrow, title, body, onPress, waiting, pair }) {
     >
       {pair ? (
         <DiscPair
-          r={pairR}
-          d={44}
+          r={52}
+          d={64}
           meId={pair.meId}
           partnerId={pair.partnerId}
           partnerKey={pair.partnerKey}
-          ring
-          style={{ position: 'absolute', top: -20, right: -40 }}
+          style={{ position: 'absolute', top: -26, right: -36 }}
         >
-          <Icon name={pair.icon ?? 'clock'} size={24} color={colors.onLens} />
+          <Icon name={pair.icon ?? 'clock'} size={20} color={colors.onLens} />
         </DiscPair>
       ) : null}
       <Text style={[app.statusEyebrow, waiting && app.statusEyebrowWaiting]}>{eyebrow}</Text>
       <View style={app.statusRow}>
         <View style={{ flex: 1 }}>
-          <Text style={app.statusTitle}>{title}</Text>
+          <Text style={app.statusTitle}>{factLines(title)}</Text>
           {body ? <Text style={[app.statusBody, waiting && app.statusBodyWaiting]}>{body}</Text> : null}
         </View>
         {onPress ? (
@@ -201,10 +249,11 @@ export function StatRow({ stats }) {
 }
 
 // 1 to 5 rating: five 56 circle choice buttons showing the number (no emoji), "Bad" and "Good" under the ends.
-export function RatingIcons({ value, onChange }) {
+// label names the scale for a screen reader (pass the visible question); each choice reads "4, leaning good".
+export function RatingIcons({ value, onChange, label }) {
   return (
     <View>
-      <View style={app.iconRateRow} accessibilityRole="radiogroup">
+      <View style={app.iconRateRow} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {RATING_SCALE.map((r) => {
           const selected = value === r.value;
           return (
@@ -217,7 +266,7 @@ export function RatingIcons({ value, onChange }) {
               ]}
               onPress={() => onChange(r.value)}
               accessibilityRole="radio"
-              accessibilityLabel={r.label}
+              accessibilityLabel={`${r.value}, ${r.label}`}
               accessibilityState={{ checked: selected }}
             >
               <Text style={app.iconRateText} maxFontSizeMultiplier={1.3}>{r.value}</Text>

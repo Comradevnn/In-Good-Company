@@ -3,7 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { font, type } from '../theme/tokens';
+import { font, touch, type } from '../theme/tokens';
 import Icon from './Icon';
 import { ErrorLine } from './Controls';
 import { formatDate, parseDate } from '../screens/dates';
@@ -32,7 +32,12 @@ export default function DateField({ label, value, onChange, placeholder = 'Choos
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value || placeholder}`}
       >
-        <Text style={[value ? type.fieldValue : { fontFamily: font.textMedium, fontSize: 17 }, { color: value ? colors.ink : colors.ink3, flexShrink: 1 }]}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+          style={[value ? type.fieldValue : { fontFamily: font.textMedium, fontSize: 17 }, { color: value ? colors.ink : colors.ink3, flexShrink: 1 }]}
+        >
           {value || placeholder}
         </Text>
         <Icon name={error ? 'alert' : 'calendar'} size={24} color={error ? colors.danger : value ? colors.ink : colors.ink3} />
@@ -68,7 +73,8 @@ export default function DateField({ label, value, onChange, placeholder = 'Choos
 }
 
 const styles = StyleSheet.create({
-  field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  // Grows past 56 rather than clipping when the text is large; the value shrinks to one line first.
+  field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, height: undefined, minHeight: touch.field },
   done: {
     fontFamily: font.textBold,
     fontSize: 16,
