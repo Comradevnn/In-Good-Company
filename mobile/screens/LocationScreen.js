@@ -4,7 +4,7 @@ import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { ErrorLine, Headline, Icon, Input, KeyboardScroll, Tag } from '../components/AppParts';
+import { Headline, Icon, Input, KeyboardScroll } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 import { detectLocation, geocodePlace } from '../location/geocode';
@@ -76,9 +76,8 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
     <View style={s.container}>
       <KeyboardScroll
         header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
-        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} error={error} />}
       >
-        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
         <Headline>Where are you volunteering?</Headline>
         <Text style={s.rationale}>
           We use this to find nearby shifts and match you with someone close enough that
@@ -116,15 +115,12 @@ export default function LocationScreen({ sessionToken, step, total, onNext, init
             if (text) setDetected(null);
           }}
         />
-
-        {error ? <ErrorLine message={error} style={styles.error} /> : null}
       </KeyboardScroll>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepTag: { marginBottom: 12 },
   locateCard: {
     marginTop: 24,
     minHeight: 64,
@@ -138,5 +134,4 @@ const styles = StyleSheet.create({
   },
   iconWell: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   locateText: { flex: 1 },
-  error: { marginTop: 16 },
 });

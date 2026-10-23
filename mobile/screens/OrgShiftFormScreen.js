@@ -6,7 +6,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { radii, touch, type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { Chip, ErrorLine, ErrorText, Field, Headline, Icon, Input, Screen } from '../components/AppParts';
+import { Chip, ErrorLine, Field, Headline, Icon, Input, Screen } from '../components/AppParts';
 import { geocodePlace } from '../location/geocode';
 
 // List a shift (plotline "orgListShift"). Date and times come from native
@@ -103,7 +103,7 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
   const timeLabel = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   return (
-    <Screen title="List a shift" onBack={onBack} footer={<PrimaryButton label="Publish shift" onPress={publish} disabled={!valid || busy} loading={busy} />}>
+    <Screen title="List a shift" onBack={onBack} footer={<PrimaryButton label="Publish shift" onPress={publish} disabled={!valid || busy} loading={busy} error={error} />}>
       <Headline>List your shift</Headline>
       <Text style={[s.rationale, { marginTop: 8 }]}>This is what volunteers will see when they're matched to it.</Text>
 
@@ -111,7 +111,7 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
       <Field label="Cause area" style={s.field}>
         <View style={styles.chips}>
           {CAUSES.map((c) => (
-            <Chip key={c} label={c} selected={cause === c} onPress={() => setCause(c)} />
+            <Chip key={c} label={c} selected={cause === c} role="radio" onPress={() => setCause(c)} />
           ))}
         </View>
       </Field>
@@ -159,7 +159,6 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
         placeholder="What will volunteers actually be doing?"
         maxLength={1000}
       />
-      <ErrorText error={error} />
     </Screen>
   );
 }

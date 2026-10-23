@@ -4,13 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { app } from '../theme/appStyles';
-import { font, radii, touch, type } from '../theme/tokens';
+import { font, HEAD_TEXT, radii, touch, type } from '../theme/tokens';
 import { lensFor, onLensFor, personKeyFor } from '../theme/people';
 import { api, timeUntil } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
 import PartnerCard from '../components/PartnerCard';
 import {
-  Button, Card, DiscPair, DiscPairApart, ErrorText, Headline, Icon, InfoCard, KeyboardScroll, LinkButton, ListRow, Loading,
+  Bullet, Button, Card, DiscPair, DiscPairApart, ErrorText, factLines, Headline, Icon, InfoCard, KeyboardScroll, LinkButton, ListRow, Loading,
   Screen, ShiftCard, Tag, Toggle, TopBar,
 } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
@@ -37,15 +37,6 @@ function lensLines(label) {
 
 // Same id the partner card uses for the partner's disc, so the colour matches everywhere.
 const partnerIdOf = (partner) => partner.user_id ?? partner.id ?? partner.display_name;
-
-function Bullet({ children }) {
-  return (
-    <View style={styles.bullet}>
-      <View style={styles.bulletDot} />
-      <Text style={[type.bodyS, { color: colors.ink, flex: 1 }]}>{children}</Text>
-    </View>
-  );
-}
 
 export default function PairingScreen({ sessionToken, pairingId, navigate, onBack }) {
   const [pairing, setPairing] = useState(null);
@@ -122,6 +113,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
               onPress={() => run(() => api(sessionToken, `/pairings/${pairingId}/confirm`, { method: 'POST', body: { safety_notice_ack: noticeRead } }))}
               disabled={busy || !canConfirm}
               loading={busy}
+              error={error}
             />
           )}
           contentContainerStyle={{ paddingBottom: 24 }}
@@ -159,18 +151,17 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
               Here's exactly where you'd go and who with. Nothing is held until you confirm.
               {p.partner_confirmed ? ` ${partnerName} has already confirmed.` : ''} Respond within {timeUntil(p.proposal_expires_at, nowMs)}.
             </Text>
-            <ShiftCard shift={p.shift} />
-            {p.shift.description ? <Text style={[type.bodyS, { color: colors.ink2, marginTop: 12 }]}>{p.shift.description}</Text> : null}
+            <ShiftCard shift={p.shift} description={p.shift.description} />
             <PartnerCard sessionToken={sessionToken} pairingId={pairingId} partner={p.partner} />
 
             <Card tone="ink" style={{ marginTop: 16 }}>
               <View style={styles.depositLine}>
                 <Text style={[type.body, { color: colors.onInk, fontFamily: font.textBold, flex: 1 }]}>Held from your Deeds when you confirm</Text>
-                <Text style={[styles.numeral, { color: colors.accent }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{p.deeds.price}</Text>
+                <Text {...HEAD_TEXT} style={[styles.numeral, { color: colors.accent }]} numberOfLines={1}>{p.deeds.price}</Text>
               </View>
               <View style={[styles.depositLine, styles.depositDivider]}>
                 <Text style={[type.body, { color: colors.onInk, fontFamily: font.textBold, flex: 1 }]}>You have available</Text>
-                <Text style={[styles.numeral, { color: colors.onInk }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{p.deeds.available}</Text>
+                <Text {...HEAD_TEXT} style={[styles.numeral, { color: colors.onInk }]} numberOfLines={1}>{p.deeds.available}</Text>
               </View>
               <Text style={[type.bodyS, { color: colors.onInk2, marginTop: 16 }]}>
                 Show up and they all come back. Change your mind shortly after confirming and they're released, no questions asked.
@@ -193,7 +184,6 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
               </Card>
             ) : null}
 
-            <ErrorText error={error} />
             {errorAction ? <Button label={errorAction[0]} onPress={() => navigate(errorAction[1])} ghost style={{ marginTop: 12 }} /> : null}
 
             <LinkButton
@@ -254,9 +244,9 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         onBack={onBack}
         footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}
       >
-        <DiscPairApart r={apartR} colourA={colors.you} colourB={colors[partnerKey]} style={{ marginTop: 8 }} />
-        <Headline style={{ marginTop: 24 }}>{titles[p.status]}</Headline>
-        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>
+        <DiscPairApart r={apartR} colourA={colors.you} colourB={colors[partnerKey]} youIcon initial={partnerName} style={{ marginTop: 8 }} />
+        <Headline style={{ marginTop: 24, fontSize: 40, lineHeight: 44 }}>{titles[p.status]}</Headline>
+        <Text style={[type.body, { color: colors.ink, marginTop: 10 }]}>
           {p.status === 'cancelled'
             ? `${partnerName} has been told and offered a new partner or their Deeds back.`
             : 'Any Deeds you had on hold for it are back in your balance.'}
@@ -278,15 +268,15 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
       title="Your shift"
       onBack={onBack}
       footer={p.chat_open
-        ? <PrimaryButton label={`Chat with ${partnerName}`} onPress={() => navigate('chat', { pairingId })} />
-        : rateInFooter ? <PrimaryButton label="Rate the shift" onPress={rate} /> : null}
+        ? <PrimaryButton label={`Chat with ${partnerName}`} onPress={() => navigate('chat', { pairingId })} error={error} />
+        : rateInFooter ? <PrimaryButton label="Rate the shift" onPress={rate} error={error} /> : null}
     >
       <Tag
         label={p.status === 'completed' ? 'Shift complete' : p.status === 'proposed' ? "You're confirmed" : "You're paired"}
         tone="accent"
         style={{ marginBottom: 12 }}
       />
-      <Headline>{p.shift.when_label}</Headline>
+      <Headline>{factLines(p.shift.when_label)}</Headline>
       {p.status === 'proposed' ? (
         <InfoCard title={`Waiting for ${partnerName} to confirm`} body={`They have until ${new Date(p.proposal_expires_at).toLocaleString()}. If they don't, your Deeds come straight back and we keep looking.`} />
       ) : null}
@@ -301,8 +291,8 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         <Button label="Rate the shift" ghost onPress={rate} style={{ marginTop: 16 }} />
       ) : null}
 
-      <PartnerCard sessionToken={sessionToken} pairingId={pairingId} partner={p.partner} />
       <ShiftCard shift={p.shift} />
+      <PartnerCard sessionToken={sessionToken} pairingId={pairingId} partner={p.partner} />
       {p.my_booking.hold ? (
         <Text style={app.finetext}>
           {p.my_booking.hold.amount} Deeds {p.my_booking.hold.status === 'held' ? 'held for this shift' : p.my_booking.hold.status}.
@@ -327,7 +317,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         />
       </View>
 
-      <ErrorText error={error} />
+      {!(p.chat_open || rateInFooter) ? <ErrorText error={error} /> : null}
       {['confirmed', 'proposed'].includes(p.status) && !started ? (
         <LinkButton label="Can't make it? Cancel your shift" danger style={{ marginTop: 16 }} onPress={() => navigate('cancel', { bookingId: p.my_booking.id })} />
       ) : null}
@@ -351,6 +341,4 @@ const styles = StyleSheet.create({
   depositLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
   depositDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: 2, borderStyle: 'dashed', borderColor: colors.onInkLine },
   noticeHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  bullet: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  bulletDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.ink, marginTop: 7 },
 });

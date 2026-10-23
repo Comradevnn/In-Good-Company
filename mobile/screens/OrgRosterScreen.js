@@ -61,8 +61,8 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
             </View>
             {r.status === 'confirmed' ? (
               <View style={styles.actions}>
-                <PillButton label="Check in" onPress={() => act(`/orgs/mine/bookings/${r.booking_id}/check-in`)} style={styles.flex} />
-                <PillButton label="No-show" ghost onPress={() => act(`/orgs/mine/bookings/${r.booking_id}/no-show`)} style={styles.flex} />
+                <PillButton label="Check in" accessibilityLabel={`Check in ${r.first_name}`} onPress={() => act(`/orgs/mine/bookings/${r.booking_id}/check-in`)} style={styles.flex} />
+                <PillButton label="No-show" accessibilityLabel={`Mark ${r.first_name} as a no-show`} ghost onPress={() => act(`/orgs/mine/bookings/${r.booking_id}/no-show`)} style={styles.flex} />
               </View>
             ) : null}
             {['attended', 'no_show'].includes(r.status) ? (
@@ -71,11 +71,12 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
               ) : (
                 <View style={{ marginTop: 12 }}>
                   <Text style={s.label}>Attendance</Text>
-                  <RatingIcons value={draft.attendance} onChange={(v) => setRating((p) => ({ ...p, [r.booking_id]: { ...draft, attendance: v } }))} />
+                  <RatingIcons label={`Attendance for ${r.first_name}`} value={draft.attendance} onChange={(v) => setRating((p) => ({ ...p, [r.booking_id]: { ...draft, attendance: v } }))} />
                   <Text style={[s.label, { marginTop: 16 }]}>Contribution</Text>
-                  <RatingIcons value={draft.contribution} onChange={(v) => setRating((p) => ({ ...p, [r.booking_id]: { ...draft, contribution: v } }))} />
+                  <RatingIcons label={`Contribution for ${r.first_name}`} value={draft.contribution} onChange={(v) => setRating((p) => ({ ...p, [r.booking_id]: { ...draft, contribution: v } }))} />
                   <PillButton
                     label="Save rating"
+                    accessibilityLabel={`Save rating for ${r.first_name}`}
                     disabled={!(draft.attendance && draft.contribution)}
                     onPress={() => act(`/orgs/mine/bookings/${r.booking_id}/rate`, draft)}
                     style={{ marginTop: 16 }}

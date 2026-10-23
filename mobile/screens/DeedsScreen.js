@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
-import { type } from '../theme/tokens';
+import { HEAD_TEXT, type } from '../theme/tokens';
 import { Card, Display, ErrorText, Headline, Icon, ListRow, Screen, SectionHeader, Tag } from '../components/AppParts';
 import { BACKEND_URL } from '../config/api';
 import { api } from '../api/client';
@@ -80,8 +80,8 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
       <Card tone="ink" style={{ marginTop: 20 }}>
         <Tag label="Demo only — no real payment" tone="accent" />
         <Text
+          {...HEAD_TEXT}
           style={[type.display, { color: colors.accent, marginTop: 16 }]}
-          maxFontSizeMultiplier={1.3}
           accessibilityLabel={`${balance ?? 0} Deeds`}
         >
           {balance ?? 0}
@@ -109,6 +109,8 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
           key={pack.deeds}
           label={`${pack.deeds} Deeds`}
           sublabel={`$${pack.price}`}
+          accessibilityLabel={`Buy ${pack.deeds} Deeds for $${pack.price}`}
+          accessibilityState={{ disabled: purchasing }}
           onPress={purchasing ? undefined : () => handlePurchase(pack)}
           trailing={(
             <View style={[styles.buyPill, purchasing && { backgroundColor: colors.offBg }]}>

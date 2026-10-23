@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { ErrorLine, Headline, Input, KeyboardScroll, LinkButton, ListRow, Tag } from '../components/AppParts';
+import { Headline, Input, KeyboardScroll, LinkButton, ListRow } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 
@@ -45,11 +45,11 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
               onPress={handleSubmitOrgName}
               disabled={!orgName.trim() || submitting}
               loading={submitting}
+              error={error}
             />
           ) : null
         }
       >
-        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
         <Headline>Do you already know where you want to volunteer?</Headline>
         <Text style={s.rationale}>
           Either way you'll end up in the same place — we just use this to skip straight to
@@ -86,16 +86,12 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
             <LinkButton label="Choose causes instead" align="right" onPress={onBrowseByCause} style={styles.causeLink} />
           </View>
         )}
-
-        {error ? <ErrorLine message={error} style={styles.error} /> : null}
       </KeyboardScroll>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepTag: { marginBottom: 12 },
   options: { marginTop: 16 },
   causeLink: { marginTop: 8, justifyContent: 'flex-start' },
-  error: { marginTop: 16 },
 });

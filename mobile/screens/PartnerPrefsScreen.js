@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { ErrorLine, Headline, KeyboardScroll, Tag, Toggle } from '../components/AppParts';
+import { Headline, KeyboardScroll, Toggle } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 
@@ -36,9 +36,8 @@ export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, 
     <View style={s.container}>
       <KeyboardScroll
         header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
-        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting} loading={submitting} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting} loading={submitting} error={error} />}
       >
-        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
         <Headline>Who we pair you with</Headline>
         <Text style={s.rationale}>This only affects matching. You can change it anytime.</Text>
 
@@ -59,16 +58,12 @@ export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, 
           good together, not a dating mechanic. Telling us this just helps us match you with
           people looking for the same thing.
         </Text>
-
-        <ErrorLine message={error} style={styles.error} />
       </KeyboardScroll>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepTag: { alignSelf: 'flex-start', marginBottom: 12 },
   toggleFirst: { marginTop: 16 },
   note: { marginTop: 16 },
-  error: { marginTop: 16 },
 });

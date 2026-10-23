@@ -74,7 +74,7 @@ export default function PremiumScreen({ sessionToken, onBack }) {
             <Card key={plan.plan} style={{ marginTop: 8 }}>
               <Text style={styles.planTitle}>{plan.plan === 'monthly' ? 'Monthly' : 'Annual'}</Text>
               <Text style={styles.label}>${plan.usd} / {plan.months === 1 ? 'month' : 'year'}</Text>
-              <PillButton label="Subscribe (demo)" ghost onPress={() => subscribe(plan.plan)} disabled={busy} style={{ marginTop: 12 }} />
+              <PillButton label="Subscribe (demo)" accessibilityLabel={`Subscribe (demo), ${plan.plan === 'monthly' ? 'monthly' : 'annual'} plan`} ghost onPress={() => subscribe(plan.plan)} disabled={busy} style={{ marginTop: 12 }} />
             </Card>
           ))}
           <Text style={styles.fine}>Demo subscription: nothing is charged and no card details are collected. Paid time starts when your trial ends.</Text>

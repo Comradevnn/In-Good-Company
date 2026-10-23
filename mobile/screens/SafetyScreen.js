@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { type } from '../theme/tokens';
-import { colors } from '../theme/colors';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { Card, Chip, ErrorText, Headline, Heading, Input, Loading, Screen, SectionHeader, Toggle } from '../components/AppParts';
+import { Bullet, Card, Chip, ErrorText, Headline, Heading, Input, Loading, Screen, SectionHeader, Toggle } from '../components/AppParts';
 
 // Safety: the pre-shift safety notice and the in-app report flow. Reports
 // are stored for a person to review and permanently stop the two people
@@ -64,19 +62,19 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
     <Screen
       title="Safety"
       onBack={onBack}
-      footer={category ? <PrimaryButton label="Send report" onPress={submit} disabled={busy} loading={busy} /> : null}
+      footer={category ? <PrimaryButton label="Send report" onPress={submit} disabled={busy} loading={busy} error={error} /> : null}
     >
       <Headline>{partnerName ? `Report a concern about ${partnerName}` : 'Staying safe'}</Headline>
       <Card tone="field" style={styles.notice}>
         <Heading level="titleS">{notice.title}</Heading>
-        {notice.points.map((p) => <Text key={p} style={styles.point}>• {p}</Text>)}
+        {notice.points.map((p) => <Bullet key={p}>{p}</Bullet>)}
       </Card>
 
       <SectionHeader title="Report a concern" />
       <Text style={s.rationale}>Reviewed by a real person, not a bot.{partnerName ? '' : ' To report a partner, open the report from their shift.'}</Text>
       <View style={styles.chipGrid}>
         {notice.categories.map((c) => (
-          <Chip key={c} label={CATEGORY_LABELS[c] ?? c} selected={category === c} onPress={() => setCategory(c)} />
+          <Chip key={c} label={CATEGORY_LABELS[c] ?? c} selected={category === c} onPress={() => setCategory(c)} role="radio" />
         ))}
       </View>
       <Input
@@ -95,13 +93,11 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
           onValueChange={setCancelPairing}
         />
       ) : null}
-      <ErrorText error={error} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   notice: { marginTop: 16 },
-  point: { ...type.bodyS, color: colors.ink, marginTop: 8 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 16 },
 });

@@ -7,7 +7,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { radii, touch, type } from '../theme/tokens';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import PrimaryButton from '../components/PrimaryButton';
-import { Chip, ErrorLine, Field, Headline, KeyboardScroll, Tag } from '../components/AppParts';
+import { Chip, Field, Headline, KeyboardScroll, Tag } from '../components/AppParts';
 import Icon from '../components/Icon';
 import { patchProfile } from '../auth/api';
 import { formatDate, parseDate } from './dates';
@@ -76,9 +76,8 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
     <View style={s.container}>
       <KeyboardScroll
         header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
-        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting || endDate < today} loading={submitting} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting || endDate < today} loading={submitting} error={error} />}
       >
-        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
         <Headline>When can you go?</Headline>
         <Text style={s.rationale}>
           Pick the window you're free for your {title ? 'next' : 'first'} shift — we'll do the matching from there.
@@ -140,10 +139,11 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
 
         <View style={s.field}>
           <View style={s.labelRow}>
-            <Text style={s.label}>How far are you willing to travel?</Text>
+            <Text style={[s.label, styles.travelLabel]}>How far are you willing to travel?</Text>
             <Tag tone="accent" label={`${radius} mi`} />
           </View>
           <Slider
+            style={styles.slider}
             minimumValue={1}
             maximumValue={Math.max(20, radius)}
             step={1}
@@ -153,6 +153,7 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
             maximumTrackTintColor={colors.edge}
             thumbTintColor={colors.ink}
             accessibilityLabel="How far are you willing to travel?"
+            accessibilityValue={{ text: `${radius} miles` }}
           />
           <View style={s.fitLabels}>
             <Text style={s.fitLabelText}>1 mi</Text>
@@ -166,20 +167,19 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
             {FREQUENCY_OPTIONS.map((option) => {
               const isSelected = frequency === option;
               return (
-                <Chip key={option} label={option} selected={isSelected} onPress={() => setFrequency(option)} />
+                <Chip key={option} label={option} selected={isSelected} onPress={() => setFrequency(option)} role="radio" />
               );
             })}
           </View>
         </View>
-
-        <ErrorLine message={error} style={styles.error} />
       </KeyboardScroll>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepTag: { alignSelf: 'flex-start', marginBottom: 12 },
+  travelLabel: { flexShrink: 1 },
+  slider: { height: 48 },
   passedNote: { marginTop: 12, color: colors.ink },
   dateCol: { flex: 1 },
   dateBox: {
@@ -196,5 +196,4 @@ const styles = StyleSheet.create({
   },
   dateText: { ...type.fieldValue, color: colors.ink, flexShrink: 1 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  error: { marginTop: 16 },
 });

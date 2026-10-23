@@ -145,7 +145,7 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
                 <Text style={styles.altBody}>{shift.org_name}</Text>
                 <Text style={styles.altBody}>{shift.when_label}</Text>
                 {shift.daytime ? <Tag label="Daytime" tone="accent" icon="sun" style={{ alignSelf: 'flex-start', marginTop: 8 }} /> : null}
-                <PillButton label="RSVP solo" ghost disabled={busy} style={{ marginTop: 12 }} onPress={() => rsvp(shift.id)} />
+                <PillButton label="RSVP solo" accessibilityLabel={`RSVP solo for ${shift.title}`} ghost disabled={busy} style={{ marginTop: 12 }} onPress={() => rsvp(shift.id)} />
               </View>
             ))
             : (
@@ -153,7 +153,7 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
                 label={{ widen_radius: 'Widen my distance', nearby_date: 'Use these dates', add_cause: 'Add this cause' }[alt.type]}
                 ghost
                 disabled={busy}
-                style={{ marginTop: 10, alignSelf: 'flex-start' }}
+                style={{ marginTop: 10 }}
                 onPress={() => adjust(
                   alt.type === 'widen_radius' ? { travel_radius_miles: alt.travel_radius_miles }
                     : alt.type === 'nearby_date' ? { window_start: alt.window_start, window_end: alt.window_end }

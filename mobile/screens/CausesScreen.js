@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { Chip, ErrorLine, Headline, KeyboardScroll, Tag } from '../components/AppParts';
+import { Chip, Headline, KeyboardScroll } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 
@@ -60,9 +60,8 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
     <View style={s.container}>
       <KeyboardScroll
         header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
-        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} error={error} />}
       >
-        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
         <Headline>What do you care about?</Headline>
         <Text style={s.rationale}>
           {initialValues?.prospective_org_name
@@ -74,19 +73,15 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
           {CAUSE_OPTIONS.map((cause) => {
             const isSelected = selected.includes(cause);
             return (
-              <Chip key={cause} label={cause} selected={isSelected} onPress={() => toggle(cause)} />
+              <Chip key={cause} label={cause} selected={isSelected} onPress={() => toggle(cause)} role="checkbox" />
             );
           })}
         </View>
-
-        <ErrorLine message={error} style={styles.error} />
       </KeyboardScroll>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepTag: { alignSelf: 'flex-start', marginBottom: 12 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 16 },
-  error: { marginTop: 16 },
 });

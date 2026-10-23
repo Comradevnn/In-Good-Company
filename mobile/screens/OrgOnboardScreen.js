@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { Chip, ErrorText, Field, Headline, Input, LinkButton, ListRow, Screen } from '../components/AppParts';
+import { Chip, Field, Headline, Input, LinkButton, ListRow, Screen } from '../components/AppParts';
 import { detectLocation, geocodePlace } from '../location/geocode';
 import WaiverPicker, { waiverBody } from '../components/WaiverPicker';
 
@@ -72,7 +72,7 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
 
   const ready = name.trim() && registration.trim() && location.trim() && causes.length && waiver;
   return (
-    <Screen footer={<PrimaryButton label="Continue" onPress={submit} disabled={!ready || busy} loading={busy} />}>
+    <Screen footer={<PrimaryButton label="Continue" onPress={submit} disabled={!ready || busy} loading={busy} error={error} />}>
       <Headline style={styles.headline}>Let's get to know you</Headline>
       <Text style={s.rationale}>A few basics so we can verify you're a real nonprofit. You'll list your first shift right after this.</Text>
       {[
@@ -115,7 +115,7 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
         <View style={styles.chips}>
           {CAUSES.map((c) => {
             const on = causes.includes(c);
-            return <Chip key={c} label={c} selected={on} onPress={() => setCauses((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))} />;
+            return <Chip key={c} label={c} selected={on} role="checkbox" onPress={() => setCauses((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))} />;
           })}
         </View>
       </Field>
@@ -123,7 +123,6 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
         <Text style={[s.rationale, styles.waiverNote]}>Upload a photo of your own signed waiver, or use our default form.</Text>
         <WaiverPicker value={waiver} onChange={setWaiver} />
       </Field>
-      <ErrorText error={error} />
       <LinkButton label="Log out" danger onPress={onLogOut} style={styles.logout} />
     </Screen>
   );

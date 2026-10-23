@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { colors } from '../theme/colors';
 import { radii, type } from '../theme/tokens';
 import PrimaryButton from '../components/PrimaryButton';
-import { Chip, ErrorText, Headline, HeroField, Icon, Input, LinkButton, Screen, TopBar } from '../components/AppParts';
+import { Chip, Headline, HeroField, Icon, Input, LinkButton, Screen, TopBar } from '../components/AppParts';
 import DateField from '../components/DateField';
 import { BACKEND_URL } from '../config/api';
 import { nameMatches, dobMatchesAge, dobIsAdult, expiryIsValid } from '../verification/localChecks';
@@ -200,13 +200,14 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
     ];
     return (
       <Screen
-        hero={<HeroField><TopBar title="Before we send anything" onField style={styles.bar} /></HeroField>}
+        hero={<HeroField><TopBar title="Before we send anything" onField /></HeroField>}
         footer={(
           <PrimaryButton
             label="Submit for verification"
             onPress={handleSubmit}
             disabled={submitting}
             loading={submitting}
+            error={error}
           />
         )}
       >
@@ -238,18 +239,18 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
           as "Verified (preview)" until real document scanning ships.
         </Text>
 
-        <ErrorText error={error} />
       </Screen>
     );
   }
 
   return (
     <Screen
-      hero={<HeroField><TopBar title="Verify your ID" onBack={cancel} onField style={styles.bar} /></HeroField>}
+      hero={<HeroField><TopBar title="Verify your ID" onBack={cancel} onField /></HeroField>}
       footer={(
         <PrimaryButton
           label="Review & submit"
           onPress={runLocalChecks}
+          error={error}
           disabled={!docType || !photoUri || !idName.trim() || !dob.trim() || !docNumber.trim() || !issuingCountry.trim() || !expiry.trim()}
         />
       )}
@@ -332,14 +333,14 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
         </View>
       </View>
 
-      <View style={[styles.block, styles.row]}>
+      <View style={[styles.block, styles.row, styles.rowEnd]}>
         <Input
           label="Document number"
           placeholder="As printed on the document"
           value={docNumber}
           onChangeText={setDocNumber}
           autoCapitalize="characters"
-          wrapperStyle={{ flex: 2 }}
+          wrapperStyle={styles.flex}
         />
         <Input
           label="Issuing country"
@@ -347,7 +348,7 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
           value={issuingCountry}
           onChangeText={setIssuingCountry}
           autoCapitalize="characters"
-          wrapperStyle={styles.flex}
+          wrapperStyle={styles.country}
         />
       </View>
       <Text style={[styles.body, { marginTop: 12 }]}>
@@ -355,18 +356,16 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
         scrambled, irreversible check-value — never the number itself.
       </Text>
 
-      <ErrorText error={error} />
-
       <LinkButton label="Not now — go back" onPress={cancel} style={{ marginTop: 12 }} />
     </Screen>
   );
 }
 
-// The Deeds badge floats top-right under the status bar, so the bar leaves that corner clear.
 const styles = StyleSheet.create({
-  bar: { paddingRight: 84 },
   flex: { flex: 1 },
+  country: { width: 88 },
   row: { flexDirection: 'row', gap: 12 },
+  rowEnd: { alignItems: 'flex-end' },
   block: { marginTop: 20 },
   body: { ...type.bodyS, color: colors.ink2, marginTop: 8 },
   label: { ...type.label, color: colors.ink, marginBottom: 8 },

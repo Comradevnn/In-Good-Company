@@ -82,6 +82,8 @@ export default function EmailCaptureScreen({ onSignedUp, notice }) {
   return (
     <View style={s.container}>
       <KeyboardScroll
+        fullBleed
+        bounces={false}
         contentContainerStyle={styles.scrollContent}
         footer={
           <PrimaryButton

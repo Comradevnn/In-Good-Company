@@ -76,16 +76,16 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   const ready = (!needsOrg || (operational && fit)) && (!needsPartner || again !== null);
 
   return (
-    <Screen key="form" title="Rate your shift" onBack={onBack} footer={<PrimaryButton label="Submit" onPress={submit} disabled={!ready || busy} loading={busy} />}>
+    <Screen key="form" title="Rate your shift" onBack={onBack} footer={<PrimaryButton label="Submit" onPress={submit} disabled={!ready || busy} loading={busy} error={error} />}>
       <Headline>How'd it go?</Headline>
 
       {needsOrg ? (
         <>
           <SectionHeader title={`Rate ${form.shift.org_name}`} />
           <Text style={styles.body}>Was it well-run — clear instructions, enough real work to do? This shows publicly on their profile.</Text>
-          <RatingIcons value={operational} onChange={setOperational} />
+          <RatingIcons value={operational} onChange={setOperational} label="Was it well-run?" />
           <Text style={styles.question}>Did this cause resonate with you?</Text>
-          <RatingIcons value={fit} onChange={setFit} />
+          <RatingIcons value={fit} onChange={setFit} label="Did this cause resonate with you?" />
           <InfoCard body={`Private — only tunes your own matching, never shown to the org${form.partner ? ` or ${form.partner.display_name}` : ''}.`} />
         </>
       ) : null}
@@ -96,8 +96,8 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
           <Toggle label="They showed up" value={showedUp} onValueChange={setShowedUp} />
           <Text style={styles.question}>Would you volunteer with them again?</Text>
           <View style={styles.thumbRow}>
-            <Chip label="Yes" selected={again === true} onPress={() => setAgain(true)} />
-            <Chip label="No" selected={again === false} onPress={() => setAgain(false)} />
+            <Chip label="Yes" selected={again === true} onPress={() => setAgain(true)} role="radio" />
+            <Chip label="No" selected={again === false} onPress={() => setAgain(false)} role="radio" />
           </View>
           <Text style={[styles.body, { marginTop: 12 }]}>
             If you both say yes, you become volunteer buddies ({form.buddy_slots.used} of {form.buddy_slots.cap} buddy slots used). Otherwise nothing happens and neither of you is told how the other answered. A thumbs down also means we won't pair you two again.
@@ -119,7 +119,6 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
           />
         </InfoCard>
       ) : null}
-      <ErrorText error={error} />
     </Screen>
   );
 }

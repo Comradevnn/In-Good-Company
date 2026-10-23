@@ -54,7 +54,7 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
       title="Change of plans"
       onBack={onBack}
       footer={open ? (
-        <Footer style={{ gap: 12 }}>
+        <Footer style={{ gap: 12 }} error={error}>
           <Button label="Find me someone new" onPress={() => choose('rematch')} disabled={busy} />
           <Button label="Just give them back" ghost onPress={() => choose('release')} disabled={busy} />
         </Footer>
@@ -79,7 +79,6 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
       ) : (
         <Text style={[type.body, { color: colors.ink2, marginTop: 16 }]}>This decision has already been made.</Text>
       )}
-      <ErrorText error={error} />
     </Screen>
   );
 }

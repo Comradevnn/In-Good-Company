@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { app } from '../theme/appStyles';
-import { type } from '../theme/tokens';
+import { font, type } from '../theme/tokens';
 import { lensFor, personKeyFor } from '../theme/people';
 import { api, timeUntil } from '../api/client';
 import {
-  Card, DiscPair, DisplayS, ErrorText, Icon, InfoCard, ListRow, Loading, PillButton, Screen, SectionTitle, StatRow, StatusCard, Tag,
+  Card, DeedsBadge, DiscPair, DisplayS, ErrorText, Icon, InfoCard, ListRow, Loading, PillButton, Screen, SectionTitle, StatRow, StatusCard, Tag,
 } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
 
@@ -139,21 +139,21 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
 
   return (
     <Screen refreshing={false} onRefresh={load}>
-      <View style={styles.badgeClearance} />
       <View style={styles.greetingRow}>
         <View style={styles.flex}>
-          <DisplayS>Hi, {home.profile.display_name}</DisplayS>
           <Text style={styles.weekday}>{weekday}</Text>
+          <DisplayS numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>Hi, {home.profile.display_name}</DisplayS>
         </View>
         <Pressable
           style={({ pressed }) => [styles.bell, pressed && { backgroundColor: colors.surfacePressed }]}
           onPress={() => navigate('notifications')}
           accessibilityRole="button"
-          accessibilityLabel="Notifications"
+          accessibilityLabel={home.notifications_unread ? 'Notifications, unread' : 'Notifications'}
         >
           <Icon name="bell" size={24} color={colors.ink} />
           {home.notifications_unread ? <View style={styles.bellDot} /> : null}
         </Pressable>
+        <DeedsBadge count={home.deeds.available} />
       </View>
 
       {home.matching_block ? (
@@ -189,12 +189,20 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
       {upcoming.length ? (
         <>
           <SectionTitle title="Upcoming" />
-          {upcoming.map((b) => (
+          {upcoming.map((b) => {
+            const status = b.pairing
+              ? b.pairing.status === 'proposed'
+                ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
+                : b.pairing.status === 'cancelled'
+                  ? `${b.pairing.partner_name} can't make it — tap to choose what's next`
+                  : `With ${b.pairing.partner_name}`
+              : b.status === 'attended' ? 'Checked in' : 'Solo spot';
+            return (
             <Pressable
               key={b.booking_id}
               onPress={() => navigate(b.pairing ? 'pairing' : 'booking', { pairingId: b.pairing?.id, bookingId: b.booking_id })}
               accessibilityRole="button"
-              accessibilityLabel={`${b.shift.title}, ${b.shift.org_name}, ${b.shift.when_label}`}
+              accessibilityLabel={`${b.shift.title}, ${b.shift.org_name}, ${b.shift.when_label}, ${status}`}
               style={styles.upcomingGap}
             >
               {({ pressed }) => (
@@ -202,19 +210,12 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
                   <Text style={app.discoverTitle}>{b.shift.title}</Text>
                   <Text style={app.discoverOrg}>{b.shift.org_name}</Text>
                   <Text style={app.discoverOrg}>{b.shift.when_label}</Text>
-                  <Text style={app.discoverMeta}>
-                    {b.pairing
-                      ? b.pairing.status === 'proposed'
-                        ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
-                        : b.pairing.status === 'cancelled'
-                          ? `${b.pairing.partner_name} can't make it — tap to choose what's next`
-                          : `With ${b.pairing.partner_name}`
-                      : b.status === 'attended' ? 'Checked in' : 'Solo spot'}
-                  </Text>
+                  <Text style={app.discoverMeta}>{status}</Text>
                 </Card>
               )}
             </Pressable>
-          ))}
+            );
+          })}
         </>
       ) : null}
 
@@ -294,14 +295,11 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  // The Deeds badge floats over the top-right corner (it ends 52 below the status bar); with the
-  // scroll body's 16 top padding this puts the greeting and the bell 12 clear of it.
-  badgeClearance: { height: 48 },
-  greetingRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  weekday: { ...type.bodyS, color: colors.ink2, marginTop: 4 },
+  greetingRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
+  weekday: { ...type.bodyS, fontFamily: font.textBold, color: colors.ink2 },
   bell: {
     width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.ink,
-    alignItems: 'center', justifyContent: 'center', marginTop: 4,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
   },
   bellDot: {
     position: 'absolute', top: 6, right: 6, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.unread,
@@ -309,5 +307,5 @@ const styles = StyleSheet.create({
   },
   ctaText: { ...type.body, color: colors.ink },
   upcomingGap: { marginTop: 8 },
-  navList: { marginTop: 24, gap: 8 },
+  navList: { marginTop: 24 },
 });

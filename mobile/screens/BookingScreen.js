@@ -4,7 +4,7 @@ import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { Button, ErrorText, Footer, Headline, InfoCard, LinkButton, Loading, Screen, ShiftCard, Tag } from '../components/AppParts';
+import { Button, ErrorText, factLines, Footer, Headline, InfoCard, LinkButton, Loading, Screen, ShiftCard, Tag } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
 
 // A booking without a partner: a solo RSVP, or a spot kept after a pairing
@@ -42,7 +42,7 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
       ) : <PrimaryButton label="Back to home" onPress={toHome} />}
     >
       <Tag label={booking.kind === 'solo' ? 'Solo spot' : 'Your shift'} tone="accent" style={{ marginBottom: 12 }} />
-      <Headline>{booking.shift.when_label}</Headline>
+      <Headline>{factLines(booking.shift.when_label)}</Headline>
       {booking.status === 'confirmed' && !booking.started ? (
         <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>You're booked. We'll still try to pair you with someone before it starts — if we do, you'll get a proposal to confirm.</Text>
       ) : null}

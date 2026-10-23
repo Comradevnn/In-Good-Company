@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { colors } from '../theme/colors';
-import { font, radii, touch } from '../theme/tokens';
+import { font, radii, touch, type } from '../theme/tokens';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { BACKEND_URL } from '../config/api';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { ErrorLine, Field, Headline, InfoCard, Input, KeyboardScroll, Tag } from '../components/AppParts';
+import { Field, Headline, InfoCard, Input, KeyboardScroll } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 
 // The first real onboarding screen a new user hits (intro -> emailCapture -> quickProfile).
@@ -95,9 +95,8 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
     <View style={s.container}>
       <KeyboardScroll
         header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
-        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={!canSubmit} loading={submitting} error={error} />}
       >
-        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
         <Headline>Build a quick profile</Headline>
         <Text style={s.rationale}>
           This is what your future volunteer partner sees — keep it real, not polished.
@@ -176,15 +175,12 @@ export default function QuickProfileScreen({ sessionToken, step, total, onNext, 
           onChangeText={setBlurb}
           multiline
         />
-
-        {error ? <ErrorLine message={error} style={styles.error} /> : null}
       </KeyboardScroll>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stepTag: { marginBottom: 12 },
   notice: { marginTop: 16 },
   ageCol: { flex: 1 },
   occupationCol: { flex: 2 },
@@ -197,7 +193,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
-  picker: { color: colors.ink, fontFamily: font.textSemiBold },
-  pickerItem: { color: colors.ink, fontFamily: font.textSemiBold },
-  error: { marginTop: 16 },
+  picker: { color: colors.ink, fontFamily: font.textSemiBold, fontSize: type.fieldValue.fontSize },
+  pickerItem: { color: colors.ink, fontFamily: font.textSemiBold, fontSize: type.fieldValue.fontSize },
 });

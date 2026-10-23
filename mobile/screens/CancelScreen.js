@@ -50,7 +50,7 @@ export default function CancelScreen({ sessionToken, bookingId, navigate, onBack
     <Screen
       title="Cancel shift"
       onBack={onBack}
-      footer={<PrimaryButton label="Confirm cancellation" onPress={confirm} disabled={busy} loading={busy} />}
+      footer={<PrimaryButton label="Confirm cancellation" onPress={confirm} disabled={busy} loading={busy} error={error} />}
     >
       <Headline style={{ marginBottom: 8 }}>{preview.partner_name ? `Cancel your shift with ${preview.partner_name}?` : 'Cancel your spot?'}</Headline>
       <Text style={s.rationale}>{preview.hours_before_shift} hours before the shift starts.</Text>
@@ -63,7 +63,6 @@ export default function CancelScreen({ sessionToken, bookingId, navigate, onBack
       {preview.can_keep_spot_solo ? (
         <Toggle style={{ marginTop: 16 }} label="Keep my spot and go solo instead" value={keepSolo} onValueChange={setKeepSolo} />
       ) : null}
-      <ErrorText error={error} />
       <Button label="Never mind, keep it" ghost onPress={onBack} style={{ marginTop: 24 }} />
     </Screen>
   );

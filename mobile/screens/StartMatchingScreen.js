@@ -68,7 +68,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
     <Screen
       title="Find a shift"
       onBack={onBack}
-      footer={<PrimaryButton label="Start looking" onPress={handleStart} disabled={submitting || datesStale} loading={submitting} />}
+      footer={<PrimaryButton label="Start looking" onPress={handleStart} disabled={submitting || datesStale} loading={submitting} error={error} />}
     >
       <Headline>When can you go?</Headline>
       <Text style={[s.rationale, { marginTop: 8 }]}>We'll look for a partner and a shift that fits both of you in this window.</Text>
@@ -167,7 +167,6 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
         <LinkButton label="Get Deeds" align="left" onPress={() => navigate('deeds')} style={{ marginTop: 8 }} />
       ) : null}
 
-      <ErrorText error={error} />
       {action ? <LinkButton label={action[0]} align="left" onPress={() => navigate(action[1])} style={{ marginTop: 8 }} /> : null}
     </Screen>
   );
