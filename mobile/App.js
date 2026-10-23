@@ -2,13 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFonts, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-} from '@expo-google-fonts/inter';
-import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
+import { useFonts } from 'expo-font';
 import { Gabarito_700Bold, Gabarito_800ExtraBold, Gabarito_900Black } from '@expo-google-fonts/gabarito';
 import { Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
 import { colors } from './theme/colors';
@@ -97,12 +91,6 @@ function AppContent() {
   const [signedOutNotice, setSignedOutNotice] = useState(null);
 
   const [fontsLoaded] = useFonts({
-    Fraunces_600SemiBold,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    IBMPlexMono_400Regular,
-    IBMPlexMono_500Medium,
     Gabarito_700Bold,
     Gabarito_800ExtraBold,
     Gabarito_900Black,
@@ -595,7 +583,7 @@ function AppContent() {
   return (
     <View style={styles.container}>
       {renderApp()}
-      {__DEV__ ? <Text style={[styles.debugBar, { top: insets.top }]} pointerEvents="none">{backendStatus}</Text> : null}
+      {__DEV__ ? <Text style={[styles.debugBar, { top: insets.top }]}>{backendStatus}</Text> : null}
       {sessionToken && profile && accountKind !== 'org' ? (
         <View style={[styles.deedsBadge, { top: insets.top + 4 }]}>
           <Icon name="coin" size={24} color={colors.ink} />
@@ -646,8 +634,9 @@ const styles = StyleSheet.create({
     fontFamily: font.textMedium,
     fontSize: 11,
     lineHeight: 14,
-    color: colors.ink2,
+    color: colors.ink,
     textAlign: 'center',
+    pointerEvents: 'none',
   },
   doneText: {
     ...type.body,

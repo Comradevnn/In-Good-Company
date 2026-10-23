@@ -13,14 +13,21 @@ export const font = {
   textBold: 'Figtree_700Bold',
 };
 
+// Gabarito's natural line height is about 1.2em, so the tight heading line heights below it (Display
+// 56/54, Display S 48/52, Headline 36/40, Title L 28/32, Title M 26/30) let Android clip the top of
+// the glyphs on the first line. Android only: a top padding of 0.12em gives the ascenders room.
+// Padding rather than a taller lineHeight keeps the line spacing between wrapped lines the same on
+// both platforms, and iOS (which draws the glyphs outside the line box) is untouched.
+const androidHeadroom = (size) => Platform.select({ android: { paddingTop: Math.round(size * 0.12) }, default: null });
+
 // Size / line height / tracking per role. letterSpacing is in px (em x size).
 // Colour is left to the caller.
 export const type = {
-  display: { fontFamily: font.black, fontSize: 56, lineHeight: 54, letterSpacing: -1.12 },
-  displayS: { fontFamily: font.black, fontSize: 48, lineHeight: 52, letterSpacing: -0.96 },
-  headline: { fontFamily: font.black, fontSize: 36, lineHeight: 40, letterSpacing: -0.54 },
-  titleL: { fontFamily: font.black, fontSize: 28, lineHeight: 32, letterSpacing: -0.28 },
-  titleM: { fontFamily: font.black, fontSize: 26, lineHeight: 30, letterSpacing: -0.26 },
+  display: { fontFamily: font.black, fontSize: 56, lineHeight: 54, letterSpacing: -1.12, ...androidHeadroom(56) },
+  displayS: { fontFamily: font.black, fontSize: 48, lineHeight: 52, letterSpacing: -0.96, ...androidHeadroom(48) },
+  headline: { fontFamily: font.black, fontSize: 36, lineHeight: 40, letterSpacing: -0.54, ...androidHeadroom(36) },
+  titleL: { fontFamily: font.black, fontSize: 28, lineHeight: 32, letterSpacing: -0.28, ...androidHeadroom(28) },
+  titleM: { fontFamily: font.black, fontSize: 26, lineHeight: 30, letterSpacing: -0.26, ...androidHeadroom(26) },
   titleS: { fontFamily: font.black, fontSize: 22, lineHeight: 28 },
   subtitleL: { fontFamily: font.extraBold, fontSize: 20, lineHeight: 26 },
   subtitle: { fontFamily: font.bold, fontSize: 18, lineHeight: 24 },
@@ -34,6 +41,14 @@ export const type = {
 
 // Display, Display S and Headline stop growing here so big heads do not collapse the layout.
 export const DISPLAY_FONT_SCALE = 1.3;
+
+// Spread onto a Text that uses the display, displayS or headline style: <Text {...HEAD_TEXT} style={type.headline}>.
+// (The Display, DisplayS and Headline components already do this.)
+export const HEAD_TEXT = { maxFontSizeMultiplier: DISPLAY_FONT_SCALE };
+
+// Width the top bars leave free on the right for the Deeds badge that App.js floats there on volunteer
+// screens (a 48 tall pill, 12 from the edge). OnboardingTopBar and TopBar reserve it.
+export const DEEDS_BADGE_RESERVE = 104;
 
 export const space = {
   xxs: 4,

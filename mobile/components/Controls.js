@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { DISPLAY_FONT_SCALE, font, footerShadow, radii, touch, type } from '../theme/tokens';
+import { DEEDS_BADGE_RESERVE, HEAD_TEXT, font, footerShadow, radii, touch, type } from '../theme/tokens';
 import Icon from './Icon';
 import { DiscPairApart } from './Discs';
 
@@ -20,7 +20,7 @@ const HEADING_LEVELS = new Set(['display', 'displayS', 'headline']);
 
 // level is a key of the type scale. Display, Display S and Headline stop growing at 1.3x.
 export function Heading({ level = 'headline', style, children, ...rest }) {
-  const capped = HEADING_LEVELS.has(level) ? { maxFontSizeMultiplier: DISPLAY_FONT_SCALE } : null;
+  const capped = HEADING_LEVELS.has(level) ? HEAD_TEXT : null;
   return (
     <Text {...capped} {...rest} style={[type[level], { color: colors.ink }, style]}>
       {children}
@@ -124,7 +124,8 @@ export function BackButton({ onPress, style }) {
 
 // 56 tall bar: 48 back circle with the title beside it, left aligned. Transparent over paper or a
 // field; onField gives it the field's own fill (for a bar pinned over scrolled content).
-// It does not apply the top inset: HeroField and OnboardingTopBar do.
+// It does not apply the top inset: HeroField and OnboardingTopBar do. The last DEEDS_BADGE_RESERVE of
+// the bar stays empty (after `right`) for the Deeds badge App.js floats there on volunteer screens.
 export function TopBar({ title, onBack, onField = false, right, style }) {
   return (
     <View style={[styles.topBar, onField && { backgroundColor: colors.field }, style]}>
@@ -137,11 +138,13 @@ export function TopBar({ title, onBack, onField = false, right, style }) {
         <View style={styles.flex} />
       )}
       {right}
+      <View style={{ width: DEEDS_BADGE_RESERVE }} />
     </View>
   );
 }
 
-// A full-bleed field region that runs under the status bar and rounds its bottom edge.
+// A full-bleed field region that runs under the status bar and rounds its bottom edge. It pads for the
+// status bar itself, so an OnboardingTopBar placed inside it takes insetTop={false}.
 export function HeroField({ children, style }) {
   const insets = useSafeAreaInsets();
   return <View style={[styles.hero, { paddingTop: insets.top }, style]}>{children}</View>;
@@ -169,7 +172,7 @@ export function Button({ label, onPress, disabled, loading, ghost, style, access
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={ghost ? colors.ink : colors.onInk} />
+        <ActivityIndicator color={disabled ? colors.offFg : ghost ? colors.ink : colors.onInk} />
       ) : (
         <Text style={[type.button, { color: textColor }]} maxFontSizeMultiplier={1.3}>{label}</Text>
       )}
@@ -246,8 +249,7 @@ export function Toggle({ value, onValueChange, label, description, disabled, sty
       onPress={() => onValueChange?.(!on)}
       disabled={disabled}
       accessibilityRole="switch"
-      accessibilityLabel={label}
-      accessibilityHint={description}
+      accessibilityLabel={[label, description].filter(Boolean).join('. ') || undefined}
       accessibilityState={{ checked: on, disabled: Boolean(disabled) }}
       style={[styles.toggleRow, style]}
     >

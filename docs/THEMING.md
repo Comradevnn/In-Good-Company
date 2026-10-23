@@ -90,10 +90,8 @@ also carry an initial. Storing a chosen colour per user would need a backend cha
 ## Rule: no colour literals outside the palettes
 
 No hex, `rgb()`/`rgba()`/`hsl()` or named colour (other than `'transparent'`) may appear in app code outside
-`mobile/theme/palettes/`. A lint test enforces it. While the redesign is in progress, files not yet migrated are
-listed in `PENDING_MIGRATION` at the top of `mobile/theme/palettes.test.mjs`; their hits are reported, not failed,
-and the list shrinks to empty as screens move to role tokens. `colors.js` also still carries a temporary block of
-old colour names (`LEGACY_COLOR_KEYS`) for the same reason.
+`mobile/theme/palettes/`. A lint test enforces it, and another fails when code reads a `colors.<key>` that is not a
+role token. Components name roles (`colors.field`, `colors.lens1`), never a hue (`pink`, `moss`, `blue`).
 
 ## Native chrome in app.json
 
@@ -102,7 +100,8 @@ old colour names (`LEGACY_COLOR_KEYS`) for the same reason.
 - `expo.backgroundColor` = the palette's `paper`
 - `expo.android.adaptiveIcon.backgroundColor` = the palette's `field`
 
-The test fails if they drift. Splash-screen colour is not set there: configuring it needs the `expo-splash-screen`
+The test fails if they drift. `EXPO_PUBLIC_PALETTE` cannot change these values (the adaptive icon and the root
+background), so they always follow the default palette, even when the JavaScript colours come from another one. Splash-screen colour is not set there: configuring it needs the `expo-splash-screen`
 package, which this app does not install. The status bar style is not in `app.json` either; it comes from
 `colors.statusBar` in JavaScript.
 

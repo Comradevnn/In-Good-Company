@@ -41,7 +41,7 @@ export function Loading({ label }) {
       style={{ paddingTop: 48, alignItems: 'center' }}
       accessible
       accessibilityRole="progressbar"
-      accessibilityLabel={label}
+      accessibilityLabel={label ?? 'Loading'}
       accessibilityState={{ busy: true }}
     >
       <DiscPair r={40} d={40} colourA={colors.you} colourB={colors.person1} lens={colors.lens1} />
@@ -111,7 +111,8 @@ export function ShiftCard({ shift, eyebrow = 'The shift' }) {
 
 // B Home status card: field fill (tint when waiting), tag on top, Title M, Body, and a 48 ink circle
 // with a chevron when it can be tapped. `pair` (optional, off by default) draws the small cropped
-// disc pair in the corner: { meId, partnerId, icon = 'clock' }.
+// disc pair in the corner: { meId, partnerId, icon = 'clock' }, or { partnerKey, icon } with a person
+// key ('person1' to 'person3') when no partner id is known.
 export function StatusCard({ eyebrow, title, body, onPress, waiting, pair }) {
   const pairR = 40;
   return (
@@ -132,6 +133,7 @@ export function StatusCard({ eyebrow, title, body, onPress, waiting, pair }) {
           d={44}
           meId={pair.meId}
           partnerId={pair.partnerId}
+          partnerKey={pair.partnerKey}
           ring
           style={{ position: 'absolute', top: -20, right: -40 }}
         >

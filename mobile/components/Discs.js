@@ -8,7 +8,7 @@ import Icon from './Icon';
 // The signature move of direction B: a person is a flat disc in their own colour, and where two
 // discs overlap a solid pre-mixed lens holds the shift. Geometry per design-candidates/B/direction.md.
 
-const decorative = { accessible: false, importantForAccessibility: 'no-hide-descendants' };
+const decorative = { accessible: false, importantForAccessibility: 'no-hide-descendants', accessibilityElementsHidden: true };
 
 function resolveKey({ personKey, userId, meId }) {
   if (personKey) return personKey;
@@ -44,17 +44,18 @@ export function PersonDisc({ size = 48, personKey, userId, meId, initial, ring =
 // Overlapping pair: discs of radius r whose centres are d apart, with the lens between them.
 // children sit over the lens as ordinary views, so text scales and stays accessible; leftContent and
 // rightContent sit on the visible part of each disc. Pass meId and partnerId to take the colours from
-// the people palette instead of colourA, colourB and lens.
+// the people palette instead of colourA, colourB and lens, or partnerKey (a person key such as
+// 'person1') when there is no partner id to hash.
 export function DiscPair({
-  r = 60, d = 70, colourA, colourB, lens, meId, partnerId, ring = false,
+  r = 60, d = 70, colourA, colourB, lens, meId, partnerId, partnerKey, ring = false,
   youIcon = false, initial, leftContent, rightContent, children, style, accessibilityLabel,
 }) {
   let a = colourA;
   let b = colourB;
   let l = lens;
-  if (meId != null && partnerId != null) {
+  if (partnerKey || (meId != null && partnerId != null)) {
     const keyA = 'you';
-    const keyB = personKeyFor(partnerId, meId);
+    const keyB = partnerKey ?? personKeyFor(partnerId, meId);
     a = a ?? colors[keyA];
     b = b ?? colors[keyB];
     l = l ?? lensFor(keyA, keyB);
@@ -71,7 +72,10 @@ export function DiscPair({
   const h = Math.sqrt(r * r - (dist / 2) * (dist / 2));
   const lensWidth = 2 * r - dist;
   const lensPath = `M ${mx},${cy - h} A ${r} ${r} 0 0 0 ${mx},${cy + h} A ${r} ${r} 0 0 0 ${mx},${cy - h} Z`;
+  // The stroke is centred on the circle's edge, so a ringed circle is drawn 1.5 smaller to keep the
+  // whole ring inside the Svg bounds. The lens path stays on the full r.
   const ringProps = ring ? { stroke: colors.ring, strokeWidth: 3 } : {};
+  const discR = ring ? r - 1.5 : r;
   const iconSize = Math.round(Math.min(r * 0.45, dist * 0.55));
   const label = accessibilityLabel ? { accessible: true, accessibilityRole: 'image', accessibilityLabel } : {};
   const hide = accessibilityLabel ? {} : decorative;
@@ -80,8 +84,8 @@ export function DiscPair({
     <View style={[{ width, height }, style]} {...label}>
       <View style={StyleSheet.absoluteFill} {...hide}>
         <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-          <Circle cx={r} cy={cy} r={r} fill={a} {...ringProps} />
-          <Circle cx={r + dist} cy={cy} r={r} fill={b} {...ringProps} />
+          <Circle cx={r} cy={cy} r={discR} fill={a} {...ringProps} />
+          <Circle cx={r + dist} cy={cy} r={discR} fill={b} {...ringProps} />
           <Path d={lensPath} fill={l} />
         </Svg>
       </View>

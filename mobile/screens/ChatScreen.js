@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { radii, touch, type } from '../theme/tokens';
+import { font, radii, touch, type } from '../theme/tokens';
 import { api } from '../api/client';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { Chip, ErrorText, Footer, Icon, Input, Loading, PersonDisc, Toggle } from '../components/AppParts';
+import { ErrorText, Footer, Icon, Input, Loading, PersonDisc, Toggle } from '../components/AppParts';
 
 // Per-pairing chat (plotline "chat"): text only, polled. Opens with each
 // side's auto-sent introduction of the other person; conversation starters
@@ -102,9 +102,7 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
           {messages.map((m) => {
             if (m.kind === 'starter') {
               return (
-                <View key={m.id} style={styles.starter} accessible accessibilityRole="text" accessibilityLabel={m.body}>
-                  <Chip label={m.body} style={{ flexShrink: 1 }} />
-                </View>
+                <Text key={m.id} style={styles.starter}>{m.body}</Text>
               );
             }
             if (m.from === 'system') {
@@ -177,7 +175,8 @@ const styles = StyleSheet.create({
   theirs: { ...bubble, alignSelf: 'flex-start', backgroundColor: colors.tint },
   mine: { ...bubble, alignSelf: 'flex-end', backgroundColor: colors.ink },
   system: { ...type.bodyS, color: colors.ink2, textAlign: 'center', paddingHorizontal: 8 },
-  starter: { alignSelf: 'center', maxWidth: '92%' },
+  // Conversation starters are a quiet suggestion in the thread, not a control, so they are plain text.
+  starter: { ...type.bodyS, fontFamily: font.textBold, color: colors.ink, textAlign: 'center', alignSelf: 'center', maxWidth: '92%' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   send: {
     width: touch.back,

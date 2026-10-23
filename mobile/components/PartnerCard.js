@@ -52,8 +52,8 @@ export default function PartnerCard({ sessionToken, pairingId, partner, onPress,
         <Avatar name={partner.display_name} size={64} userId={partner.user_id ?? partner.id ?? partner.display_name} />
         <View style={{ flex: 1 }}>
           <Text style={[type.titleL, { color: colors.ink }]}>{partner.display_name}{partner.age ? `, ${partner.age}` : ''}</Text>
-          {metaLines.map((line) => (
-            <Text key={line} style={app.partnerMeta}>{line}</Text>
+          {metaLines.map((line, i) => (
+            <Text key={i} style={app.partnerMeta}>{line}</Text>
           ))}
           {badge === null ? (
             <ActivityIndicator size="small" color={colors.ink} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
@@ -71,8 +71,8 @@ export default function PartnerCard({ sessionToken, pairingId, partner, onPress,
       {partner.bio && !compact ? <Text style={app.blurb}>{`\u201C${partner.bio}\u201D`}</Text> : null}
       <View style={app.historyRow}>
         <TagPill label={history.shift_count ? `${history.shift_count} shift${history.shift_count === 1 ? '' : 's'}` : 'First shift with us'} />
-        {(history.causes_volunteered?.length ? history.causes_volunteered : partner.causes ?? []).slice(0, 3).map((c) => (
-          <TagPill key={c} label={c} />
+        {(history.causes_volunteered?.length ? history.causes_volunteered : partner.causes ?? []).slice(0, 3).map((c, i) => (
+          <TagPill key={i} label={c} />
         ))}
       </View>
       {!compact && history.public_org_ratings?.length ? (

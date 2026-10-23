@@ -9,14 +9,6 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 const THEME_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MOBILE_DIR = path.resolve(THEME_DIR, '..');
 
-// TEMPORARY: files (relative to mobile/) that still hold hex/rgb/named colours and have not been migrated to
-// role tokens yet. Hits in these files are reported, not failed. Later phases shrink this to empty.
-const PENDING_MIGRATION = new Set([
-  'screens/BuddiesScreen.js',
-  'screens/OrgHomeScreen.js',
-  'screens/RatingScreen.js',
-]);
-
 // ---------------------------------------------------------------------------------------------------------
 // Loading the theme modules. They are written for Metro (ESM syntax in .js files without "type": "module"),
 // so copy them into a fresh temp dir as .mjs, rewrite relative imports, and import by file URL. A fresh dir
@@ -370,16 +362,65 @@ test('app.json native chrome matches the active palette', () => {
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// Lint: no colour literals outside theme/palettes/. Named colours are only flagged where they are used as a
-// value: right after a colour-like prop or style key (`color: 'white'`, `fill="black"`,
-// `placeholderTextColor={'gray'}`), so copy such as 'Green' in a label is not a hit. 'transparent' is allowed.
+// Lint: no colour literals outside theme/palettes/. Hex strings and rgb()/hsl() calls are flagged anywhere in
+// code. Named colours ('white', 'red', ...) are common English words, so they are only flagged where they are
+// used as a colour VALUE: inside the expression that follows a colour-like prop or style key (`color:`,
+// `backgroundColor=`, `fill=`, `colors=`, ...), whether it is the plain literal (`color: 'white'`,
+// `fill="black"`, `placeholderTextColor={'gray'}`), a ternary arm (`color: on ? 'white' : 'red'`) or an array
+// element (`colors={['red']}`). The expression ends at the first comma or closing bracket at its own depth, and
+// carries on over the next few lines while a bracket is open or the next line starts with `?`, `:`, `||`, `&&`
+// or `??`. Copy such as `label: 'Green'` has no colour key in front of it, so it is not a hit. 'transparent' is
+// allowed. Comments are stripped first (a `//` at line start or after whitespace; `https://` survives).
+// Known limit: a colour hidden behind a variable or a function call is not seen, only literals are.
 const NAMED = ['white', 'black', 'red', 'gray', 'grey', 'green', 'blue', 'yellow', 'orange', 'pink', 'purple', 'brown',
   'cyan', 'magenta', 'silver', 'gold', 'navy', 'teal', 'maroon', 'olive', 'lime', 'aqua', 'fuchsia', 'violet', 'indigo',
   'beige', 'ivory', 'coral', 'salmon', 'tan', 'crimson', 'lavender'];
 const HEX_RE = /['"`]#[0-9A-Fa-f]{3,8}['"`]/;
 const FUNC_RE = /\b(?:rgb|rgba|hsl|hsla)\(/;
-const NAMED_RE = new RegExp(
-  `\\b(?:[A-Za-z]*[Cc]olor|fill|stroke|tintColor|underlayColor|activeOpacityColor)\\s*[:=]\\s*\\{?\\s*['"\`](?:${NAMED.join('|')})['"\`]`, 'i');
+const NAMED_LITERAL_RE = new RegExp(`(['"\`])(?:${NAMED.join('|')})\\1`, 'i');
+const COLOUR_KEY_RE = /\b(?:[A-Za-z]*[Cc]olors?|fill|stroke|underlayColor)\s*[:=](?![=>])/g;
+const CONTINUES_RE = /^\s*(?:[?:]|\|\||&&|\?\?)/;
+
+const stripComment = (line) => line.replace(/(^|\s)\/\/.*$/, '$1');
+
+// Text of the value expression that starts at `from` in lines[lineIndex] (comments already stripped; see above).
+function valueExpression(lines, lineIndex, from) {
+  let out = '';
+  let depth = 0;
+  let quote = null;
+  let line = lineIndex;
+  let col = from;
+  for (let extra = 0; extra <= 4; ) {
+    const text = lines[line];
+    for (; col < text.length; col++) {
+      const ch = text[col];
+      if (quote) {
+        if (ch === '\\') { out += ch + (text[col + 1] ?? ''); col++; continue; }
+        if (ch === quote) quote = null;
+      } else if (ch === '"' || ch === "'" || ch === '`') quote = ch;
+      else if (ch === '(' || ch === '[' || ch === '{') depth++;
+      else if (ch === ')' || ch === ']' || ch === '}') { if (--depth < 0) return out; }
+      else if (ch === ',' && depth === 0) return out;
+      out += ch;
+    }
+    const next = lines[line + 1];
+    if (next === undefined || !(depth > 0 || CONTINUES_RE.test(next))) return out;
+    line++; col = 0; extra++; out += ' ';
+  }
+  return out;
+}
+
+// Indexes (0-based) of lines that put a named colour literal in a colour value.
+function namedColourLines(source) {
+  const lines = source.split('\n').map(stripComment);
+  const hits = new Set();
+  lines.forEach((text, i) => {
+    for (const m of text.matchAll(COLOUR_KEY_RE)) {
+      if (NAMED_LITERAL_RE.test(valueExpression(lines, i, m.index + m[0].length))) hits.add(i);
+    }
+  });
+  return hits;
+}
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -392,28 +433,64 @@ function walk(dir, out = []) {
   return out;
 }
 
-test('no hex, rgb or named colour literals outside theme/palettes/ (pending files are reported only)', (t) => {
+test('the colour lint sees literals in plain values, ternaries and arrays, and ignores copy and URLs', () => {
+  const flagged = (src) => namedColourLines(src).size > 0;
+  for (const bad of [
+    "color: 'white',",
+    'fill="black"',
+    "placeholderTextColor={'gray'}",
+    "color: on ? 'white' : colors.ink,",
+    "color: on ? colors.ink : 'red',",
+    "backgroundColor: ok ? colors.field : \"Blue\",",
+    "<LinearGradient colors={['red', colors.ink]} />",
+    "colors={[colors.ink, 'red']}",
+    "style={{ borderColor: cond\n  ? 'green'\n  : colors.edge }}",
+  ]) assert.ok(flagged(bad), `should flag: ${bad}`);
+  for (const good of [
+    "label: 'Green',",
+    "title: 'Red flags', color: colors.ink,",
+    "const url = 'https://example.com/red';",
+    "color: colors.ink, // 'white' was the old value",
+    "color: 'transparent',",
+    "if (color === 'red') return 1;",
+    "color: colors.ink }, label: 'White'",
+    "backgroundColor: colors.field, text: cond ? 'Blue' : 'Red',",
+  ]) assert.ok(!flagged(good), `should not flag: ${good}`);
+  assert.equal(stripComment("const u = 'https://x.dev'; // note"), "const u = 'https://x.dev'; ");
+});
+
+test('no hex, rgb or named colour literals outside theme/palettes/', () => {
   const failures = [];
-  const seenPending = new Set();
   for (const file of walk(MOBILE_DIR)) {
     const rel = path.relative(MOBILE_DIR, file).split(path.sep).join('/');
-    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-      const code = line.replace(/\/\/.*$/, '');
-      if (!(HEX_RE.test(code) || FUNC_RE.test(code) || NAMED_RE.test(code))) return;
+    const source = fs.readFileSync(file, 'utf8');
+    const named = namedColourLines(source);
+    source.split('\n').forEach((line, i) => {
+      const code = stripComment(line);
+      if (!(HEX_RE.test(code) || FUNC_RE.test(code) || named.has(i))) return;
       const hit = `${rel}:${i + 1}: ${line.trim().slice(0, 100)}`;
-      if (PENDING_MIGRATION.has(rel)) { seenPending.add(rel); t.diagnostic(`pending ${hit}`); } else failures.push(hit);
+      failures.push(hit);
     });
   }
-  t.diagnostic(`files with pending hits: ${seenPending.size} of ${PENDING_MIGRATION.size} listed`);
   assert.deepEqual(failures, [], 'colour literals found outside theme/palettes/; use role tokens from theme/colors.js');
 });
 
-test('every file in PENDING_MIGRATION still exists', () => {
-  const missing = [...PENDING_MIGRATION].filter((rel) => !fs.existsSync(path.join(MOBILE_DIR, rel)));
-  assert.deepEqual(missing, [], 'remove migrated or deleted files from PENDING_MIGRATION');
+test('every colors.<key> used in app code exists on the active colors object', () => {
+  const missing = [];
+  for (const file of walk(MOBILE_DIR)) {
+    const rel = path.relative(MOBILE_DIR, file).split(path.sep).join('/');
+    const source = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ''));
+    source.split('\n').map(stripComment).forEach((line, i) => {
+      for (const m of line.matchAll(/\bcolors\.([A-Za-z_$][\w$]*)/g)) {
+        if (!(m[1] in base.colors)) missing.push(`${rel}:${i + 1}: colors.${m[1]}`);
+      }
+    });
+  }
+  assert.deepEqual(missing, [], 'these keys are not on colors (theme/colors.js); use a role token');
 });
 
-test('legacy colour aliases are tracked in LEGACY_COLOR_KEYS (a later phase asserts they are gone)', () => {
-  assert.ok(Array.isArray(base.LEGACY_COLOR_KEYS));
-  for (const key of base.LEGACY_COLOR_KEYS) assert.ok(key in base.colors, `colors.${key} should still be defined`);
+test('the old colour names are gone: colors carries role tokens only', () => {
+  const OLD = ['bg', 'bgDeep', 'inkSoft', 'moss', 'mossDark', 'mossTint', 'ochre', 'ochreTint', 'teal', 'tealTint', 'line'];
+  assert.deepEqual(OLD.filter((key) => key in base.colors), []);
+  assert.equal(base.LEGACY_COLOR_KEYS, undefined);
 });

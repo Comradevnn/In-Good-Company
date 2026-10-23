@@ -15,10 +15,9 @@ import DevClockBar from '../components/DevClockBar';
 // only the user can make first — so there's never a dead end.
 const POLL_MS = 5000;
 
-// Stand-ins for the status card's disc pair: the data names no partner id here, so it
-// shows you and the first other-person colour.
+// The data names no partner id for the status card, so its disc pair shows you and the first
+// other-person colour. ME stands in for the signed-in user's id when colouring buddies.
 const ME = 'me';
-const PARTNER_PLACEHOLDER = 'partner';
 
 
 function primaryCard(home, navigate) {
@@ -167,7 +166,7 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
         />
       ) : null}
 
-      {card ? <StatusCard {...card} pair={{ meId: ME, partnerId: PARTNER_PLACEHOLDER, icon: 'clock' }} /> : null}
+      {card ? <StatusCard {...card} pair={{ partnerKey: 'person1', icon: 'clock' }} /> : null}
 
       {!hasOpenRequest && home.profile.verified && !home.matching_block && premium.cap.used >= premium.cap.cap ? (
         <InfoCard
@@ -295,8 +294,9 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  // The Deeds badge floats over the top-right corner, so the greeting starts below it.
-  badgeClearance: { height: 40 },
+  // The Deeds badge floats over the top-right corner (it ends 52 below the status bar); with the
+  // scroll body's 16 top padding this puts the greeting and the bell 12 clear of it.
+  badgeClearance: { height: 48 },
   greetingRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   weekday: { ...type.bodyS, color: colors.ink2, marginTop: 4 },
   bell: {

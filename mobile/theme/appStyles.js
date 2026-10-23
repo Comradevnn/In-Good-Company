@@ -159,14 +159,15 @@ export const app = StyleSheet.create({
   sendBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   sendBtnText: { color: colors.onInk, fontSize: 16 },
 
-  iconRateRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  // Five 56 circles with 8 gaps need 312; below that the buttons shrink evenly (48 at 320dp), above it they stop at 56.
+  iconRateRow: { flexDirection: 'row', gap: 8, marginTop: 12, maxWidth: 312 },
   iconRateBtn: {
-    width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: colors.edge, backgroundColor: colors.surface,
+    flex: 1, maxWidth: 56, aspectRatio: 1, borderRadius: 28, borderWidth: 2, borderColor: colors.edge, backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center',
   },
   iconRateBtnSelected: { backgroundColor: colors.selected, borderColor: colors.ink },
   iconRateText: { fontFamily: font.black, fontSize: 22, lineHeight: 28, color: colors.ink },
-  iconRateLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, width: 312 },
+  iconRateLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, maxWidth: 312 },
   iconRateLabel: { ...type.caption, color: colors.ink2 },
   thumbRow: { flexDirection: 'row', gap: 16, marginTop: 12 },
   thumbBtn: {
