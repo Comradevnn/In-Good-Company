@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { radii, touch, type } from '../theme/tokens';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import PrimaryButton from '../components/PrimaryButton';
+import { Chip, ErrorLine, Field, Headline, KeyboardScroll, Tag } from '../components/AppParts';
+import Icon from '../components/Icon';
 import { patchProfile } from '../auth/api';
 import { formatDate, parseDate } from './dates';
 
@@ -71,35 +74,43 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
-        <Text style={s.h2}>When can you go?</Text>
+      <KeyboardScroll
+        header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting || endDate < today} loading={submitting} />}
+      >
+        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
+        <Headline>When can you go?</Headline>
         <Text style={s.rationale}>
           Pick the window you're free for your {title ? 'next' : 'first'} shift — we'll do the matching from there.
         </Text>
 
         {savedPassed ? (
-          <Text style={[s.rationale, { marginTop: 10, color: colors.mossDark }]}>Your saved dates have passed, so we've started from today.</Text>
+          <Text style={[s.rationale, styles.passedNote]}>Your saved dates have passed, so we've started from today.</Text>
         ) : null}
 
-        <View style={s.row}>
-          <View style={[s.field, { flex: 1 }]}>
-            <Text style={s.label}>Earliest</Text>
-            <TouchableOpacity style={s.input} onPress={() => setShowStartPicker(true)}>
-              <Text style={{ fontFamily: 'Inter_400Regular', color: colors.ink }}>
-                {formatDate(startDate)}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={[s.field, { flex: 1 }]}>
-            <Text style={s.label}>Latest</Text>
-            <TouchableOpacity style={s.input} onPress={() => setShowEndPicker(true)}>
-              <Text style={{ fontFamily: 'Inter_400Regular', color: colors.ink }}>
-                {formatDate(endDate)}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <View style={[s.row, s.field]}>
+          <Field label="Earliest" style={styles.dateCol}>
+            <Pressable
+              style={styles.dateBox}
+              onPress={() => setShowStartPicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Earliest date, ${formatDate(startDate)}`}
+            >
+              <Text style={styles.dateText}>{formatDate(startDate)}</Text>
+              <Icon name="calendar" size={24} color={colors.ink} />
+            </Pressable>
+          </Field>
+          <Field label="Latest" style={styles.dateCol}>
+            <Pressable
+              style={styles.dateBox}
+              onPress={() => setShowEndPicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Latest date, ${formatDate(endDate)}`}
+            >
+              <Text style={styles.dateText}>{formatDate(endDate)}</Text>
+              <Icon name="calendar" size={24} color={colors.ink} />
+            </Pressable>
+          </Field>
         </View>
 
         {showStartPicker ? (
@@ -130,7 +141,7 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
         <View style={s.field}>
           <View style={s.labelRow}>
             <Text style={s.label}>How far are you willing to travel?</Text>
-            <Text style={s.valuePill}>{radius} mi</Text>
+            <Tag tone="accent" label={`${radius} mi`} />
           </View>
           <Slider
             minimumValue={1}
@@ -138,9 +149,10 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
             step={1}
             value={radius}
             onValueChange={setRadius}
-            minimumTrackTintColor={colors.moss}
-            maximumTrackTintColor={colors.line}
-            thumbTintColor={colors.moss}
+            minimumTrackTintColor={colors.ink}
+            maximumTrackTintColor={colors.edge}
+            thumbTintColor={colors.ink}
+            accessibilityLabel="How far are you willing to travel?"
           />
           <View style={s.fitLabels}>
             <Text style={s.fitLabelText}>1 mi</Text>
@@ -150,25 +162,39 @@ export default function AvailabilityScreen({ sessionToken, step, total, onNext, 
 
         <View style={s.field}>
           <Text style={s.label}>How often would you like to go?</Text>
-          <View style={s.chipGrid}>
+          <View style={styles.chipGrid}>
             {FREQUENCY_OPTIONS.map((option) => {
               const isSelected = frequency === option;
               return (
-                <TouchableOpacity
-                  key={option}
-                  style={[s.chip, isSelected && s.chipSelected]}
-                  onPress={() => setFrequency(option)}
-                >
-                  <Text style={[s.chipText, isSelected && s.chipTextSelected]}>{option}</Text>
-                </TouchableOpacity>
+                <Chip key={option} label={option} selected={isSelected} onPress={() => setFrequency(option)} />
               );
             })}
           </View>
         </View>
 
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-      </ScrollView>
-      <PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting || endDate < today} loading={submitting} />
+        <ErrorLine message={error} style={styles.error} />
+      </KeyboardScroll>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  stepTag: { alignSelf: 'flex-start', marginBottom: 12 },
+  passedNote: { marginTop: 12, color: colors.ink },
+  dateCol: { flex: 1 },
+  dateBox: {
+    height: touch.field,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 16,
+    borderWidth: 2,
+    borderColor: colors.edge,
+    borderRadius: radii.field,
+    backgroundColor: colors.surface,
+  },
+  dateText: { ...type.fieldValue, color: colors.ink, flexShrink: 1 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  error: { marginTop: 16 },
+});

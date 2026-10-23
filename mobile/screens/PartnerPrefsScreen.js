@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
+import { ErrorLine, Headline, KeyboardScroll, Tag, Toggle } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 
@@ -9,17 +10,6 @@ import { patchProfile } from '../auth/api';
 // (-> gender_pref) and the friendship-vs-romance toggle (-> seeking). Note:
 // seeking is stored but intentionally never read by the matching engine —
 // see the comment on that column in backend/db/schema.sql.
-function Toggle({ label, value, onToggle }) {
-  return (
-    <TouchableOpacity style={s.toggleRow} onPress={onToggle} activeOpacity={0.7}>
-      <Text style={s.toggleLabel}>{label}</Text>
-      <View style={[s.switchTrack, value && s.switchTrackOn]}>
-        <View style={[s.switchThumb, value && s.switchThumbOn]} />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, initialValues, title, onBack }) {
   const [sameGenderOnly, setSameGenderOnly] = useState(initialValues?.gender_pref === 'same_gender_only');
   const [friendshipOnly, setFriendshipOnly] = useState(initialValues?.seeking === 'friendship_only');
@@ -44,32 +34,41 @@ export default function PartnerPrefsScreen({ sessionToken, step, total, onNext, 
 
   return (
     <View style={s.container}>
-      <OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        {step != null ? <Text style={s.eyebrow}>Step {step} of {total}</Text> : null}
-        <Text style={s.h2}>Who we pair you with</Text>
+      <KeyboardScroll
+        header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
+        footer={<PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting} loading={submitting} />}
+      >
+        {step != null ? <Tag tone="accent" label={`Step ${step} of ${total}`} style={styles.stepTag} /> : null}
+        <Headline>Who we pair you with</Headline>
         <Text style={s.rationale}>This only affects matching. You can change it anytime.</Text>
 
         <Toggle
           label="Only match me with the same gender"
           value={sameGenderOnly}
-          onToggle={() => setSameGenderOnly((v) => !v)}
+          onValueChange={setSameGenderOnly}
+          style={styles.toggleFirst}
         />
         <Toggle
           label="I'm here for friendship, not romance"
           value={friendshipOnly}
-          onToggle={() => setFriendshipOnly((v) => !v)}
+          onValueChange={setFriendshipOnly}
         />
 
-        <Text style={[s.rationale, { marginTop: 14 }]}>
+        <Text style={[s.rationale, styles.note]}>
           This is a volunteering platform first — the pairing is about showing up to something
           good together, not a dating mechanic. Telling us this just helps us match you with
           people looking for the same thing.
         </Text>
 
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-      </ScrollView>
-      <PrimaryButton label="Continue" onPress={handleContinue} disabled={submitting} loading={submitting} />
+        <ErrorLine message={error} style={styles.error} />
+      </KeyboardScroll>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  stepTag: { alignSelf: 'flex-start', marginBottom: 12 },
+  toggleFirst: { marginTop: 16 },
+  note: { marginTop: 16 },
+  error: { marginTop: 16 },
+});

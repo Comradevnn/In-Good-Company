@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors } from '../theme/colors';
+import { type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { ErrorText, Loading, PillButton, RatingIcons, Screen } from '../components/AppParts';
+import {
+  Chip, DiscPair, ErrorText, Headline, Icon, InfoCard, LinkButton, Loading, PillButton, RatingIcons, Screen,
+  SectionHeader, Toggle,
+} from '../components/AppParts';
+
+// The signed-in user's id is not passed to this screen; discs use the same placeholder as Home.
+const ME = 'me';
 
 // After the shift (plotline "rating" + "done"): rate the org on two separate
 // axes — how well-run it was (public) and whether the cause was for you
@@ -50,15 +56,17 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   if (result || (form.org_rated && (!form.partner || form.partner_rated))) {
     return (
       <Screen key="done" footer={<PrimaryButton label="Find your next shift" onPress={() => navigate('startMatching', {}, { replace: true })} />}>
-        <View style={app.doneWrap}>
-          <View style={app.doneBadge}><Text style={app.doneBadgeText}>✓</Text></View>
-          <Text style={[s.h2, { textAlign: 'center' }]}>Nice work.</Text>
-          <Text style={[s.rationale, { textAlign: 'center', fontSize: 14.5, maxWidth: 280 }]}>
-            {form.hours} hours at {form.shift.org_name}{form.partner ? `, with ${form.partner.display_name}` : ''}.
-            {result?.became_buddies ? ` You and ${form.partner.display_name} both said yes — you're volunteer buddies now.` : ' See you again soon.'}
-          </Text>
+        <View style={styles.done}>
+          <DiscPair r={80} d={100} meId={form.partner ? ME : undefined} partnerId={form.partner ? (form.partner.user_id ?? form.partner.display_name) : undefined}>
+            <Icon name="check" size={32} color={colors.onLens} />
+          </DiscPair>
         </View>
-        <Text style={[app.quietLink, { marginTop: 24 }]} onPress={() => navigate('home', {}, { reset: true })}>Go to your dashboard</Text>
+        <Headline style={{ marginTop: 24 }}>Nice work.</Headline>
+        <Text style={styles.body}>
+          {form.hours} hours at {form.shift.org_name}{form.partner ? `, with ${form.partner.display_name}` : ''}.
+          {result?.became_buddies ? ` You and ${form.partner.display_name} both said yes — you're volunteer buddies now.` : ' See you again soon.'}
+        </Text>
+        <LinkButton label="Go to your dashboard" onPress={() => navigate('home', {}, { reset: true })} style={{ marginTop: 16 }} />
       </Screen>
     );
   }
@@ -69,60 +77,56 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
 
   return (
     <Screen key="form" title="Rate your shift" onBack={onBack} footer={<PrimaryButton label="Submit" onPress={submit} disabled={!ready || busy} loading={busy} />}>
-      <Text style={s.eyebrow}>Shift complete</Text>
-      <Text style={s.h2}>How'd it go?</Text>
+      <Headline>How'd it go?</Headline>
 
       {needsOrg ? (
         <>
-          <View style={{ marginTop: 20 }}>
-            <Text style={app.h3}>Rate {form.shift.org_name}</Text>
-            <Text style={s.rationale}>Was it well-run — clear instructions, enough real work to do? This shows publicly on their profile.</Text>
-            <RatingIcons value={operational} onChange={setOperational} />
-          </View>
-          <View style={{ marginTop: 18 }}>
-            <Text style={[s.label, { color: '#20291F' }]}>Did this cause resonate with you?</Text>
-            <RatingIcons value={fit} onChange={setFit} />
-            <Text style={app.privateNote}>🔒 Private — only tunes your own matching, never shown to the org{form.partner ? ` or ${form.partner.display_name}` : ''}.</Text>
-          </View>
+          <SectionHeader title={`Rate ${form.shift.org_name}`} />
+          <Text style={styles.body}>Was it well-run — clear instructions, enough real work to do? This shows publicly on their profile.</Text>
+          <RatingIcons value={operational} onChange={setOperational} />
+          <Text style={styles.question}>Did this cause resonate with you?</Text>
+          <RatingIcons value={fit} onChange={setFit} />
+          <InfoCard body={`Private — only tunes your own matching, never shown to the org${form.partner ? ` or ${form.partner.display_name}` : ''}.`} />
         </>
       ) : null}
 
       {needsPartner ? (
         <>
-          <View style={app.divider} />
-          <Text style={app.h3}>How about {form.partner.display_name}?</Text>
-          <TouchableOpacity style={[s.toggleRow]} onPress={() => setShowedUp((v) => !v)}>
-            <Text style={s.toggleLabel}>They showed up</Text>
-            <View style={[s.switchTrack, showedUp && s.switchTrackOn]}><View style={[s.switchThumb, showedUp && s.switchThumbOn]} /></View>
-          </TouchableOpacity>
-          <Text style={[s.rationale, { marginTop: 16, fontFamily: 'Inter_600SemiBold' }]}>Would you volunteer with them again?</Text>
-          <View style={app.thumbRow}>
-            <TouchableOpacity style={[app.thumbBtn, again === true && app.thumbBtnUp]} onPress={() => setAgain(true)} accessibilityLabel="Yes">
-              <Text style={{ fontSize: 24 }}>👍</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[app.thumbBtn, again === false && app.thumbBtnDown]} onPress={() => setAgain(false)} accessibilityLabel="No">
-              <Text style={{ fontSize: 24 }}>👎</Text>
-            </TouchableOpacity>
+          <SectionHeader title={`How about ${form.partner.display_name}?`} />
+          <Toggle label="They showed up" value={showedUp} onValueChange={setShowedUp} />
+          <Text style={styles.question}>Would you volunteer with them again?</Text>
+          <View style={styles.thumbRow}>
+            <Chip label="Yes" selected={again === true} onPress={() => setAgain(true)} />
+            <Chip label="No" selected={again === false} onPress={() => setAgain(false)} />
           </View>
-          <Text style={[s.rationale, { marginTop: 10 }]}>
-            If you both say yes, you become volunteer buddies ({form.buddy_slots.used} of {form.buddy_slots.cap} buddy slots used). Otherwise nothing happens and neither of you is told how the other answered. A 👎 also means we won't pair you two again.
+          <Text style={[styles.body, { marginTop: 12 }]}>
+            If you both say yes, you become volunteer buddies ({form.buddy_slots.used} of {form.buddy_slots.cap} buddy slots used). Otherwise nothing happens and neither of you is told how the other answered. A thumbs down also means we won't pair you two again.
           </Text>
         </>
       ) : null}
 
       {form.org_rating_of_you ? (
-        <View style={app.safetyCard}>
-          <Text style={app.safetyTitle}>What {form.shift.org_name} said about your shift</Text>
-          <Text style={app.safetyBody}>Attendance: {form.org_rating_of_you.attendance} · Contribution: {form.org_rating_of_you.contribution}</Text>
+        <InfoCard
+          tone="warn"
+          title={`What ${form.shift.org_name} said about your shift`}
+          body={`Attendance: ${form.org_rating_of_you.attendance}\nContribution: ${form.org_rating_of_you.contribution}`}
+        >
           <PillButton
             label={form.org_rating_public ? 'Shown on your profile — hide it' : 'Show it on your profile'}
             ghost
             onPress={togglePublic}
-            style={{ marginTop: 10, alignSelf: 'flex-start' }}
+            style={{ marginTop: 12 }}
           />
-        </View>
+        </InfoCard>
       ) : null}
       <ErrorText error={error} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  done: { marginTop: 24 },
+  body: { ...type.bodyS, color: colors.ink2, marginTop: 4 },
+  question: { ...type.subtitle, color: colors.ink, marginTop: 24 },
+  thumbRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+});

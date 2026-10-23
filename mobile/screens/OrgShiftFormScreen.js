@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { radii, touch, type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { ErrorText, Screen } from '../components/AppParts';
+import { Chip, ErrorLine, ErrorText, Field, Headline, Icon, Input, Screen } from '../components/AppParts';
 import { geocodePlace } from '../location/geocode';
 
 // List a shift (plotline "orgListShift"). Date and times come from native
@@ -75,13 +76,19 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
     }
   }
 
-  const pickerButton = (label, value, which, flex) => (
-    <View style={[s.field, flex && { flex: 1 }]}>
-      <Text style={s.label}>{label}</Text>
-      <TouchableOpacity style={s.input} onPress={() => setPicker(picker === which ? null : which)}>
-        <Text style={{ fontFamily: 'Inter_400Regular', color: colors.ink }}>{value}</Text>
-      </TouchableOpacity>
-    </View>
+  const pickerButton = (label, value, which, flex, icon, error) => (
+    <Field label={label} style={[s.field, flex && { flex: 1 }]}>
+      <Pressable
+        style={({ pressed }) => [styles.pickerField, error && styles.pickerFieldError, pressed && { backgroundColor: colors.surfacePressed }]}
+        onPress={() => setPicker(picker === which ? null : which)}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value}`}
+        accessibilityState={{ expanded: picker === which }}
+      >
+        <Text style={styles.pickerValue}>{value}</Text>
+        <Icon name={icon} size={24} color={colors.ink} />
+      </Pressable>
+    </Field>
   );
   const onPick = (which) => (_, picked) => {
     if (Platform.OS !== 'ios') setPicker(null);
@@ -97,34 +104,27 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
 
   return (
     <Screen title="List a shift" onBack={onBack} footer={<PrimaryButton label="Publish shift" onPress={publish} disabled={!valid || busy} loading={busy} />}>
-      <Text style={s.eyebrow}>For organizations</Text>
-      <Text style={s.h2}>List your shift</Text>
-      <Text style={s.rationale}>This is what volunteers will see when they're matched to it.</Text>
+      <Headline>List your shift</Headline>
+      <Text style={[s.rationale, { marginTop: 8 }]}>This is what volunteers will see when they're matched to it.</Text>
 
-      <View style={s.field}>
-        <Text style={s.label}>Shift title</Text>
-        <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="Dog socializing" placeholderTextColor={colors.inkSoft} maxLength={100} />
-      </View>
-      <View style={s.field}>
-        <Text style={s.label}>Cause area</Text>
-        <View style={s.chipGrid}>
+      <Input wrapperStyle={s.field} label="Shift title" value={title} onChangeText={setTitle} placeholder="Dog socializing" maxLength={100} />
+      <Field label="Cause area" style={s.field}>
+        <View style={styles.chips}>
           {CAUSES.map((c) => (
-            <TouchableOpacity key={c} style={[s.chip, cause === c && s.chipSelected]} onPress={() => setCause(c)}>
-              <Text style={[s.chipText, cause === c && s.chipTextSelected]}>{c}</Text>
-            </TouchableOpacity>
+            <Chip key={c} label={c} selected={cause === c} onPress={() => setCause(c)} />
           ))}
         </View>
-      </View>
+      </Field>
 
-      {pickerButton('Date', date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }), 'date')}
+      {pickerButton('Date', date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }), 'date', false, 'calendar', problems.date)}
       {picker === 'date' ? (
         <DateTimePicker value={date} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} minimumDate={today} onChange={onPick('date')} />
       ) : null}
-      {problems.date ? <Text style={s.errorText}>{problems.date}</Text> : null}
+      <ErrorLine message={problems.date} style={styles.problem} />
 
       <View style={s.row}>
-        {pickerButton('Starts', timeLabel(start), 'start', true)}
-        {pickerButton('Ends', timeLabel(end), 'end', true)}
+        {pickerButton('Starts', timeLabel(start), 'start', true, 'clock', problems.times)}
+        {pickerButton('Ends', timeLabel(end), 'end', true, 'clock', problems.times)}
       </View>
       {picker === 'start' || picker === 'end' ? (
         <DateTimePicker
@@ -135,25 +135,50 @@ export default function OrgShiftFormScreen({ sessionToken, onDone, onBack }) {
           onChange={onPick(picker)}
         />
       ) : null}
-      {problems.times ? <Text style={s.errorText}>{problems.times}</Text> : null}
+      <ErrorLine message={problems.times} style={styles.problem} />
       {!problems.times && !daytime ? (
         <Text style={[s.rationale, { marginTop: 8 }]}>This runs outside daytime hours. That's fine — daytime shifts just get a small tag volunteers can see.</Text>
       ) : null}
 
-      <View style={s.field}>
-        <Text style={s.label}>Capacity (volunteers)</Text>
-        <TextInput style={s.input} value={capacity} onChangeText={setCapacity} keyboardType="number-pad" maxLength={3} placeholderTextColor={colors.inkSoft} />
-        {problems.capacity ? <Text style={s.errorText}>{problems.capacity}</Text> : null}
-      </View>
-      <View style={s.field}>
-        <Text style={s.label}>Location</Text>
-        <TextInput style={s.input} value={location} onChangeText={setLocation} placeholder="Leave blank to use your org's address" placeholderTextColor={colors.inkSoft} maxLength={100} />
-      </View>
-      <View style={s.field}>
-        <Text style={s.label}>Description</Text>
-        <TextInput style={[s.input, s.textarea]} multiline value={description} onChangeText={setDescription} placeholder="What will volunteers actually be doing?" placeholderTextColor={colors.inkSoft} maxLength={1000} />
-      </View>
+      <Input
+        wrapperStyle={s.field}
+        label="Capacity (volunteers)"
+        value={capacity}
+        onChangeText={setCapacity}
+        keyboardType="number-pad"
+        maxLength={3}
+        error={problems.capacity}
+      />
+      <Input wrapperStyle={s.field} label="Location" value={location} onChangeText={setLocation} placeholder="Leave blank to use your org's address" maxLength={100} />
+      <Input
+        wrapperStyle={s.field}
+        label="Description"
+        multiline
+        value={description}
+        onChangeText={setDescription}
+        placeholder="What will volunteers actually be doing?"
+        maxLength={1000}
+      />
       <ErrorText error={error} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pickerField: {
+    height: touch.field,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: colors.edge,
+    borderRadius: radii.field,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+  },
+  pickerFieldError: { borderColor: colors.danger, backgroundColor: colors.dangerTint },
+  pickerValue: { ...type.fieldValue, color: colors.ink, flexShrink: 1 },
+  problem: { marginTop: 10 },
+});

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { ErrorText, Screen } from '../components/AppParts';
+import { Chip, ErrorText, Field, Headline, Input, LinkButton, ListRow, Screen } from '../components/AppParts';
 import { detectLocation, geocodePlace } from '../location/geocode';
 import WaiverPicker, { waiverBody } from '../components/WaiverPicker';
 
@@ -74,58 +73,66 @@ export default function OrgOnboardScreen({ sessionToken, onDone, onLogOut }) {
   const ready = name.trim() && registration.trim() && location.trim() && causes.length && waiver;
   return (
     <Screen footer={<PrimaryButton label="Continue" onPress={submit} disabled={!ready || busy} loading={busy} />}>
-      <Text style={s.eyebrow}>For organizations</Text>
-      <Text style={s.h2}>Let's get to know you</Text>
+      <Headline style={styles.headline}>Let's get to know you</Headline>
       <Text style={s.rationale}>A few basics so we can verify you're a real nonprofit. You'll list your first shift right after this.</Text>
       {[
         ['Organization name', name, setName, 'Your organization'],
         ['501(c)(3) or equivalent', registration, setRegistration, 'EIN / registration number'],
         ['Organization website', website, setWebsite, 'https://yourorg.org'],
       ].map(([label, value, set, placeholder]) => (
-        <View key={label} style={s.field}>
-          <Text style={s.label}>{label}</Text>
-          <TextInput style={s.input} value={value} onChangeText={set} placeholder={placeholder} placeholderTextColor={colors.inkSoft} autoCapitalize={label.includes('website') ? 'none' : 'sentences'} />
-        </View>
-      ))}
-      <View style={s.field}>
-        <Text style={s.label}>Where you are</Text>
-        <TextInput
-          style={s.input}
-          value={location}
-          onChangeText={(text) => { setLocation(text); setCoords(null); }}
-          placeholder="Street address, neighborhood or city"
-          placeholderTextColor={colors.inkSoft}
+        <Input
+          key={label}
+          wrapperStyle={s.field}
+          label={label}
+          value={value}
+          onChangeText={set}
+          placeholder={placeholder}
+          autoCapitalize={label.includes('website') ? 'none' : 'sentences'}
         />
-        <TouchableOpacity onPress={useCurrentLocation}>
-          <Text style={[s.label, { marginTop: 8, color: colors.mossDark }]}>
-            {coords ? '✓ Location found — shown to volunteers by distance' : 'Use my current location ›'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <View style={s.field}>
-        <Text style={s.label}>What you do</Text>
-        <TextInput style={[s.input, s.textarea]} multiline value={description} onChangeText={setDescription} placeholder="A sentence or two volunteers will see" placeholderTextColor={colors.inkSoft} />
-      </View>
-      <View style={s.field}>
-        <Text style={s.label}>Causes you work on</Text>
-        <View style={s.chipGrid}>
+      ))}
+      <Input
+        wrapperStyle={s.field}
+        label="Where you are"
+        value={location}
+        onChangeText={(text) => { setLocation(text); setCoords(null); }}
+        placeholder="Street address, neighborhood or city"
+      />
+      <ListRow
+        style={styles.locate}
+        icon={coords ? 'check' : 'map-pin'}
+        label={coords ? 'Location found — shown to volunteers by distance' : 'Use my current location'}
+        onPress={useCurrentLocation}
+      />
+      <Input
+        wrapperStyle={s.field}
+        label="What you do"
+        multiline
+        value={description}
+        onChangeText={setDescription}
+        placeholder="A sentence or two volunteers will see"
+      />
+      <Field label="Causes you work on" style={s.field}>
+        <View style={styles.chips}>
           {CAUSES.map((c) => {
             const on = causes.includes(c);
-            return (
-              <TouchableOpacity key={c} style={[s.chip, on && s.chipSelected]} onPress={() => setCauses((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))}>
-                <Text style={[s.chipText, on && s.chipTextSelected]}>{c}</Text>
-              </TouchableOpacity>
-            );
+            return <Chip key={c} label={c} selected={on} onPress={() => setCauses((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))} />;
           })}
         </View>
-      </View>
-      <View style={s.field}>
-        <Text style={s.label}>Liability waiver</Text>
-        <Text style={[s.rationale, { marginTop: 0, marginBottom: 8 }]}>Upload a photo of your own signed waiver, or use our default form.</Text>
+      </Field>
+      <Field label="Liability waiver" style={s.field}>
+        <Text style={[s.rationale, styles.waiverNote]}>Upload a photo of your own signed waiver, or use our default form.</Text>
         <WaiverPicker value={waiver} onChange={setWaiver} />
-      </View>
+      </Field>
       <ErrorText error={error} />
-      <Text style={{ marginTop: 22, textAlign: 'center', color: colors.danger, fontFamily: 'Inter_600SemiBold' }} onPress={onLogOut}>Log out</Text>
+      <LinkButton label="Log out" danger onPress={onLogOut} style={styles.logout} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  headline: { marginBottom: 8 },
+  locate: { marginTop: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  waiverNote: { marginTop: 0, marginBottom: 8 },
+  logout: { marginTop: 16 },
+});

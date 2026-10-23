@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { type } from '../theme/tokens';
+import { colors } from '../theme/colors';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { ErrorText, InfoCard, Loading, Screen, SectionTitle } from '../components/AppParts';
+import { Card, Chip, ErrorText, Headline, Heading, Input, Loading, Screen, SectionHeader, Toggle } from '../components/AppParts';
 
 // Safety: the pre-shift safety notice and the in-app report flow. Reports
 // are stored for a person to review and permanently stop the two people
@@ -50,7 +50,7 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
   if (sent) {
     return (
       <Screen key="done" title="Safety" footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
-        <Text style={s.h2}>Thank you for telling us</Text>
+        <Headline>Thank you for telling us</Headline>
         <Text style={s.rationale}>
           A real person will review your report.{partnerName ? ` You won't be paired with ${partnerName} again.` : ''}
           {sent.cancelled ? ' You have been taken out of the pairing, with no cost to you.' : ''}
@@ -66,39 +66,42 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
       onBack={onBack}
       footer={category ? <PrimaryButton label="Send report" onPress={submit} disabled={busy} loading={busy} /> : null}
     >
-      <Text style={s.eyebrow}>Safety</Text>
-      <Text style={s.h2}>{partnerName ? `Report a concern about ${partnerName}` : 'Staying safe'}</Text>
-      <InfoCard title={notice.title}>
-        {notice.points.map((p) => <Text key={p} style={app.safetyBody}>• {p}</Text>)}
-      </InfoCard>
+      <Headline>{partnerName ? `Report a concern about ${partnerName}` : 'Staying safe'}</Headline>
+      <Card tone="field" style={styles.notice}>
+        <Heading level="titleS">{notice.title}</Heading>
+        {notice.points.map((p) => <Text key={p} style={styles.point}>• {p}</Text>)}
+      </Card>
 
-      <SectionTitle title="Report a concern" />
+      <SectionHeader title="Report a concern" />
       <Text style={s.rationale}>Reviewed by a real person, not a bot.{partnerName ? '' : ' To report a partner, open the report from their shift.'}</Text>
-      <View style={s.chipGrid}>
+      <View style={styles.chipGrid}>
         {notice.categories.map((c) => (
-          <TouchableOpacity key={c} style={[s.chip, category === c && s.chipSelected]} onPress={() => setCategory(c)}>
-            <Text style={[s.chipText, category === c && s.chipTextSelected]}>{CATEGORY_LABELS[c] ?? c}</Text>
-          </TouchableOpacity>
+          <Chip key={c} label={CATEGORY_LABELS[c] ?? c} selected={category === c} onPress={() => setCategory(c)} />
         ))}
       </View>
-      <View style={s.field}>
-        <Text style={s.label}>What happened? (optional)</Text>
-        <TextInput
-          style={[s.input, s.textarea]}
-          multiline
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Anything that helps our team understand"
-          placeholderTextColor={colors.inkSoft}
-        />
-      </View>
+      <Input
+        wrapperStyle={s.field}
+        label="What happened? (optional)"
+        multiline
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Anything that helps our team understand"
+      />
       {pairingId ? (
-        <TouchableOpacity style={s.toggleRow} onPress={() => setCancelPairing((v) => !v)}>
-          <Text style={s.toggleLabel}>Also take me out of this pairing (no cost to me)</Text>
-          <View style={[s.switchTrack, cancelPairing && s.switchTrackOn]}><View style={[s.switchThumb, cancelPairing && s.switchThumbOn]} /></View>
-        </TouchableOpacity>
+        <Toggle
+          style={s.field}
+          label="Also take me out of this pairing (no cost to me)"
+          value={cancelPairing}
+          onValueChange={setCancelPairing}
+        />
       ) : null}
       <ErrorText error={error} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  notice: { marginTop: 16 },
+  point: { ...type.bodyS, color: colors.ink, marginTop: 8 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 16 },
+});
