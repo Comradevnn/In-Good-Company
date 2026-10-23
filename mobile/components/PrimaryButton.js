@@ -1,50 +1,11 @@
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { Button, Footer } from './Controls';
 
-// Shared footer + primary pill button, matching specs/plotline.html's
-// .footer-cta / .btn-primary styling.
+// Footer bar + 56 ink pill: the one primary action on a screen. Disabled = off fill and text;
+// pressed = the darker ink; loading shows a spinner in place of the label.
 export default function PrimaryButton({ label, onPress, disabled, loading }) {
   return (
-    <View style={styles.footer}>
-      <TouchableOpacity
-        style={[styles.btnPrimary, disabled && styles.btnPrimaryDisabled]}
-        disabled={disabled}
-        onPress={onPress}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.surface} />
-        ) : (
-          <Text style={styles.btnPrimaryText}>{label}</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+    <Footer>
+      <Button label={label} onPress={onPress} disabled={disabled} loading={loading} />
+    </Footer>
   );
 }
-
-const styles = StyleSheet.create({
-  footer: {
-    paddingHorizontal: 22,
-    paddingTop: 14,
-    paddingBottom: 22,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.surface,
-  },
-  btnPrimary: {
-    borderRadius: 999,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    backgroundColor: colors.moss,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimaryDisabled: {
-    backgroundColor: '#C8CCC1',
-  },
-  btnPrimaryText: {
-    fontFamily: 'Inter_600SemiBold',
-    color: '#F6F4EA',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});

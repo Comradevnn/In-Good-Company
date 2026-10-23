@@ -7,7 +7,7 @@ const root = process.argv[2];
 if (!root) { console.error('usage: node scan-undefined.js <abs path to mobile>'); process.exit(2); }
 const babel = require(path.join(root, 'node_modules/@babel/parser'));
 const traverse = require(path.join(root, 'node_modules/@babel/traverse')).default;
-const dirs = ['screens', 'components', 'api', 'location', 'onboarding', 'auth', 'verification'];
+const dirs = ['screens', 'components', 'theme', 'theme/palettes', 'api', 'location', 'onboarding', 'auth', 'verification'];
 const files = ['App.js', ...dirs.filter((d) => fs.existsSync(path.join(root, d)))
   .flatMap((d) => fs.readdirSync(path.join(root, d)).filter((f) => f.endsWith('.js')).map((f) => `${d}/${f}`))];
 const globals = new Set(['undefined', 'console', 'fetch', 'Date', 'Math', 'Number', 'String', 'JSON', 'Promise', 'Object', 'Array',

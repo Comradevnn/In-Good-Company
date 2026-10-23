@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
 import {
   Inter_400Regular,
@@ -8,6 +9,11 @@ import {
   Inter_600SemiBold,
 } from '@expo-google-fonts/inter';
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
+import { Gabarito_700Bold, Gabarito_800ExtraBold, Gabarito_900Black } from '@expo-google-fonts/gabarito';
+import { Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
+import { colors } from './theme/colors';
+import { font, radii, type } from './theme/tokens';
+import { Icon, Loading } from './components/AppParts';
 import { BACKEND_URL } from './config/api';
 import { loadSessionToken, clearSessionToken } from './auth/session';
 import { installAuthInterceptor, setUnauthorizedHandler } from './api/client';
@@ -52,6 +58,15 @@ const EDIT_SECTION_TITLES = {
 };
 
 export default function App() {
+  return (
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
+  const insets = useSafeAreaInsets();
   const [backendStatus, setBackendStatus] = useState('Checking backend...');
   // undefined = still reading secure storage; null = signed out; string = token
   const [sessionToken, setSessionToken] = useState(undefined);
@@ -88,6 +103,12 @@ export default function App() {
     Inter_600SemiBold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
+    Gabarito_700Bold,
+    Gabarito_800ExtraBold,
+    Gabarito_900Black,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
   });
 
   useEffect(() => {
@@ -200,7 +221,7 @@ export default function App() {
   if (!fontsLoaded || sessionToken === undefined) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator />
+        <Loading />
       </View>
     );
   }
@@ -208,7 +229,7 @@ export default function App() {
   if (sessionToken && resumeState === undefined) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator />
+        <Loading />
       </View>
     );
   }
@@ -217,10 +238,14 @@ export default function App() {
     return (
       <View style={styles.loading}>
         <Text style={styles.doneText}>Couldn't load your profile.</Text>
-        <TouchableOpacity onPress={loadResumeState} style={styles.retryBtn}>
+        <Pressable
+          onPress={loadResumeState}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.retryBtn, pressed && { backgroundColor: colors.inkPressed }]}
+        >
           <Text style={styles.retryBtnText}>Retry</Text>
-        </TouchableOpacity>
-        <Text style={styles.signOutLink} onPress={handleLogOut}>Sign out</Text>
+        </Pressable>
+        <Text style={styles.signOutLink} accessibilityRole="link" onPress={handleLogOut}>Sign out</Text>
       </View>
     );
   }
@@ -518,7 +543,7 @@ export default function App() {
     if (orgReady === null) {
       return (
         <View style={styles.loading}>
-          <ActivityIndicator />
+          <Loading />
         </View>
       );
     }
@@ -569,14 +594,15 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      {__DEV__ ? <Text style={styles.debugBar}>{backendStatus}</Text> : null}
+      {renderApp()}
+      {__DEV__ ? <Text style={[styles.debugBar, { top: insets.top }]} pointerEvents="none">{backendStatus}</Text> : null}
       {sessionToken && profile && accountKind !== 'org' ? (
-        <View style={styles.deedsBadge}>
-          <Text style={styles.deedsBadgeText}>🪙 {profile.deeds_balance ?? 0}</Text>
+        <View style={[styles.deedsBadge, { top: insets.top + 4 }]}>
+          <Icon name="coin" size={24} color={colors.ink} />
+          <Text style={styles.deedsBadgeText}>{profile.deeds_balance ?? 0}</Text>
         </View>
       ) : null}
-      {renderApp()}
-      <StatusBar style="auto" />
+      <StatusBar style={colors.statusBar} />
     </View>
   );
 }
@@ -584,58 +610,66 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.paper,
   },
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
-    backgroundColor: '#FBF9F3',
+    gap: 16,
+    paddingHorizontal: 24,
+    backgroundColor: colors.paper,
   },
   retryBtn: {
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#4F6F52',
+    minHeight: 56,
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    paddingHorizontal: 24,
+    backgroundColor: colors.ink,
   },
   signOutLink: {
-    fontFamily: 'Inter_600SemiBold',
-    color: '#B4543A',
-    marginTop: 4,
+    ...type.label,
+    color: colors.danger,
+    textDecorationLine: 'underline',
+    paddingVertical: 14,
   },
   retryBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    color: '#F6F4EA',
+    ...type.button,
+    color: colors.onInk,
   },
+  // Dev only: a small line of text just under the status bar, over the screen's own top bar.
   debugBar: {
-    fontFamily: 'IBMPlexMono_400Regular',
-    fontSize: 10,
-    color: '#5B6459',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    fontFamily: font.textMedium,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.ink2,
     textAlign: 'center',
-    paddingTop: 6,
-    paddingBottom: 2,
-    backgroundColor: '#EDE7DA',
   },
   doneText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    color: '#20291F',
+    ...type.body,
+    color: colors.ink,
     textAlign: 'center',
-    lineHeight: 22,
   },
   deedsBadge: {
     position: 'absolute',
-    top: 26,
-    right: 14,
+    right: 12,
     zIndex: 10,
-    backgroundColor: '#20291F',
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.accent,
+    borderRadius: radii.pill,
+    paddingHorizontal: 16,
   },
   deedsBadgeText: {
-    fontFamily: 'IBMPlexMono_500Medium',
-    fontSize: 12,
-    color: '#F2EFE4',
+    fontFamily: font.black,
+    fontSize: 22,
+    lineHeight: 26,
+    color: colors.ink,
   },
 });

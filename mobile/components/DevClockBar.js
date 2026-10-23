@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
+import { font, radii } from '../theme/tokens';
 import { api } from '../api/client';
 
 // Dev builds only: fast-forwards the BACKEND's clock (POST /dev/clock/advance)
@@ -33,18 +34,30 @@ export default function DevClockBar({ sessionToken, onAdvanced, jumps = [] }) {
   return (
     <View style={bar}>
       <Text style={barLabel}>DEV CLOCK{label ? ` · ${label}` : ''}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
         {buttons.map(([text, body]) => (
-          <TouchableOpacity key={text} style={chip} onPress={() => advance(body)} disabled={busy}>
+          <Pressable
+            key={text}
+            style={({ pressed }) => [chip, pressed && { backgroundColor: colors.surfacePressed }, busy && { borderColor: colors.offBg }]}
+            onPress={() => advance(body)}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={text}
+            accessibilityState={{ disabled: busy }}
+          >
             <Text style={chipText}>{text}</Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
     </View>
   );
 }
 
-const bar = { marginTop: 26, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.line, borderRadius: 12, padding: 10 };
-const barLabel = { fontFamily: 'IBMPlexMono_500Medium', fontSize: 10.5, color: colors.inkSoft, letterSpacing: 1 };
-const chip = { borderWidth: 1, borderColor: colors.line, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 };
-const chipText = { fontFamily: 'IBMPlexMono_400Regular', fontSize: 11, color: colors.inkSoft };
+// Quiet dev chrome: a tint card with small chips, in the app's own type.
+const bar = { marginTop: 24, backgroundColor: colors.tint, borderRadius: radii.notice, padding: 12 };
+const barLabel = { fontFamily: font.textBold, fontSize: 13, lineHeight: 18, color: colors.ink2 };
+const chip = {
+  minHeight: 44, justifyContent: 'center', borderWidth: 2, borderColor: colors.edge, backgroundColor: colors.surface,
+  borderRadius: radii.pill, paddingHorizontal: 14,
+};
+const chipText = { fontFamily: font.textSemiBold, fontSize: 14, lineHeight: 20, color: colors.ink };

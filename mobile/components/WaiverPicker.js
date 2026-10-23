@@ -1,6 +1,10 @@
-import { Image, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { radii } from '../theme/tokens';
+import Icon from './Icon';
+import { Toggle } from './Controls';
 
 // Liability waiver / consent form: a photo of the org's own signed waiver,
 // or the platform default. value is { uri, base64, mime } | 'default' | null.
@@ -15,23 +19,33 @@ export default function WaiverPicker({ value, onChange }) {
   const uploaded = value && value !== 'default';
   return (
     <View>
-      <TouchableOpacity style={s.locateCard} onPress={pick}>
+      <Pressable
+        style={({ pressed }) => [s.locateCard, pressed && { backgroundColor: colors.tintPressed }]}
+        onPress={pick}
+        accessibilityRole="button"
+        accessibilityLabel={uploaded ? 'Waiver chosen — tap to replace' : 'Tap to upload a photo of your waiver'}
+      >
         {uploaded ? (
           <>
-            <Image source={{ uri: value.uri }} style={{ width: 120, height: 90, borderRadius: 8 }} />
-            <Text style={[s.successText, { marginTop: 8 }]}>✓ Waiver chosen — tap to replace</Text>
+            <Image source={{ uri: value.uri }} style={{ width: 120, height: 90, borderRadius: radii.field }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <Icon name="check" size={20} color={colors.success} />
+              <Text style={[s.successText, { marginTop: 0 }]}>Waiver chosen — tap to replace</Text>
+            </View>
           </>
         ) : (
           <>
-            <Text style={s.pin}>📄</Text>
-            <Text style={[s.optionTitle, { marginTop: 8 }]}>Tap to upload a photo of your waiver</Text>
+            <Icon name="file" size={32} color={colors.ink} />
+            <Text style={[s.optionTitle, { marginTop: 12, textAlign: 'center' }]}>Tap to upload a photo of your waiver</Text>
           </>
         )}
-      </TouchableOpacity>
-      <TouchableOpacity style={s.toggleRow} onPress={() => onChange(value === 'default' ? null : 'default')}>
-        <Text style={s.toggleLabel}>Use the platform's default waiver instead</Text>
-        <View style={[s.switchTrack, value === 'default' && s.switchTrackOn]}><View style={[s.switchThumb, value === 'default' && s.switchThumbOn]} /></View>
-      </TouchableOpacity>
+      </Pressable>
+      <Toggle
+        value={value === 'default'}
+        onValueChange={() => onChange(value === 'default' ? null : 'default')}
+        label="Use the platform's default waiver instead"
+        style={{ marginTop: 12 }}
+      />
     </View>
   );
 }

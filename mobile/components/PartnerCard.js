@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { app } from '../theme/appStyles';
+import { colors } from '../theme/colors';
+import { type } from '../theme/tokens';
 import { BACKEND_URL } from '../config/api';
 import { verifySignedBadge } from '../verification/badgeVerify';
-import { Avatar, TagPill } from './AppParts';
+import { Avatar, Icon, TagPill } from './AppParts';
 
-// Brief partner profile (plotline .partner-card). The verified badge is shown
+// Brief partner profile (direction B partner card: person-tint card, 64 person disc, Title L name). The verified badge is shown
 // only when BOTH checks agree (D10, see backend/recryption/badgeStore.js):
 // the server serves the badge only if Recryption's verify() passes, and the
 // app re-verifies the Ed25519 signature on-device against the public key.
@@ -37,26 +39,36 @@ export default function PartnerCard({ sessionToken, pairingId, partner, onPress,
 
   if (!partner) return null;
   const history = partner.history ?? {};
-  const meta = [partner.occupation, partner.gender].filter(Boolean).join(' · ');
+  const metaLines = [partner.occupation, partner.gender].filter(Boolean);
 
   return (
-    <TouchableOpacity style={app.partnerCard} onPress={onPress} disabled={!onPress}>
+    <Pressable
+      style={({ pressed }) => [app.partnerCard, pressed && onPress && { backgroundColor: colors.tintPressed }]}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+    >
       <View style={app.partnerTop}>
-        <Avatar name={partner.display_name} />
+        <Avatar name={partner.display_name} size={64} userId={partner.user_id ?? partner.id ?? partner.display_name} />
         <View style={{ flex: 1 }}>
-          <Text style={app.h3}>{partner.display_name}{partner.age ? `, ${partner.age}` : ''}</Text>
-          {meta ? <Text style={app.partnerMeta}>{meta}</Text> : null}
+          <Text style={[type.titleL, { color: colors.ink }]}>{partner.display_name}{partner.age ? `, ${partner.age}` : ''}</Text>
+          {metaLines.map((line) => (
+            <Text key={line} style={app.partnerMeta}>{line}</Text>
+          ))}
           {badge === null ? (
-            <ActivityIndicator size="small" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+            <ActivityIndicator size="small" color={colors.ink} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
           ) : badge ? (
-            <View style={app.badgeVerified}><Text style={app.badgeVerifiedText}>✓ Verified</Text></View>
+            <View style={app.badgeVerified}>
+              <Icon name="shield-check" size={18} color={colors.ink} />
+              <Text style={app.badgeVerifiedText}>Verified</Text>
+            </View>
           ) : (
-            <Text style={[app.partnerMeta, { marginTop: 4 }]}>Verification badge not confirmed</Text>
+            <Text style={[app.partnerMeta, { marginTop: 8 }]}>Verification badge not confirmed</Text>
           )}
         </View>
-        {onPress ? <Text style={{ color: '#5B6459', fontSize: 16 }}>›</Text> : null}
+        {onPress ? <Icon name="chevron-right" size={24} color={colors.ink} /> : null}
       </View>
-      {partner.bio && !compact ? <Text style={app.blurb}>"{partner.bio}"</Text> : null}
+      {partner.bio && !compact ? <Text style={app.blurb}>{`\u201C${partner.bio}\u201D`}</Text> : null}
       <View style={app.historyRow}>
         <TagPill label={history.shift_count ? `${history.shift_count} shift${history.shift_count === 1 ? '' : 's'}` : 'First shift with us'} />
         {(history.causes_volunteered?.length ? history.causes_volunteered : partner.causes ?? []).slice(0, 3).map((c) => (
@@ -64,10 +76,10 @@ export default function PartnerCard({ sessionToken, pairingId, partner, onPress,
         ))}
       </View>
       {!compact && history.public_org_ratings?.length ? (
-        <Text style={[app.finetext, { marginTop: 10 }]}>
+        <Text style={[app.finetext, { marginTop: 12 }]}>
           Org feedback they've chosen to share: {history.public_org_ratings.map((r) => `${r.contribution} contribution (${r.cause_tags.join(', ')})`).join('; ')}
         </Text>
       ) : null}
-    </TouchableOpacity>
+    </Pressable>
   );
 }

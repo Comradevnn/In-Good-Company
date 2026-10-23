@@ -12,9 +12,6 @@ const MOBILE_DIR = path.resolve(THEME_DIR, '..');
 // TEMPORARY: files (relative to mobile/) that still hold hex/rgb/named colours and have not been migrated to
 // role tokens yet. Hits in these files are reported, not failed. Later phases shrink this to empty.
 const PENDING_MIGRATION = new Set([
-  'App.js',
-  'components/PartnerCard.js',
-  'components/PrimaryButton.js',
   'screens/BookingScreen.js',
   'screens/BuddiesScreen.js',
   'screens/DeedsScreen.js',
@@ -26,8 +23,6 @@ const PENDING_MIGRATION = new Set([
   'screens/RatingScreen.js',
   'screens/VerifyIdScreen.js',
   'screens/WaitingScreen.js',
-  'theme/appStyles.js',
-  'theme/onboardingStyles.js',
 ]);
 
 // ---------------------------------------------------------------------------------------------------------
