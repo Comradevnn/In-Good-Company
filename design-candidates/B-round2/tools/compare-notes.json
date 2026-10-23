@@ -1,0 +1,71 @@
+{
+  "intro": "Design candidate B (\"Overprint\") in four refined palettes after the cofounder's feedback on round 1: fewer colours per screen, keep the Moss green and Calm lavender fields, bring in the pale cyan card shade, and drop the blue \"you\" disc, the yellow person disc and accent, and the olive lens. Only colours change. Round-1 Moss and Calm sit alongside for reference. Scroll each row sideways to compare one screen across all six.",
+  "recommendation": {
+    "title": "Recommended: moss-shade-tonal. Runner-up: calm-tonal",
+    "points": [
+      "<strong>moss-shade-tonal answers every point of the feedback.</strong> It keeps the Moss green field and the Moss status card on Home, uses the pale cyan shade for the shift and list cards, and rebuilds \"you\", Jordan, the accent and the overlap lens as tones of the same green: dark green, pale mint and deep forest. Sign in and Expired show one colour plus ink; Home drops from 5 hue families to 4.",
+      "<strong>The cyan shade works better with Moss than with Calm.</strong> Beside green, cyan reads as a neighbouring cool hue (sky over garden), and it matches Moss's teal success card, so Verify stays in one green-and-teal family. Beside lavender it reads as a second pastel competing with the field, and Calm's own lavender card tint is quieter.",
+      "<strong>It is also the safest.</strong> 0 contrast failures, 0 colour-blind flags, and the fewest warnings of the four (8).",
+      "<strong>Watch:</strong> the deep forest lens is close to the dark green \"you\" disc, so the overlap reads more like a shadow than a mix of two inks. If that matters, cooling lens-1 a few degrees toward teal (around #0B4A3A) is a one-token change; re-run the checker against success after.",
+      "<strong>Choose calm-tonal</strong> if a quieter, gentler feel matters more than energy. Its violet \"you\", pale lilac Jordan and indigo lens make the clearest \"mixed inks\" overlap of the four. Jordan's pale disc is faint on white; deepening person-1 one step would help.",
+      "<strong>moss-shade</strong> is the controlled baseline. The cyan cards help a little, but it keeps the blue, marigold and olive the cofounder disliked. <strong>calm-tonal-shade</strong> works, but the cyan dilutes the lavender."
+    ]
+  },
+  "adopt": "<p>Copy the <code>colors.js</code> export from the chosen variant's <code>scheme.md</code> into <code>mobile/theme/colors.js</code>, keeping the palette as swappable role tokens, and keep <code>design-candidates/B/direction.md</code> for everything else (read its colour names through the mapping table at the end of each <code>scheme.md</code>). For the overnight redesign run: \"adopt design-candidates/B/direction.md with the palette from design-candidates/B-round2/&lt;slug&gt;/scheme.md\". That run starts from <code>main</code>, so merge <code>explore/b-color-schemes</code> and then <code>explore/b-round2</code> first, or copy those files onto <code>main</code>.</p>",
+  "schemes": [
+    {
+      "slug": "moss-shade-tonal", "name": "moss-shade-tonal",
+      "changed": "Round-1 Moss with the cyan card tint; you, Jordan, partner card, accent and lens-1 rebuilt in greens. Peony and lilac people, their lenses and the teal success card kept.",
+      "count": "Sign in 2 · Verify 3 + red · Home 4 · Shift 3 · Expired 2 <span class=\"muted\">(round-1 Moss: 4 · 4 · 5 · 4 · 4)</span>",
+      "contrast": "0 failures; ink on field 6.2; white on the lens 10.5.",
+      "colorblind": "0 flags, 8 warnings (fewest); lowest 12.1.",
+      "critique": "One green voice plus cyan cards: the loved Moss field and card, with \"you\" and the lens now inside the palette.",
+      "risk": "The forest lens sits close to the dark green \"you\", so the overlap reads as a shadow more than a mix."
+    },
+    {
+      "slug": "calm-tonal", "name": "calm-tonal",
+      "changed": "Round-1 Calm; you, Jordan, partner card, accent and lens-1 rebuilt in violet and lavender. Lavender cards, clay and sage people, rose and teal lenses and the green success card kept.",
+      "count": "Sign in 2 · Verify 3 + red · Home 4 · Shift 2 · Expired 2 <span class=\"muted\">(round-1 Calm: 5 · 4 · 7 · 5 · 4)</span>",
+      "contrast": "0 failures; ink on field 6.7.",
+      "colorblind": "0 flags, 10 warnings; lowest 11.4.",
+      "critique": "Lavender and indigo only: the cleanest \"mixed inks\" lens, gentle and quiet.",
+      "risk": "Jordan's pale lilac disc is faint on white and has little edge on the field."
+    },
+    {
+      "slug": "calm-tonal-shade", "name": "calm-tonal-shade",
+      "changed": "calm-tonal with the cyan shade for cards and the partner card.",
+      "count": "Sign in 2 · Verify 3 + red · Home 5 · Shift 3 · Expired 2 <span class=\"muted\">(round-1 Calm: 5 · 4 · 7 · 5 · 4)</span>",
+      "contrast": "0 failures; ink on field 6.7; ink-2, ink-3 and edge needed no retune on the cyan.",
+      "colorblind": "0 flags, 9 warnings; lowest 11.4.",
+      "critique": "Calm-tonal with the cyan card added, which gives up some lavender purity.",
+      "risk": "The cyan competes with the lavender as a second pastel; Verify shows lavender, green and red together."
+    },
+    {
+      "slug": "moss-shade", "name": "moss-shade",
+      "changed": "Round-1 Moss with only the card tint changed to the cyan shade (#E9F4F8). The controlled baseline.",
+      "count": "Sign in 4 · Verify 4 + red · Home 5 · Shift 4 · Expired 4 <span class=\"muted\">(same as round-1 Moss)</span>",
+      "contrast": "0 failures; ink on the cyan card 13.2.",
+      "colorblind": "0 flags, 9 warnings (same as round-1 Moss).",
+      "critique": "The cyan cards help a little, but it still has the blue, marigold and olive the cofounder disliked.",
+      "risk": "The olive lens barely separates from the green field."
+    },
+    {
+      "slug": "moss", "name": "Moss", "round1": true,
+      "changed": "Round 1 as reviewed by the cofounder.",
+      "count": "Sign in 4 · Verify 4 + red · Home 5 · Shift 4 · Expired 4",
+      "contrast": "0 failures; ink on field 6.2.",
+      "colorblind": "0 flags, 9 warnings.",
+      "critique": "Loved field and status card; the peacock disc, marigold and olive lens were the complaint.",
+      "risk": "Reference only."
+    },
+    {
+      "slug": "calm", "name": "Calm", "round1": true,
+      "changed": "Round 1 as reviewed by the cofounder.",
+      "count": "Sign in 5 · Verify 4 + red · Home 7 · Shift 5 · Expired 4",
+      "contrast": "0 failures; ink on field 6.7.",
+      "colorblind": "0 flags, 11 warnings.",
+      "critique": "Loved lavender field; the slate-blue disc, mustard and olive lens were the complaint.",
+      "risk": "Reference only."
+    }
+  ]
+}

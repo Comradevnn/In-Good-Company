@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Overprint Round Two</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Gabarito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+/* Page shell: a quiet neutral so the palettes carry all the colour. Single light look by choice. */
+:root{--bg:#ECECEF;--panel:#FFFFFF;--fg:#1B1B26;--fg-2:#4A4A58;--line:#D6D6DE;--rec:#F7F7FB;color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 'Figtree','Helvetica Neue',Arial,sans-serif;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:32px 64px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
+h1{font-family:'Gabarito',sans-serif;font-weight:900;font-size:2.2rem;line-height:1.1;margin:0 0 8px;text-wrap:balance}
+h2{font-family:'Gabarito',sans-serif;font-weight:800;font-size:1.4rem;margin:0 0 12px}
+p{margin:0 0 10px;max-width:72ch}
+.muted{color:var(--fg-2);font-size:.88rem}
+.ref{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-2);border:1px solid var(--line);border-radius:6px;padding:0 5px;vertical-align:2px}
+a{color:#1E2A9E;text-underline-offset:3px}
+code{font-size:.85em}
+.rec{background:var(--rec);border:1px solid var(--line);border-radius:12px;padding:20px 22px}
+.rec .tag{display:inline-block;font-weight:700;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-2);margin-bottom:6px}
+.rec ul{margin:6px 0 0;padding-left:20px;max-width:76ch}.rec li{margin-bottom:6px}
+.strip{display:flex;gap:24px;overflow-x:auto;padding:4px 2px 16px;scroll-snap-type:x proximity}
+.strip figure{margin:0;flex:none;scroll-snap-align:start;display:flex;flex-direction:column;gap:10px}
+.strip figcaption{font-size:15px;color:var(--fg-2)}
+.strip figcaption b{color:var(--fg)}
+.palettes{display:flex;flex-direction:column;gap:14px}
+.pal{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.pal h3{margin:0 0 8px;font-size:1rem}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:84px;font-size:12px;line-height:1.3}
+.sw i{display:block;width:84px;height:40px;border-radius:8px;border:1px solid rgba(0,0,0,.12)}
+.sw b{font-weight:700}.sw code{color:var(--fg-2);font-size:11px}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+table{border-collapse:collapse;min-width:1100px;width:100%;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:11px 12px;border-bottom:1px solid var(--line)}
+tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}
+tbody th{color:var(--fg-2);width:110px}
+a:focus-visible{outline:2px solid #1E2A9E;outline-offset:2px}
+/* B's own CSS, scoped to each phone */
+.cmp{
+  /* ===== SCHEME COLOURS: a scheme changes ONLY the values in this block ===== */
+  /* ink: text, primary buttons, outlines, icons */
+  --ink:#0E1280; --ink-2:#3B43A6; --ink-3:#5058B0;
+  --on-ink:#FFFFFF; --on-ink-2:#D9DBFF; --on-ink-line:#5058E0;
+  /* grounds and surfaces */
+  --paper:#FFFFFF; --surface:#FFFFFF; --tint:#EEF0FF; --edge:#6E76D0;
+  /* the field: the loud region (hero, Home status card) and its tint */
+  --field:#FF4F9A; --field-tint:#FFE3EF;
+  --selected:#FF4F9A; --unread:#FF4F9A; --ring:#FFFFFF; --empty-ring:#FF4F9A;
+  /* people: you + a fixed pool (person-1 = Jordan, person-2 = Sam, person-3 = next person) */
+  --you:#2E3BF0; --on-you:#FFFFFF;
+  --person-1:#FFE23D; --person-1-tint:#FFF6BF; --person-2:#FF4F9A; --person-3:#46E0B4;
+  /* lenses: one solid pre-mixed colour per pairing */
+  --lens-1:#0A7A48; --lens-2:#7B2CD6; --lens-3:#0A6E7A; --lens-others:#FF7A2F; --on-lens:#FFFFFF;
+  /* accent: Deeds badge, small tags, notice icon, the hold numeral */
+  --accent:#FFE23D; --accent-tint:#FFF6BF;
+  /* states */
+  --success:#0A7A48; --success-tint:#E6F7EE; --on-success:#FFFFFF;
+  --danger:#B3001B; --danger-tint:#FFE9EC;
+  --off-bg:#E4E6F7; --off-fg:#5C62A8;
+  --scrollbar:#8C92DD;
+  /* ===== end scheme colours ===== */
+  /* presentation only (page around the phones): not part of a scheme */
+  --page-bg:#E9E9EE; --page-ink:#1B1B26; --page-ink-2:#3A3A48; --device-frame:#14152B;
+  --font-display:'Gabarito','Trebuchet MS',sans-serif;
+  --font-text:'Figtree','Helvetica Neue',Arial,sans-serif;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --r-field:20px; --r-card:28px; --r-hero:32px; --r-pill:999px;
+  --shadow-bar:0 -4px 16px rgba(0,0,0,.10);
+  --t-display:56px; --t-headline:36px; --t-title:24px; --t-subtitle:18px;
+  --t-body:16px; --t-body-s:15px; --t-label:15px; --t-caption:13px;
+}
+.cmp *{box-sizing:border-box;margin:0;padding:0}
+.cmp /* device */
+.device{position:relative;width:390px;height:844px;box-sizing:content-box;border:10px solid var(--device-frame);border-radius:56px;overflow:hidden;background:var(--paper)}
+.cmp .device.tall{height:auto}
+.cmp .screen{position:relative;width:390px;height:844px;overflow:hidden;background:var(--paper);font-family:var(--font-text);color:var(--ink)}
+.cmp .tall .screen{height:auto;min-height:844px;overflow:visible;padding-bottom:34px}
+.cmp .island{position:absolute;top:11px;left:50%;margin-left:-60px;width:120px;height:34px;border-radius:17px;background:var(--device-frame);z-index:20}
+.cmp .home-ind{position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:3px;background:var(--ink);z-index:20}
+.cmp /* status bar */
+.statusbar{height:47px;position:relative;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 40px;font-weight:700;font-size:17px;color:var(--ink)}
+.cmp .statusbar .sys{display:flex;gap:6px;align-items:center}
+.cmp .top{position:relative;z-index:5}
+.cmp .top.pinned{position:absolute;top:0;left:0;right:0}
+.cmp .top.pink{background:var(--field)}
+.cmp .top.white{background:var(--paper)}
+.cmp .bar{height:56px;display:flex;align-items:center;gap:8px;padding:0 12px 0 12px}
+.cmp .bar-title{font-family:var(--font-display);font-weight:800;font-size:20px;line-height:26px;color:var(--ink)}
+.cmp .back{width:48px;height:48px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;color:var(--ink);flex:none}
+.cmp /* icons */
+.ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.cmp /* type roles */
+.t-display{font-family:var(--font-display);font-weight:900;font-size:var(--t-display);line-height:54px;letter-spacing:-.02em}
+.cmp .t-headline{font-family:var(--font-display);font-weight:900;font-size:var(--t-headline);line-height:40px;letter-spacing:-.015em}
+.cmp .t-title{font-family:var(--font-display);font-weight:800;font-size:var(--t-title);line-height:28px;letter-spacing:-.005em}
+.cmp .t-subtitle{font-family:var(--font-display);font-weight:700;font-size:var(--t-subtitle);line-height:24px}
+.cmp .t-body{font-size:var(--t-body);line-height:24px;font-weight:500}
+.cmp .t-body-s{font-size:var(--t-body-s);line-height:22px;font-weight:500}
+.cmp .t-label{font-size:var(--t-label);line-height:20px;font-weight:700}
+.cmp .t-caption{font-size:var(--t-caption);line-height:18px;font-weight:700}
+.cmp .muted{color:var(--ink-2)}
+.cmp /* layout */
+.pad{padding:0 24px}
+.cmp .stack>*+*{margin-top:var(--s4)}
+.cmp /* chips and tags */
+.tag{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:var(--r-pill);font-weight:700;font-size:15px;line-height:20px;color:var(--ink);background:var(--surface);white-space:nowrap}
+.cmp .tag.yellow{background:var(--accent)}
+.cmp .tag.ink{background:var(--ink);color:var(--on-ink)}
+.cmp .tag.line{background:var(--surface);border:2px solid var(--ink);height:32px;padding:0 12px}
+.cmp .tag.pink{background:var(--field)}
+.cmp .chip{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:48px;padding:0 11px;border-radius:var(--r-pill);border:2px solid var(--edge);background:var(--surface);color:var(--ink);font-weight:700;font-size:15px;white-space:nowrap}
+.cmp .chip.sel{background:var(--selected);border-color:var(--ink)}
+.cmp .chips{display:flex;gap:6px}
+.cmp /* fields */
+.field{display:flex;flex-direction:column;gap:8px}
+.cmp .field>label{font-weight:700;font-size:15px;line-height:20px;color:var(--ink)}
+.cmp .input{height:56px;border-radius:var(--r-field);border:2px solid var(--edge);background:var(--surface);padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:17px;font-weight:600;color:var(--ink);white-space:nowrap}
+.cmp .input .ph{color:var(--ink-3);font-weight:500}
+.cmp .input.focus{border-color:var(--ink);box-shadow:0 0 0 4px var(--selected)}
+.cmp .input.err{border-color:var(--danger);background:var(--danger-tint);color:var(--ink)}
+.cmp .input.err .ic{color:var(--danger)}
+.cmp .dots{display:flex;gap:6px}
+.cmp .dots i{width:9px;height:9px;border-radius:50%;background:var(--ink);display:block}
+.cmp .pair{display:flex;gap:12px}
+.cmp .pair>*{min-width:0}
+.cmp .errmsg{display:flex;gap:8px;align-items:flex-start;color:var(--danger);font-weight:700;font-size:15px;line-height:22px}
+.cmp .helper{font-size:15px;line-height:22px;font-weight:500;color:var(--ink-2)}
+.cmp /* links and buttons */
+.link{display:flex;align-items:center;min-height:48px;font-weight:700;font-size:16px;color:var(--ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+.cmp .link.center{justify-content:center}
+.cmp .link.right{justify-content:flex-end;white-space:nowrap}
+.cmp .btn{display:flex;align-items:center;justify-content:center;gap:8px;height:56px;width:100%;border-radius:var(--r-pill);font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:.005em}
+.cmp .btn.primary{background:var(--ink);color:var(--on-ink)}
+.cmp .btn.secondary{background:var(--surface);color:var(--ink);border:2px solid var(--ink)}
+.cmp .btn.disabled{background:var(--off-bg);color:var(--off-fg)}
+.cmp .footer{position:absolute;left:0;right:0;bottom:0;padding:16px 24px 34px;background:var(--paper);box-shadow:var(--shadow-bar);z-index:10}
+.cmp .tall .footer{position:static;box-shadow:none;padding-bottom:16px}
+.cmp .footer .link{margin-bottom:-8px}
+.cmp /* cards */
+.card{border-radius:var(--r-card);background:var(--tint);padding:20px}
+.cmp .card.yellow{background:var(--person-1-tint)}
+.cmp .card.pinkt{background:var(--field-tint)}
+.cmp .card.ink{background:var(--ink);color:var(--on-ink)}
+.cmp .section-h{display:flex;align-items:center;justify-content:space-between;min-height:48px}
+.cmp .hero-pink{background:var(--field);border-radius:0 0 var(--r-hero) var(--r-hero);position:relative}
+.cmp /* notice */
+.notice{display:flex;gap:12px;border-radius:24px;background:var(--accent-tint);padding:16px;color:var(--ink)}
+.cmp .notice .ico{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.cmp .notice p{font-size:15px;line-height:22px;font-weight:500}
+.cmp /* upload card */
+.upload{display:flex;gap:14px;align-items:center;border-radius:var(--r-card);border:2px dashed var(--success);background:var(--success-tint);padding:16px}
+.cmp .upload .ico{width:48px;height:48px;border-radius:50%;background:var(--success);color:var(--on-success);display:flex;align-items:center;justify-content:center;flex:none}
+.cmp /* toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;min-height:56px;gap:12px;font-weight:700;font-size:17px}
+.cmp .switch{position:relative;width:56px;height:32px;border-radius:16px;border:2px solid var(--ink);background:var(--surface);flex:none}
+.cmp .switch::after{content:"";position:absolute;left:6px;top:6px;width:16px;height:16px;border-radius:50%;background:var(--ink)}
+.cmp .switch.on{background:var(--selected)}
+.cmp .switch.on::after{left:28px;width:20px;height:20px;top:4px}
+.cmp /* lists */
+.navrow{display:flex;align-items:center;gap:14px;min-height:64px;border-radius:24px;background:var(--tint);padding:0 16px;font-family:var(--font-display);font-weight:700;font-size:18px;color:var(--ink)}
+.cmp .navrow .ni{width:40px;height:40px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;flex:none}
+.cmp .navrow .chev{margin-left:auto;display:flex}
+.cmp .kv{display:flex;gap:14px;align-items:flex-start}
+.cmp .kv .ki{width:40px;height:40px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;flex:none}
+.cmp .kv .kl{font-weight:700;font-size:14px;line-height:18px;color:var(--ink-2)}
+.cmp .kv .kv-v{font-size:16px;line-height:22px;font-weight:600;color:var(--ink)}
+.cmp .bul{display:flex;gap:12px;font-size:15px;line-height:22px;font-weight:500}
+.cmp .bul::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink);flex:none;margin-top:7px}
+.cmp .scrollbar{position:absolute;right:4px;width:4px;border-radius:2px;background:var(--scrollbar);z-index:12}
+.cmp .stats{display:flex;border-radius:var(--r-card);background:var(--tint);padding:20px 8px}
+.cmp .stats>div{flex:1;text-align:center}
+.cmp .stats b{display:block;font-family:var(--font-display);font-weight:900;font-size:56px;line-height:56px;letter-spacing:-.02em;color:var(--ink)}
+.cmp .stats span{display:block;margin-top:4px;font-size:15px;line-height:20px;font-weight:700;color:var(--ink-2)}
+.cmp .disc-pair{position:relative;flex:none}
+
+.cmp .device{flex:none}
+.cmp.s-moss-shade-tonal{--ink:#0A2E1B;--ink-2:#35604A;--ink-3:#4F7461;--on-ink:#FFFFFF;--on-ink-2:#CFEBD8;--on-ink-line:#4A8F69;--paper:#FAFDF7;--surface:#FFFFFF;--tint:#E9F4F8;--edge:#5E8C70;--field:#2FBF62;--field-tint:#D2F3CB;--selected:#2FBF62;--unread:#1F8F3A;--ring:#FFFFFF;--empty-ring:#1F8F3A;--you:#127718;--on-you:#FFFFFF;--person-1:#A8E6B8;--person-1-tint:#E3F6E8;--person-2:#F27FB5;--person-3:#C0A8F5;--lens-1:#0B4A16;--lens-2:#8F2A4C;--lens-3:#4A52D0;--lens-others:#EE8A2B;--on-lens:#FFFFFF;--accent:#B9ECC7;--accent-tint:#E3F6E8;--success:#0B7285;--success-tint:#DDF2F6;--on-success:#FFFFFF;--danger:#B42318;--danger-tint:#FDE8E4;--off-bg:#DDEADB;--off-fg:#4F6B59;--scrollbar:#659B77}
+.cmp.s-calm-tonal{--ink:#331A45;--ink-2:#5A3E72;--ink-3:#6F5683;--on-ink:#FFFFFF;--on-ink-2:#E6D9F0;--on-ink-line:#7C5E94;--paper:#FFFFFF;--surface:#FFFFFF;--tint:#F4F0F9;--edge:#867099;--field:#B6A3DB;--field-tint:#E8E0F5;--selected:#B6A3DB;--unread:#7A5CB5;--ring:#FFFFFF;--empty-ring:#8266BA;--you:#6A4DBE;--on-you:#FFFFFF;--person-1:#E6D6F8;--person-1-tint:#EEE6F8;--person-2:#D4806B;--person-3:#D6E8CE;--lens-1:#2D1B78;--lens-2:#9A4A68;--lens-3:#2A8080;--lens-others:#D9A26C;--on-lens:#FFFFFF;--accent:#D5C7EE;--accent-tint:#EAE2F5;--success:#14573C;--success-tint:#E2F0E8;--on-success:#FFFFFF;--danger:#A3213F;--danger-tint:#F9E7EA;--off-bg:#EAE5F0;--off-fg:#6A587C;--scrollbar:#A898BC}
+.cmp.s-calm-tonal-shade{--ink:#331A45;--ink-2:#5A3E72;--ink-3:#6F5683;--on-ink:#FFFFFF;--on-ink-2:#E6D9F0;--on-ink-line:#7C5E94;--paper:#FFFFFF;--surface:#FFFFFF;--tint:#E9F4F8;--edge:#867099;--field:#B6A3DB;--field-tint:#E8E0F5;--selected:#B6A3DB;--unread:#7A5CB5;--ring:#FFFFFF;--empty-ring:#8266BA;--you:#6F49B1;--on-you:#FFFFFF;--person-1:#DED2F7;--person-1-tint:#E9F4F8;--person-2:#D4806B;--person-3:#D6E8CE;--lens-1:#381A72;--lens-2:#9A4A68;--lens-3:#2A8080;--lens-others:#D9A26C;--on-lens:#FFFFFF;--accent:#D3C5EC;--accent-tint:#EFE9F9;--success:#14573C;--success-tint:#E2F0E8;--on-success:#FFFFFF;--danger:#A3213F;--danger-tint:#F9E7EA;--off-bg:#EAE5F0;--off-fg:#6A587C;--scrollbar:#A898BC}
+.cmp.s-moss-shade{--ink:#0A2E1B;--ink-2:#35604A;--ink-3:#4F7461;--on-ink:#FFFFFF;--on-ink-2:#CFEBD8;--on-ink-line:#4A8F69;--paper:#FAFDF7;--surface:#FFFFFF;--tint:#E9F4F8;--edge:#5E8C70;--field:#2FBF62;--field-tint:#D2F3CB;--selected:#2FBF62;--unread:#1F8F3A;--ring:#FFFFFF;--empty-ring:#1F8F3A;--you:#075A73;--on-you:#FFFFFF;--person-1:#FFC83A;--person-1-tint:#FFEFC9;--person-2:#F27FB5;--person-3:#C0A8F5;--lens-1:#5A8208;--lens-2:#8F2A4C;--lens-3:#4A52D0;--lens-others:#EE8A2B;--on-lens:#FFFFFF;--accent:#FFC83A;--accent-tint:#FFEFC9;--success:#0B7285;--success-tint:#DDF2F6;--on-success:#FFFFFF;--danger:#B42318;--danger-tint:#FDE8E4;--off-bg:#DDEADB;--off-fg:#4F6B59;--scrollbar:#659B77}
+.cmp.s-moss{--ink:#0A2E1B;--ink-2:#35604A;--ink-3:#4F7461;--on-ink:#FFFFFF;--on-ink-2:#CFEBD8;--on-ink-line:#4A8F69;--paper:#FAFDF7;--surface:#FFFFFF;--tint:#E9F5E4;--edge:#5E8C70;--field:#2FBF62;--field-tint:#D2F3CB;--selected:#2FBF62;--unread:#1F8F3A;--ring:#FFFFFF;--empty-ring:#1F8F3A;--you:#075A73;--on-you:#FFFFFF;--person-1:#FFC83A;--person-1-tint:#FFEFC9;--person-2:#F27FB5;--person-3:#C0A8F5;--lens-1:#5A8208;--lens-2:#8F2A4C;--lens-3:#4A52D0;--lens-others:#EE8A2B;--on-lens:#FFFFFF;--accent:#FFC83A;--accent-tint:#FFEFC9;--success:#0B7285;--success-tint:#DDF2F6;--on-success:#FFFFFF;--danger:#B42318;--danger-tint:#FDE8E4;--off-bg:#DDEADB;--off-fg:#4F6B59;--scrollbar:#659B77}
+.cmp.s-calm{--ink:#331A45;--ink-2:#5A3E72;--ink-3:#6F5683;--on-ink:#FFFFFF;--on-ink-2:#E6D9F0;--on-ink-line:#7C5E94;--paper:#FFFFFF;--surface:#FFFFFF;--tint:#F4F0F9;--edge:#867099;--field:#B6A3DB;--field-tint:#E8E0F5;--selected:#B6A3DB;--unread:#7A5CB5;--ring:#FFFFFF;--empty-ring:#8266BA;--you:#35599A;--on-you:#FFFFFF;--person-1:#EBC45A;--person-1-tint:#F7EBCB;--person-2:#D4806B;--person-3:#D6E8CE;--lens-1:#617B37;--lens-2:#9A4A68;--lens-3:#2A8080;--lens-others:#D9A26C;--on-lens:#FFFFFF;--accent:#EBC45A;--accent-tint:#F7EBCB;--success:#14573C;--success-tint:#E2F0E8;--on-success:#FFFFFF;--danger:#A3213F;--danger-tint:#F9E7EA;--off-bg:#EAE5F0;--off-fg:#6A587C;--scrollbar:#A898BC}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4s2-1.500 2-6.500z"/><path d="M10 19.500a2.200 2.200 0 0 0 4 0"/></symbol>
+<symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.500"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.500v2.500M12 19v2.500M2.500 12H5M19 12h2.500M5.300 5.300l1.800 1.800M16.900 16.900l1.800 1.800M5.300 18.700l1.800-1.800M16.900 7.100l1.800-1.800"/></symbol>
+<symbol id="i-verified" viewBox="0 0 24 24"><path d="M12 3l7.500 3v5.500c0 4.500-3.200 8-7.500 9.500-4.300-1.500-7.500-5-7.500-9.500V6z"/><path d="M8.800 12l2.400 2.400 4.200-4.600"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.500 3v5.500c0 4.500-3.200 8-7.500 9.500-4.300-1.500-7.500-5-7.500-9.500V6z"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.500" width="16" height="14.500" rx="3.500"/><path d="M4 10.500h16M8.500 3.500v4M15.500 3.500v4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.500M12 7.600v.1"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.500V13M12 16.500v.1"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.800"/><path d="M4.500 20c.6-4 3.700-6 7.500-6s6.900 2 7.500 6"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.500l2.600 5.400 5.900.8-4.300 4.100 1 5.900L12 17l-5.200 2.700 1-5.900-4.300-4.100 5.900-.8z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.500-4.600-7.500-10.200A4.200 4.200 0 0 1 12 7.600a4.200 4.200 0 0 1 7.500 2.200C19.500 15.400 12 20 12 20z"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.500-5.600-6.500-11a6.500 6.500 0 0 1 13 0c0 5.400-6.500 11-6.500 11z"/><circle cx="12" cy="10" r="2.400"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M9.500 7H20M9.500 12H20M9.500 17H20"/><path d="M4.500 7v.1M4.500 12v.1M4.500 17v.1"/></symbol>
+<symbol id="i-quote" viewBox="0 0 24 24"><path d="M5 17.500V13a5 5 0 0 1 5-5M13 17.500V13a5 5 0 0 1 5-5"/></symbol>
+</defs></svg>
+<div class="wrap">
+<header>
+  <h1>Overprint, round 2: four refined palettes</h1>
+  <p>Design candidate B ("Overprint") in four refined palettes after the cofounder's feedback on round 1: fewer colours per screen, keep the Moss green and Calm lavender fields, bring in the pale cyan card shade, and drop the blue "you" disc, the yellow person disc and accent, and the olive lens. Only colours change. Round-1 Moss and Calm sit alongside for reference. Scroll each row sideways to compare one screen across all six.</p>
+</header>
+<section class="rec" aria-labelledby="rec-h">
+  <span class="tag">Recommendation, not a decision</span>
+  <h2 id="rec-h">Recommended: moss-shade-tonal. Runner-up: calm-tonal</h2>
+  <ul><li><strong>moss-shade-tonal answers every point of the feedback.</strong> It keeps the Moss green field and the Moss status card on Home, uses the pale cyan shade for the shift and list cards, and rebuilds "you", Jordan, the accent and the overlap lens as tones of the same green: dark green, pale mint and deep forest. Sign in and Expired show one colour plus ink; Home drops from 5 hue families to 4.</li><li><strong>The cyan shade works better with Moss than with Calm.</strong> Beside green, cyan reads as a neighbouring cool hue (sky over garden), and it matches Moss's teal success card, so Verify stays in one green-and-teal family. Beside lavender it reads as a second pastel competing with the field, and Calm's own lavender card tint is quieter.</li><li><strong>It is also the safest.</strong> 0 contrast failures, 0 colour-blind flags, and the fewest warnings of the four (8).</li><li><strong>Watch:</strong> the deep forest lens is close to the dark green "you" disc, so the overlap reads more like a shadow than a mix of two inks. If that matters, cooling lens-1 a few degrees toward teal (around #0B4A3A) is a one-token change; re-run the checker against success after.</li><li><strong>Choose calm-tonal</strong> if a quieter, gentler feel matters more than energy. Its violet "you", pale lilac Jordan and indigo lens make the clearest "mixed inks" overlap of the four. Jordan's pale disc is faint on white; deepening person-1 one step would help.</li><li><strong>moss-shade</strong> is the controlled baseline. The cyan cards help a little, but it keeps the blue, marigold and olive the cofounder disliked. <strong>calm-tonal-shade</strong> works, but the cyan dilutes the lavender.</li></ul>
+</section>
+
+<section class="frame-row" aria-labelledby="row-0">
+  <h2 id="row-0">Sign in</h2>
+  <div class="strip">
+    <figure class="cmp s-moss-shade-tonal"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>moss-shade-tonal</b> · <a href="moss-shade-tonal/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm-tonal"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>calm-tonal</b> · <a href="calm-tonal/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm-tonal-shade"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>calm-tonal-shade</b> · <a href="calm-tonal-shade/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-moss-shade"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>moss-shade</b> · <a href="moss-shade/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-moss"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>Moss <span class="ref">round 1</span></b> · <a href="../B-schemes/moss/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>Calm <span class="ref">round 1</span></b> · <a href="../B-schemes/calm/index.html">all frames</a></figcaption></figure>
+  </div>
+</section>
+
+<section class="frame-row" aria-labelledby="row-2">
+  <h2 id="row-2">Home</h2>
+  <div class="strip">
+    <figure class="cmp s-moss-shade-tonal"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption><b>moss-shade-tonal</b> · <a href="moss-shade-tonal/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm-tonal"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption><b>calm-tonal</b> · <a href="calm-tonal/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm-tonal-shade"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption><b>calm-tonal-shade</b> · <a href="calm-tonal-shade/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-moss-shade"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption><b>moss-shade</b> · <a href="moss-shade/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-moss"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption><b>Moss <span class="ref">round 1</span></b> · <a href="../B-schemes/moss/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm"><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption><b>Calm <span class="ref">round 1</span></b> · <a href="../B-schemes/calm/index.html">all frames</a></figcaption></figure>
+  </div>
+</section>
+
+<section class="frame-row" aria-labelledby="row-3">
+  <h2 id="row-3">Shift proposal</h2>
+  <div class="strip">
+    <figure class="cmp s-moss-shade-tonal"><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>moss-shade-tonal</b> · <a href="moss-shade-tonal/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm-tonal"><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>calm-tonal</b> · <a href="calm-tonal/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm-tonal-shade"><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>calm-tonal-shade</b> · <a href="calm-tonal-shade/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-moss-shade"><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>moss-shade</b> · <a href="moss-shade/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-moss"><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>Moss <span class="ref">round 1</span></b> · <a href="../B-schemes/moss/index.html">all frames</a></figcaption></figure>
+    <figure class="cmp s-calm"><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption><b>Calm <span class="ref">round 1</span></b> · <a href="../B-schemes/calm/index.html">all frames</a></figcaption></figure>
+  </div>
+</section>
+<section aria-labelledby="pal-h"><h2 id="pal-h">Palettes</h2><div class="palettes">
+<div class="pal"><h3>moss-shade-tonal</h3><div class="swatches"><span class="sw"><i style="background:#2FBF62"></i><b>field</b><code>#2FBF62</code></span><span class="sw"><i style="background:#0A2E1B"></i><b>ink</b><code>#0A2E1B</code></span><span class="sw"><i style="background:#127718"></i><b>you</b><code>#127718</code></span><span class="sw"><i style="background:#A8E6B8"></i><b>person 1</b><code>#A8E6B8</code></span><span class="sw"><i style="background:#F27FB5"></i><b>person 2</b><code>#F27FB5</code></span><span class="sw"><i style="background:#C0A8F5"></i><b>person 3</b><code>#C0A8F5</code></span><span class="sw"><i style="background:#0B4A16"></i><b>lens 1</b><code>#0B4A16</code></span><span class="sw"><i style="background:#8F2A4C"></i><b>lens 2</b><code>#8F2A4C</code></span><span class="sw"><i style="background:#4A52D0"></i><b>lens 3</b><code>#4A52D0</code></span><span class="sw"><i style="background:#B9ECC7"></i><b>accent</b><code>#B9ECC7</code></span><span class="sw"><i style="background:#E9F4F8"></i><b>card tint</b><code>#E9F4F8</code></span><span class="sw"><i style="background:#E3F6E8"></i><b>partner card</b><code>#E3F6E8</code></span><span class="sw"><i style="background:#0B7285"></i><b>success</b><code>#0B7285</code></span><span class="sw"><i style="background:#FAFDF7"></i><b>ground</b><code>#FAFDF7</code></span></div></div>
+<div class="pal"><h3>calm-tonal</h3><div class="swatches"><span class="sw"><i style="background:#B6A3DB"></i><b>field</b><code>#B6A3DB</code></span><span class="sw"><i style="background:#331A45"></i><b>ink</b><code>#331A45</code></span><span class="sw"><i style="background:#6A4DBE"></i><b>you</b><code>#6A4DBE</code></span><span class="sw"><i style="background:#E6D6F8"></i><b>person 1</b><code>#E6D6F8</code></span><span class="sw"><i style="background:#D4806B"></i><b>person 2</b><code>#D4806B</code></span><span class="sw"><i style="background:#D6E8CE"></i><b>person 3</b><code>#D6E8CE</code></span><span class="sw"><i style="background:#2D1B78"></i><b>lens 1</b><code>#2D1B78</code></span><span class="sw"><i style="background:#9A4A68"></i><b>lens 2</b><code>#9A4A68</code></span><span class="sw"><i style="background:#2A8080"></i><b>lens 3</b><code>#2A8080</code></span><span class="sw"><i style="background:#D5C7EE"></i><b>accent</b><code>#D5C7EE</code></span><span class="sw"><i style="background:#F4F0F9"></i><b>card tint</b><code>#F4F0F9</code></span><span class="sw"><i style="background:#EEE6F8"></i><b>partner card</b><code>#EEE6F8</code></span><span class="sw"><i style="background:#14573C"></i><b>success</b><code>#14573C</code></span><span class="sw"><i style="background:#FFFFFF"></i><b>ground</b><code>#FFFFFF</code></span></div></div>
+<div class="pal"><h3>calm-tonal-shade</h3><div class="swatches"><span class="sw"><i style="background:#B6A3DB"></i><b>field</b><code>#B6A3DB</code></span><span class="sw"><i style="background:#331A45"></i><b>ink</b><code>#331A45</code></span><span class="sw"><i style="background:#6F49B1"></i><b>you</b><code>#6F49B1</code></span><span class="sw"><i style="background:#DED2F7"></i><b>person 1</b><code>#DED2F7</code></span><span class="sw"><i style="background:#D4806B"></i><b>person 2</b><code>#D4806B</code></span><span class="sw"><i style="background:#D6E8CE"></i><b>person 3</b><code>#D6E8CE</code></span><span class="sw"><i style="background:#381A72"></i><b>lens 1</b><code>#381A72</code></span><span class="sw"><i style="background:#9A4A68"></i><b>lens 2</b><code>#9A4A68</code></span><span class="sw"><i style="background:#2A8080"></i><b>lens 3</b><code>#2A8080</code></span><span class="sw"><i style="background:#D3C5EC"></i><b>accent</b><code>#D3C5EC</code></span><span class="sw"><i style="background:#E9F4F8"></i><b>card tint</b><code>#E9F4F8</code></span><span class="sw"><i style="background:#E9F4F8"></i><b>partner card</b><code>#E9F4F8</code></span><span class="sw"><i style="background:#14573C"></i><b>success</b><code>#14573C</code></span><span class="sw"><i style="background:#FFFFFF"></i><b>ground</b><code>#FFFFFF</code></span></div></div>
+<div class="pal"><h3>moss-shade</h3><div class="swatches"><span class="sw"><i style="background:#2FBF62"></i><b>field</b><code>#2FBF62</code></span><span class="sw"><i style="background:#0A2E1B"></i><b>ink</b><code>#0A2E1B</code></span><span class="sw"><i style="background:#075A73"></i><b>you</b><code>#075A73</code></span><span class="sw"><i style="background:#FFC83A"></i><b>person 1</b><code>#FFC83A</code></span><span class="sw"><i style="background:#F27FB5"></i><b>person 2</b><code>#F27FB5</code></span><span class="sw"><i style="background:#C0A8F5"></i><b>person 3</b><code>#C0A8F5</code></span><span class="sw"><i style="background:#5A8208"></i><b>lens 1</b><code>#5A8208</code></span><span class="sw"><i style="background:#8F2A4C"></i><b>lens 2</b><code>#8F2A4C</code></span><span class="sw"><i style="background:#4A52D0"></i><b>lens 3</b><code>#4A52D0</code></span><span class="sw"><i style="background:#FFC83A"></i><b>accent</b><code>#FFC83A</code></span><span class="sw"><i style="background:#E9F4F8"></i><b>card tint</b><code>#E9F4F8</code></span><span class="sw"><i style="background:#FFEFC9"></i><b>partner card</b><code>#FFEFC9</code></span><span class="sw"><i style="background:#0B7285"></i><b>success</b><code>#0B7285</code></span><span class="sw"><i style="background:#FAFDF7"></i><b>ground</b><code>#FAFDF7</code></span></div></div>
+<div class="pal"><h3>Moss <span class="ref">round 1</span></h3><div class="swatches"><span class="sw"><i style="background:#2FBF62"></i><b>field</b><code>#2FBF62</code></span><span class="sw"><i style="background:#0A2E1B"></i><b>ink</b><code>#0A2E1B</code></span><span class="sw"><i style="background:#075A73"></i><b>you</b><code>#075A73</code></span><span class="sw"><i style="background:#FFC83A"></i><b>person 1</b><code>#FFC83A</code></span><span class="sw"><i style="background:#F27FB5"></i><b>person 2</b><code>#F27FB5</code></span><span class="sw"><i style="background:#C0A8F5"></i><b>person 3</b><code>#C0A8F5</code></span><span class="sw"><i style="background:#5A8208"></i><b>lens 1</b><code>#5A8208</code></span><span class="sw"><i style="background:#8F2A4C"></i><b>lens 2</b><code>#8F2A4C</code></span><span class="sw"><i style="background:#4A52D0"></i><b>lens 3</b><code>#4A52D0</code></span><span class="sw"><i style="background:#FFC83A"></i><b>accent</b><code>#FFC83A</code></span><span class="sw"><i style="background:#E9F5E4"></i><b>card tint</b><code>#E9F5E4</code></span><span class="sw"><i style="background:#FFEFC9"></i><b>partner card</b><code>#FFEFC9</code></span><span class="sw"><i style="background:#0B7285"></i><b>success</b><code>#0B7285</code></span><span class="sw"><i style="background:#FAFDF7"></i><b>ground</b><code>#FAFDF7</code></span></div></div>
+<div class="pal"><h3>Calm <span class="ref">round 1</span></h3><div class="swatches"><span class="sw"><i style="background:#B6A3DB"></i><b>field</b><code>#B6A3DB</code></span><span class="sw"><i style="background:#331A45"></i><b>ink</b><code>#331A45</code></span><span class="sw"><i style="background:#35599A"></i><b>you</b><code>#35599A</code></span><span class="sw"><i style="background:#EBC45A"></i><b>person 1</b><code>#EBC45A</code></span><span class="sw"><i style="background:#D4806B"></i><b>person 2</b><code>#D4806B</code></span><span class="sw"><i style="background:#D6E8CE"></i><b>person 3</b><code>#D6E8CE</code></span><span class="sw"><i style="background:#617B37"></i><b>lens 1</b><code>#617B37</code></span><span class="sw"><i style="background:#9A4A68"></i><b>lens 2</b><code>#9A4A68</code></span><span class="sw"><i style="background:#2A8080"></i><b>lens 3</b><code>#2A8080</code></span><span class="sw"><i style="background:#EBC45A"></i><b>accent</b><code>#EBC45A</code></span><span class="sw"><i style="background:#F4F0F9"></i><b>card tint</b><code>#F4F0F9</code></span><span class="sw"><i style="background:#F7EBCB"></i><b>partner card</b><code>#F7EBCB</code></span><span class="sw"><i style="background:#14573C"></i><b>success</b><code>#14573C</code></span><span class="sw"><i style="background:#FFFFFF"></i><b>ground</b><code>#FFFFFF</code></span></div></div>
+</div></section>
+<section aria-labelledby="tab-h"><h2 id="tab-h">Side by side</h2><div class="tablebox"><table>
+<thead><tr><th scope="col"></th><th scope="col">moss-shade-tonal</th><th scope="col">calm-tonal</th><th scope="col">calm-tonal-shade</th><th scope="col">moss-shade</th><th scope="col">Moss <span class="ref">round 1</span></th><th scope="col">Calm <span class="ref">round 1</span></th></tr></thead>
+<tbody>
+<tr><th scope="row">What changed</th><td>Round-1 Moss with the cyan card tint; you, Jordan, partner card, accent and lens-1 rebuilt in greens. Peony and lilac people, their lenses and the teal success card kept.</td><td>Round-1 Calm; you, Jordan, partner card, accent and lens-1 rebuilt in violet and lavender. Lavender cards, clay and sage people, rose and teal lenses and the green success card kept.</td><td>calm-tonal with the cyan shade for cards and the partner card.</td><td>Round-1 Moss with only the card tint changed to the cyan shade (#E9F4F8). The controlled baseline.</td><td>Round 1 as reviewed by the cofounder.</td><td>Round 1 as reviewed by the cofounder.</td></tr>
+<tr><th scope="row">Hue families per frame (ink and neutrals count as one; error red not counted)</th><td>Sign in 2 · Verify 3 + red · Home 4 · Shift 3 · Expired 2 <span class="muted">(round-1 Moss: 4 · 4 · 5 · 4 · 4)</span></td><td>Sign in 2 · Verify 3 + red · Home 4 · Shift 2 · Expired 2 <span class="muted">(round-1 Calm: 5 · 4 · 7 · 5 · 4)</span></td><td>Sign in 2 · Verify 3 + red · Home 5 · Shift 3 · Expired 2 <span class="muted">(round-1 Calm: 5 · 4 · 7 · 5 · 4)</span></td><td>Sign in 4 · Verify 4 + red · Home 5 · Shift 4 · Expired 4 <span class="muted">(same as round-1 Moss)</span></td><td>Sign in 4 · Verify 4 + red · Home 5 · Shift 4 · Expired 4</td><td>Sign in 5 · Verify 4 + red · Home 7 · Shift 5 · Expired 4</td></tr>
+<tr><th scope="row">Contrast</th><td>0 failures; ink on field 6.2; white on the lens 10.5.</td><td>0 failures; ink on field 6.7.</td><td>0 failures; ink on field 6.7; ink-2, ink-3 and edge needed no retune on the cyan.</td><td>0 failures; ink on the cyan card 13.2.</td><td>0 failures; ink on field 6.2.</td><td>0 failures; ink on field 6.7.</td></tr>
+<tr><th scope="row">Colour-blind</th><td>0 flags, 8 warnings (fewest); lowest 12.1.</td><td>0 flags, 10 warnings; lowest 11.4.</td><td>0 flags, 9 warnings; lowest 11.4.</td><td>0 flags, 9 warnings (same as round-1 Moss).</td><td>0 flags, 9 warnings.</td><td>0 flags, 11 warnings.</td></tr>
+<tr><th scope="row">Critique</th><td>One green voice plus cyan cards: the loved Moss field and card, with "you" and the lens now inside the palette.</td><td>Lavender and indigo only: the cleanest "mixed inks" lens, gentle and quiet.</td><td>Calm-tonal with the cyan card added, which gives up some lavender purity.</td><td>The cyan cards help a little, but it still has the blue, marigold and olive the cofounder disliked.</td><td>Loved field and status card; the peacock disc, marigold and olive lens were the complaint.</td><td>Loved lavender field; the slate-blue disc, mustard and olive lens were the complaint.</td></tr>
+<tr><th scope="row">Biggest risk</th><td>The forest lens sits close to the dark green "you", so the overlap reads as a shadow more than a mix.</td><td>Jordan's pale lilac disc is faint on white and has little edge on the field.</td><td>The cyan competes with the lavender as a second pastel; Verify shows lavender, green and red together.</td><td>The olive lens barely separates from the green field.</td><td>Reference only.</td><td>Reference only.</td></tr>
+<tr><th scope="row">Field / ink / you</th><td><code>#2FBF62</code> / <code>#0A2E1B</code> / <code>#127718</code><br><span class="muted">ink on field 6.16:1</span></td><td><code>#B6A3DB</code> / <code>#331A45</code> / <code>#6A4DBE</code><br><span class="muted">ink on field 6.73:1</span></td><td><code>#B6A3DB</code> / <code>#331A45</code> / <code>#6F49B1</code><br><span class="muted">ink on field 6.73:1</span></td><td><code>#2FBF62</code> / <code>#0A2E1B</code> / <code>#075A73</code><br><span class="muted">ink on field 6.16:1</span></td><td><code>#2FBF62</code> / <code>#0A2E1B</code> / <code>#075A73</code><br><span class="muted">ink on field 6.16:1</span></td><td><code>#B6A3DB</code> / <code>#331A45</code> / <code>#35599A</code><br><span class="muted">ink on field 6.73:1</span></td></tr>
+<tr><th scope="row">Files</th><td><a href="moss-shade-tonal/index.html">frames</a> · <a href="moss-shade-tonal/scheme.md">scheme.md</a> · <a href="moss-shade-tonal/check.txt">check</a></td><td><a href="calm-tonal/index.html">frames</a> · <a href="calm-tonal/scheme.md">scheme.md</a> · <a href="calm-tonal/check.txt">check</a></td><td><a href="calm-tonal-shade/index.html">frames</a> · <a href="calm-tonal-shade/scheme.md">scheme.md</a> · <a href="calm-tonal-shade/check.txt">check</a></td><td><a href="moss-shade/index.html">frames</a> · <a href="moss-shade/scheme.md">scheme.md</a> · <a href="moss-shade/check.txt">check</a></td><td><a href="../B-schemes/moss/index.html">frames</a> · <a href="../B-schemes/moss/scheme.md">scheme.md</a> · <a href="../B-schemes/moss/check.txt">check</a></td><td><a href="../B-schemes/calm/index.html">frames</a> · <a href="../B-schemes/calm/scheme.md">scheme.md</a> · <a href="../B-schemes/calm/check.txt">check</a></td></tr>
+</tbody></table></div></section>
+<section aria-labelledby="how-h"><h2 id="how-h">How to adopt one</h2><p>Copy the <code>colors.js</code> export from the chosen variant's <code>scheme.md</code> into <code>mobile/theme/colors.js</code>, keeping the palette as swappable role tokens, and keep <code>design-candidates/B/direction.md</code> for everything else (read its colour names through the mapping table at the end of each <code>scheme.md</code>). For the overnight redesign run: "adopt design-candidates/B/direction.md with the palette from design-candidates/B-round2/&lt;slug&gt;/scheme.md". That run starts from <code>main</code>, so merge <code>explore/b-color-schemes</code> and then <code>explore/b-round2</code> first, or copy those files onto <code>main</code>.</p></section>
+</div>
+</body></html>
