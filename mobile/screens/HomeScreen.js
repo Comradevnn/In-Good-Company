@@ -1,15 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from '../theme/colors';
 import { app } from '../theme/appStyles';
+import { font, type } from '../theme/tokens';
+import { lensFor, personKeyFor } from '../theme/people';
 import { api, timeUntil } from '../api/client';
-import { Avatar, ErrorText, Loading, PillButton, Screen, SectionTitle, StatRow, StatusCard, InfoCard } from '../components/AppParts';
+import {
+  Card, DeedsBadge, DiscPair, DisplayS, ErrorText, Icon, InfoCard, ListRow, Loading, PillButton, Screen, SectionTitle, StatRow, StatusCard, Tag,
+} from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
 
 // Home dashboard (plotline "home"): the one place that always says what
 // happens next. The status card picks the most urgent thing — a decision
 // only the user can make first — so there's never a dead end.
 const POLL_MS = 5000;
+
+// The data names no partner id for the status card, so its disc pair shows you and the first
+// other-person colour. ME stands in for the signed-in user's id when colouring buddies.
+const ME = 'me';
+
 
 function primaryCard(home, navigate) {
   const action = (type) => home.actions.find((a) => a.type === type);
@@ -130,15 +139,21 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
 
   return (
     <Screen refreshing={false} onRefresh={load}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View>
-          <Text style={s.eyebrow}>{weekday}</Text>
-          <Text style={[s.h2, { marginBottom: 2 }]}>Hi, {home.profile.display_name}</Text>
+      <View style={styles.greetingRow}>
+        <View style={styles.flex}>
+          <Text style={styles.weekday}>{weekday}</Text>
+          <DisplayS numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>Hi, {home.profile.display_name}</DisplayS>
         </View>
-        <TouchableOpacity style={bell} onPress={() => navigate('notifications')} accessibilityLabel="Notifications">
-          <Text style={{ fontSize: 15 }}>🔔</Text>
-          {home.notifications_unread ? <View style={bellDot} /> : null}
-        </TouchableOpacity>
+        <Pressable
+          style={({ pressed }) => [styles.bell, pressed && { backgroundColor: colors.surfacePressed }]}
+          onPress={() => navigate('notifications')}
+          accessibilityRole="button"
+          accessibilityLabel={home.notifications_unread ? 'Notifications, unread' : 'Notifications'}
+        >
+          <Icon name="bell" size={24} color={colors.ink} />
+          {home.notifications_unread ? <View style={styles.bellDot} /> : null}
+        </Pressable>
+        <DeedsBadge count={home.deeds.available} />
       </View>
 
       {home.matching_block ? (
@@ -151,97 +166,125 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
         />
       ) : null}
 
-      {card ? <StatusCard {...card} /> : null}
+      {card ? <StatusCard {...card} pair={{ partnerKey: 'person1', icon: 'clock' }} /> : null}
 
       {!hasOpenRequest && home.profile.verified && !home.matching_block && premium.cap.used >= premium.cap.cap ? (
         <InfoCard
           title="You've used this month's matched shifts"
           body={`Your plan includes ${premium.cap.cap} matched shift${premium.cap.cap === 1 ? '' : 's'} a month. You can look again next month${premium.tier === 'premium' ? '' : ', or go Premium for more'}.`}
         >
-          {premium.tier !== 'premium' ? <PillButton label="See Premium" onPress={() => navigate('premium')} style={{ marginTop: 10, alignSelf: 'flex-start' }} /> : null}
+          {premium.tier !== 'premium' ? <PillButton label="See Premium" ghost onPress={() => navigate('premium')} style={{ marginTop: 12, alignSelf: 'flex-start' }} /> : null}
         </InfoCard>
       ) : null}
 
       {!hasOpenRequest && home.profile.verified && !home.matching_block && premium.cap.used < premium.cap.cap ? (
-        <View style={app.ctaInline}>
-          <Text style={app.ctaInlineText}>
+        <Card style={{ marginTop: 16 }}>
+          <Text style={styles.ctaText}>
             {home.impact.shifts || home.bookings.length ? 'Ready for another one?' : 'Ready for your first shift?'} Tell us when you're free and we'll start looking.
           </Text>
-          <PillButton label="Find your next shift" onPress={() => navigate('startMatching')} />
-        </View>
+          <PillButton label="Find your next shift" onPress={() => navigate('startMatching')} style={{ marginTop: 16 }} />
+        </Card>
       ) : null}
 
       {upcoming.length ? (
         <>
           <SectionTitle title="Upcoming" />
-          {upcoming.map((b) => (
-            <TouchableOpacity
+          {upcoming.map((b) => {
+            const status = b.pairing
+              ? b.pairing.status === 'proposed'
+                ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
+                : b.pairing.status === 'cancelled'
+                  ? `${b.pairing.partner_name} can't make it — tap to choose what's next`
+                  : `With ${b.pairing.partner_name}`
+              : b.status === 'attended' ? 'Checked in' : 'Solo spot';
+            return (
+            <Pressable
               key={b.booking_id}
-              style={app.discoverCard}
               onPress={() => navigate(b.pairing ? 'pairing' : 'booking', { pairingId: b.pairing?.id, bookingId: b.booking_id })}
+              accessibilityRole="button"
+              accessibilityLabel={`${b.shift.title}, ${b.shift.org_name}, ${b.shift.when_label}, ${status}`}
+              style={styles.upcomingGap}
             >
-              <Text style={app.discoverTitle}>{b.shift.title}</Text>
-              <Text style={app.discoverOrg}>{b.shift.org_name} · {b.shift.when_label}</Text>
-              <Text style={app.discoverMeta}>
-                {b.pairing
-                  ? b.pairing.status === 'proposed'
-                    ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
-                    : b.pairing.status === 'cancelled'
-                      ? `${b.pairing.partner_name} can't make it — tap to choose what's next`
-                      : `With ${b.pairing.partner_name}`
-                  : b.status === 'attended' ? 'Checked in' : 'Solo spot'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+              {({ pressed }) => (
+                <Card style={pressed && { backgroundColor: colors.tintPressed }}>
+                  <Text style={app.discoverTitle}>{b.shift.title}</Text>
+                  <Text style={app.discoverOrg}>{b.shift.org_name}</Text>
+                  <Text style={app.discoverOrg}>{b.shift.when_label}</Text>
+                  <Text style={app.discoverMeta}>{status}</Text>
+                </Card>
+              )}
+            </Pressable>
+            );
+          })}
         </>
       ) : null}
 
       {home.buddies.length ? (
         <>
           <SectionTitle title="Your buddies" link="See all" onLink={() => navigate('buddies')} />
-          {home.buddies.map((b) => (
-            <View key={b.buddy_id} style={app.buddyMini}>
-              <Avatar name={b.display_name} size={42} />
-              <View style={{ flex: 1 }}>
-                <Text style={app.buddyName}>{b.display_name}</Text>
-                <Text style={app.buddySub}>{b.shifts_together} shift{b.shifts_together === 1 ? '' : 's'} together</Text>
+          {home.buddies.map((b) => {
+            const buddyUserId = b.user_id ?? b.buddy_id;
+            return (
+              <View key={b.buddy_id} style={app.buddyMini}>
+                <DiscPair
+                  r={24}
+                  d={28}
+                  colourA={colors.you}
+                  colourB={colors[personKeyFor(buddyUserId, ME)]}
+                  lens={lensFor('you', personKeyFor(buddyUserId, ME))}
+                  youIcon
+                  initial={(b.display_name ?? '?').slice(0, 1)}
+                />
+                <View style={styles.flex}>
+                  <Text style={app.buddyName}>{b.display_name}</Text>
+                  <Text style={app.buddySub}>{b.shifts_together} shift{b.shifts_together === 1 ? '' : 's'} together</Text>
+                </View>
+                {!hasOpenRequest ? (
+                  <Pressable
+                    style={({ pressed }) => [app.miniBtn, pressed && { backgroundColor: colors.surfacePressed }]}
+                    onPress={() => navigate('startMatching', { buddy: b })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rebook ${b.display_name}`}
+                  >
+                    <Text style={app.miniBtnText}>Rebook</Text>
+                  </Pressable>
+                ) : null}
               </View>
-              {!hasOpenRequest ? (
-                <TouchableOpacity style={app.miniBtn} onPress={() => navigate('startMatching', { buddy: b })}>
-                  <Text style={app.miniBtnText}>Rebook</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ))}
+            );
+          })}
         </>
       ) : null}
 
       <SectionTitle title="Your impact" link="Details" onLink={() => navigate('metrics')} />
       <StatRow stats={[[home.impact.shifts, 'Shifts'], [home.impact.hours, 'Hours'], [home.impact.orgs, 'Orgs']]} />
 
-      <TouchableOpacity style={app.upgradeCard} onPress={() => navigate('premium')}>
-        <Text style={[s.eyebrow, { color: '#D98E3F', marginBottom: 0 }]}>
-          {premium.tier === 'premium' ? (premium.source === 'trial' ? 'Premium trial' : 'Premium') : 'Free plan'}
-        </Text>
-        <Text style={app.upgradeTitle}>{premium.cap.used} of {premium.cap.cap} matched shifts used this month</Text>
-        <Text style={app.upgradeBody}>
-          {home.deeds.available} Deeds available{home.deeds.held ? ` · ${home.deeds.held} held for upcoming shifts` : ''}.
-          {premium.source === 'trial' ? ` Trial ends ${new Date(premium.trial_ends_at).toLocaleDateString()}.` : ''}
-        </Text>
-      </TouchableOpacity>
+      <Pressable
+        onPress={() => navigate('premium')}
+        accessibilityRole="button"
+        accessibilityLabel={`${premium.tier === 'premium' ? (premium.source === 'trial' ? 'Premium trial' : 'Premium') : 'Free plan'}. ${premium.cap.used} of ${premium.cap.cap} matched shifts used this month`}
+        style={{ marginTop: 24 }}
+      >
+        {({ pressed }) => (
+          <Card tone="field" style={pressed && { backgroundColor: colors.fieldPressed }}>
+            <Tag label={premium.tier === 'premium' ? (premium.source === 'trial' ? 'Premium trial' : 'Premium') : 'Free plan'} tone="accent" style={{ alignSelf: 'flex-start' }} />
+            <Text style={app.upgradeTitle}>{premium.cap.used} of {premium.cap.cap} matched shifts used this month</Text>
+            <Text style={app.upgradeBody}>
+              {home.deeds.available} Deeds available{home.deeds.held ? ` · ${home.deeds.held} held for upcoming shifts` : ''}.
+              {premium.source === 'trial' ? ` Trial ends ${new Date(premium.trial_ends_at).toLocaleDateString()}.` : ''}
+            </Text>
+          </Card>
+        )}
+      </Pressable>
 
-      <View style={{ marginTop: 18 }}>
+      <View style={styles.navList}>
         {[
-          ['Deeds', 'deeds'],
-          ['Premium & referrals', 'premium'],
-          ['Safety & reporting', 'safety'],
-          ['Your profile', 'profile'],
-          ['Account settings', 'settings'],
-        ].map(([label, target]) => (
-          <TouchableOpacity key={target} style={app.settingsRow} onPress={() => navigate(target)}>
-            <Text style={app.settingsRowText}>{label}</Text>
-            <Text style={app.settingsArrow}>›</Text>
-          </TouchableOpacity>
+          ['Deeds', 'deeds', 'coin'],
+          ['Premium & referrals', 'premium', 'star'],
+          ['Safety & reporting', 'safety', 'shield-check'],
+          ['Your profile', 'profile', 'person'],
+          ['Account settings', 'settings', 'settings'],
+        ].map(([label, target, icon]) => (
+          <ListRow key={target} label={label} icon={icon} onPress={() => navigate(target)} />
         ))}
       </View>
 
@@ -250,8 +293,19 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
   );
 }
 
-const bell = {
-  width: 36, height: 36, borderRadius: 18, backgroundColor: '#FBF9F3', borderWidth: 1.5, borderColor: '#D7CEBB',
-  alignItems: 'center', justifyContent: 'center',
-};
-const bellDot = { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: '#D98E3F' };
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  greetingRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
+  weekday: { ...type.bodyS, fontFamily: font.textBold, color: colors.ink2 },
+  bell: {
+    width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.ink,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+  },
+  bellDot: {
+    position: 'absolute', top: 6, right: 6, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.unread,
+    borderWidth: 2, borderColor: colors.surface,
+  },
+  ctaText: { ...type.body, color: colors.ink },
+  upcomingGap: { marginTop: 8 },
+  navList: { marginTop: 24 },
+});

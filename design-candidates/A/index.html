@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Day - Candidate A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ink + ground */
+  --ink:#0F2A4A; --ink-2:#3D5170; --ink-3:#596A82;
+  --white:#FFFFFF; --ground:#F1F4F8; --fill:#E3E8EE;
+  --rule:#CFD7E1; --ctl:#78879A; --tick:#9AA7B8;
+  /* spectrum: cause + status code (100 tint / 300 band / 600 solid / 700 icon+text) */
+  --sky-100:#E6F3FC; --sky-300:#A9D6F5; --sky-600:#2F8FD8; --sky-700:#17608F;
+  --meadow-100:#E4F5E8; --meadow-300:#A6DDB2; --meadow-600:#2E9E55; --meadow-700:#1B6B38;
+  --violet-100:#EDEBFA; --violet-300:#C5BDF0; --violet-600:#6A5BD0; --violet-700:#4B3DAE;
+  --aqua-100:#DDF4F2; --aqua-300:#9BDDD6; --aqua-600:#1E9C94; --aqua-700:#0E6F6A;
+  /* the one warm signal */
+  --signal:#B8400A; --signal-100:#FCEBE3;
+  /* type */
+  --font:'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --t-display:24px; --lh-display:28px;
+  --t-title:18px;   --lh-title:24px;
+  --t-body:15px;    --lh-body:21px;
+  --t-caption:13px; --lh-caption:18px;
+  --t-label:12px;   --lh-label:16px;
+  /* space */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px;
+  /* shape */
+  --r1:2px; --r2:4px;
+  /* elevation: knob only */
+  --e-knob:0 1px 2px rgba(15,42,74,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#E7EAEE}
+body{font-family:var(--font);color:var(--ink);background:#E7EAEE;padding:40px 24px 64px;
+  -webkit-font-smoothing:antialiased}
+::selection{background:var(--sky-300);color:var(--ink)}
+
+/* ---------- presentation page ---------- */
+.page-head{max-width:1100px;margin:0 auto 36px}
+.page-head .name{font-weight:800;font-size:24px;line-height:28px;letter-spacing:-.01em}
+.page-head .cand{font-weight:700;font-size:12px;line-height:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px}
+.page-head .thesis{font-size:15px;line-height:22px;color:var(--ink-2);margin-top:6px;max-width:720px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px}
+.legend span{display:flex;align-items:center;gap:8px;font-size:13px;line-height:18px;font-weight:600;color:var(--ink)}
+.legend i{display:block;width:16px;height:16px;border-radius:var(--r1)}
+.stage{display:flex;flex-wrap:wrap;gap:40px 36px;justify-content:center;align-items:flex-start}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;line-height:18px;font-weight:600;color:var(--ink-2)}
+
+/* ---------- device ---------- */
+.phone{width:390px;height:844px;border:8px solid #17212F;border-radius:56px;background:var(--white);
+  position:relative;overflow:hidden;box-sizing:content-box;display:flex;flex-direction:column}
+.phone.tall{height:auto}
+.phone.ground{background:var(--ground)}
+.island{position:absolute;top:11px;left:50%;margin-left:-55px;width:110px;height:30px;border-radius:15px;background:#17212F;z-index:5}
+.statusbar{background:var(--white);height:47px;flex:none;display:flex;align-items:flex-start;justify-content:space-between;padding:15px 34px 0 36px}
+.statusbar .time{font-size:16px;line-height:20px;font-weight:700;color:var(--ink)}
+.statusbar .sys{display:flex;align-items:center;gap:6px;height:20px}
+.homezone{height:34px;flex:none;position:relative}
+.phone.hasfoot .homezone{background:var(--white)}
+.homezone::after{content:"";position:absolute;left:50%;margin-left:-67px;bottom:8px;width:134px;height:5px;border-radius:3px;background:var(--ink)}
+.scroll{flex:1;position:relative;overflow:hidden}
+.phone.tall .scroll{flex:none;overflow:visible}
+.thumb{position:absolute;right:3px;width:3px;border-radius:2px;background:var(--tick)}
+
+/* ---------- icons ---------- */
+svg.i{display:block;flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:10}
+svg.i .f{fill:currentColor;stroke:none}
+svg.i.s16{width:16px;height:16px}
+svg.i.s20{width:20px;height:20px}
+svg.i.s56{width:56px;height:56px}
+svg.i.s40{width:40px;height:40px}
+
+/* ---------- type roles ---------- */
+.display{font-size:var(--t-display);line-height:var(--lh-display);font-weight:800;letter-spacing:-.01em}
+.title{font-size:var(--t-title);line-height:var(--lh-title);font-weight:700;letter-spacing:-.005em}
+.headline{font-size:var(--t-body);line-height:20px;font-weight:700}
+.body{font-size:var(--t-body);line-height:var(--lh-body);font-weight:400}
+.caption{font-size:var(--t-caption);line-height:var(--lh-caption);font-weight:500;color:var(--ink-2)}
+.label{font-size:var(--t-label);line-height:var(--lh-label);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.nw{white-space:nowrap}
+.soft{color:var(--ink-2)}
+
+/* ---------- top bar ---------- */
+.topbar{height:48px;flex:none;display:flex;align-items:center;justify-content:space-between;background:inherit;border-bottom:1px solid var(--rule);padding:0 4px}
+.phone:not(.ground) .topbar{background:var(--white)}
+.phone.ground .topbar{background:var(--white)}
+.topbar .t{font-size:var(--t-body);line-height:20px;font-weight:700;text-align:center;flex:1}
+.topbar .slot{width:48px;height:48px;display:flex;align-items:center;justify-content:center}
+.topbar.home{padding:0 4px 0 16px}
+.topbar.home .t{text-align:left;flex:none}
+.topbar .acts{display:flex;align-items:center}
+.bell{position:relative}
+.bell .dot{position:absolute;top:10px;right:10px;width:9px;height:9px;border-radius:5px;background:var(--signal);border:2px solid var(--white);box-sizing:content-box;margin:-2px}
+.badge-hit{height:48px;display:flex;align-items:center;padding:0 12px 0 4px}
+.deeds{height:32px;display:flex;align-items:center;gap:6px;padding:0 10px;border-radius:var(--r2);background:var(--violet-100);border:1px solid var(--violet-300);color:var(--violet-700)}
+.deeds b{font-size:var(--t-body);line-height:20px;font-weight:800;color:var(--ink)}
+.spectrum{display:flex;height:6px;flex:none}
+.spectrum i{flex:1;display:block}
+
+/* ---------- buttons + links ---------- */
+.footer{flex:none;padding:8px 16px 8px;border-top:1px solid var(--rule);background:var(--white)}
+.btn{height:52px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:var(--t-body);line-height:20px;font-weight:700;letter-spacing:.01em}
+.btn.primary{background:var(--ink);color:var(--white)}
+.btn.disabled{background:var(--fill);color:var(--ink-2);border:1px dashed var(--ctl)}
+.btn.quiet-r{height:52px}
+.link{min-height:48px;display:flex;align-items:center;font-size:var(--t-body);line-height:20px;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.link.sm{min-height:44px;font-size:var(--t-caption);line-height:18px;font-weight:700}
+
+/* ---------- forms ---------- */
+.content{padding:0 16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>.l{font-size:var(--t-caption);line-height:var(--lh-caption);font-weight:700;color:var(--ink)}
+.input{height:48px;border:1px solid var(--ctl);border-radius:var(--r2);background:var(--white);display:flex;align-items:center;padding:0 12px;font-size:var(--t-body);line-height:20px;font-weight:500;color:var(--ink)}
+.input.ph{color:var(--ink-3);font-weight:400}
+.input.err{border:2px solid var(--signal);background:var(--signal-100);padding-left:11px}
+.input.date{padding:0 0 0 12px;justify-content:space-between}
+.input.date.err{padding-left:11px}
+.input.date .cal{width:46px;height:100%;border-left:1px solid var(--ctl);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.input.date.err .cal{border-left:1px solid var(--signal)}
+.input.focus{border:2px solid var(--sky-600);padding-left:11px}
+.dots{display:flex;gap:5px}
+.dots i{display:block;width:8px;height:8px;border-radius:4px;background:var(--ink)}
+.row2{display:flex;gap:12px}
+.row2>.field{flex:1;min-width:0}
+.errtext{display:flex;align-items:flex-start;gap:8px;color:var(--signal);font-size:var(--t-caption);line-height:var(--lh-caption);font-weight:700}
+.errtext svg{margin-top:0}
+.helper{font-size:var(--t-caption);line-height:var(--lh-caption);font-weight:500;color:var(--ink-2)}
+
+.chips{display:flex;gap:8px}
+.chip{height:44px;padding:0 14px;display:flex;align-items:center;gap:8px;border:1px solid var(--ctl);border-radius:var(--r2);background:var(--white);font-size:var(--t-body);line-height:20px;font-weight:600;color:var(--ink)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--white)}
+
+.switchrow{display:flex;align-items:center;justify-content:space-between;min-height:56px;padding:0 16px}
+.switch{width:52px;height:32px;border-radius:16px;background:#7F8DA0;position:relative;flex:none}
+.switch::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:12px;background:var(--white);box-shadow:var(--e-knob)}
+.switch.on{background:var(--ink)}
+.switch.on::after{left:24px}
+.switchhit{width:56px;height:48px;display:flex;align-items:center;justify-content:flex-end}
+
+/* ---------- surfaces ---------- */
+.card{background:var(--white);border:1px solid var(--rule);border-radius:var(--r2);overflow:hidden}
+.band{display:flex;align-items:center;justify-content:space-between;height:40px;padding:0 16px}
+.band.ink{background:var(--ink);color:var(--white)}
+.band.sky{background:var(--sky-300);color:var(--ink)}
+.band.aqua{background:var(--aqua-300);color:var(--ink)}
+.band .lft{display:flex;align-items:center;gap:8px}
+.pad{padding:16px}
+.notice{display:flex;gap:12px;align-items:flex-start;padding:12px;background:var(--ground);border:1px solid var(--rule);border-radius:var(--r2)}
+.notice p{font-size:var(--t-body);line-height:20px;color:var(--ink)}
+.sec{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:8px 16px 0}
+.sec .label{color:var(--ink-2)}
+.sec .link{min-height:44px;padding-top:0}
+.grp{margin:0 16px}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-top:1px solid var(--rule)}
+.row:first-child{border-top:0}
+.tile{width:28px;height:28px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;flex:none}
+.tile.t36{width:36px;height:36px}
+.t-sky{background:var(--sky-300);color:var(--ink)}
+.t-meadow{background:var(--meadow-300);color:var(--ink)}
+.t-violet{background:var(--violet-100);color:var(--violet-700)}
+.t-aqua{background:var(--aqua-100);color:var(--aqua-700)}
+.t-silver{background:var(--fill);color:var(--ink)}
+.avatar{width:36px;height:36px;border-radius:var(--r2);background:var(--fill);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:var(--t-title);font-weight:800;flex:none}
+.avatar.big{width:48px;height:48px;font-size:var(--t-title)}
+.grow{flex:1;min-width:0}
+.chev{color:var(--ink-3)}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:var(--r1);font-size:var(--t-label);line-height:var(--lh-label);font-weight:700;color:var(--ink);background:var(--fill)}
+.tag i{display:block;width:8px;height:8px;border-radius:var(--r1)}
+.tag.sky{background:var(--sky-100);box-shadow:inset 0 0 0 1px var(--sky-300)}
+.tag.sky i{background:var(--sky-600)}
+.tag.meadow{background:var(--meadow-100);box-shadow:inset 0 0 0 1px var(--meadow-300)}
+.tag.meadow i{background:var(--meadow-600)}
+.tag.ink{background:var(--ink);color:var(--white)}
+.verified{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:var(--r1);background:var(--aqua-100);box-shadow:inset 0 0 0 1px var(--aqua-300);color:var(--aqua-700);font-size:var(--t-label);line-height:var(--lh-label);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.verified span{color:var(--ink)}
+.meter{display:flex;gap:4px;margin-top:12px}
+.meter i{display:block;flex:1;height:8px;border-radius:var(--r1);border:1px solid var(--ink)}
+.meter i.on{background:var(--ink)}
+
+/* stats */
+.stats{display:flex}
+.stat{flex:1;display:flex;align-items:baseline;justify-content:space-between;padding:14px 12px 14px 12px;border-left:1px solid var(--rule)}
+.stat:first-child{border-left:0;padding-left:16px}
+.stat:last-child{padding-right:16px}
+.stat .k{font-size:var(--t-caption);line-height:var(--lh-caption);font-weight:600;color:var(--ink-2)}
+.stat .v{font-size:var(--t-title);line-height:var(--lh-title);font-weight:800}
+
+/* ---------- day strip (signature) ---------- */
+.strip{position:relative}
+.strip .track{position:relative;height:18px;background:var(--ground);border:1px solid var(--rule);border-radius:var(--r1)}
+.strip.lg .track{height:32px}
+.strip.xl .track{height:80px}
+.strip .blk{position:absolute;top:-1px;bottom:-1px;background:var(--c);border-radius:var(--r1);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.strip .ticks{position:relative;height:9px;margin-top:3px}
+.strip .tk{position:absolute;top:0;width:1px;height:5px;background:var(--tick)}
+.strip .tk.m{height:9px;background:var(--ink-3)}
+.strip .labels{position:relative;height:16px;margin-top:2px}
+.strip .labels span{position:absolute;top:0;font-size:var(--t-label);line-height:var(--lh-label);font-weight:600;color:var(--ink-2);white-space:nowrap}
+.strip.ended .track{background:var(--white);border-color:var(--ctl)}
+.strip.ended .blk{background:transparent;border:2px dashed var(--ctl);top:-2px;bottom:-2px}
+.strip.ended .blk{color:var(--ink-3)}
+.strip.ended .blk svg.i{width:32px;height:32px}
+.strip.ended .tk{background:var(--tick)}
+.strip.ended .tk.m{background:var(--ctl)}
+
+/* wordmark */
+.mark{position:relative;width:34px;height:24px;flex:none}
+.mark i{position:absolute;top:0;display:block;width:22px;height:24px;border-radius:var(--r1)}
+.mark .a{left:0;background:var(--sky-600)}
+.mark .b{left:12px;background:var(--meadow-600)}
+.mark .o{left:12px;width:10px;background:var(--aqua-300)}
+.lockup{display:flex;align-items:center;gap:10px}
+.lockup b{font-size:var(--t-title);line-height:var(--lh-title);font-weight:800;letter-spacing:-.01em}
+
+/* bullets */
+.bul{list-style:none;display:flex;flex-direction:column;gap:10px}
+.bul li{display:flex;gap:12px;font-size:var(--t-body);line-height:var(--lh-body)}
+.bul li::before{content:"";display:block;flex:none;width:6px;height:6px;margin-top:8px;background:var(--ink);border-radius:1px}
+.kv{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--rule);align-items:flex-start}
+.kv .k{width:56px;flex:none;font-size:var(--t-caption);line-height:20px;font-weight:700;color:var(--ink-2)}
+.kv .v{flex:1;font-size:var(--t-body);line-height:20px;font-weight:600}
+.kv .v.with{display:flex;align-items:center;gap:8px}
+.deposit{background:var(--violet-100);border:1px solid var(--violet-300);border-radius:var(--r2)}
+.deposit .dr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--violet-300)}
+.deposit .dr:first-child{border-top:0}
+.deposit .dv{display:flex;align-items:center;gap:6px;color:var(--violet-700)}
+.deposit .dv b{font-size:var(--t-title);line-height:var(--lh-title);font-weight:800;color:var(--ink)}
+.safety{background:var(--aqua-100);border:1px solid var(--aqua-300);border-radius:var(--r2);overflow:hidden}
+.safety .switchrow{border-top:1px solid var(--aqua-300);background:var(--white)}
+</style>
+</head>
+<body>
+<header class="page-head">
+  <div class="cand">Candidate A</div>
+  <div class="name">Field Day</div>
+  <p class="thesis">A civic games-identity program for doing good: a calm, systematic, cheerful public-information language, where colour is a code and every shift is a block on the day, so a stranger-meeting app feels organized, safe and trustworthy.</p>
+  <div class="legend">
+    <span><i style="background:var(--sky-600)"></i>Animal welfare</span>
+    <span><i style="background:var(--meadow-600)"></i>Food insecurity</span>
+    <span><i style="background:var(--violet-600)"></i>Deeds</span>
+    <span><i style="background:var(--aqua-600)"></i>Verified and safety</span>
+    <span><i style="background:var(--ink)"></i>Action</span>
+    <span><i style="background:var(--signal)"></i>Warning</span>
+  </div>
+</header>
+<main class="stage">
+<figure><div class="phone hasfoot"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar"><div class="slot"></div><div class="t">Sign in or get started</div><div class="slot"></div></div><div class="spectrum"><i style="background:var(--sky-600)"></i><i style="background:var(--meadow-600)"></i><i style="background:var(--violet-600)"></i><i style="background:var(--aqua-600)"></i></div><div class="scroll">
+    <div class="content" style="padding-top:28px">
+      <div class="lockup"><span class="mark"><i class="a"></i><i class="b"></i><i class="o"></i></span><b>In Good Company</b></div>
+      <h1 class="display" style="margin-top:28px">What’s your email?</h1>
+      <p class="body soft" style="margin-top:6px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+      <div class="field" style="margin-top:24px"><span class="l">Email</span><div class="input">alex.m@example.com</div></div>
+      <div class="field" style="margin-top:16px"><span class="l">Password</span><div class="input"><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div></div>
+      <div style="margin-top:12px">
+        <div class="link">Have a referral code?</div>
+        <div class="link">Signing up an organization? Tap here</div>
+      </div>
+    </div></div><div class="footer"><div class="btn primary">Continue</div></div><div class="homezone"></div></div><figcaption>1 &middot; Sign in</figcaption></figure>
+<figure><div class="phone hasfoot"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar"><div class="slot" role="button" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6L5 12L11 18"/></svg></div><div class="t">Verify your ID</div><div class="slot"></div></div><div class="scroll">
+    <div class="content" style="padding-top:8px">
+      <h1 class="display">Confirm it’s really you</h1>
+      <p class="body soft" style="margin-top:4px">Checked instantly. We never receive or keep your ID photo, and we store only an irreversible check-value of your document number — never the number itself.</p>
+
+      <div class="field" style="margin-top:12px"><span class="l">What are you verifying with?</span>
+        <div class="chips"><span class="chip on"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12L10 17L19 8"/></svg>Driver’s license</span><span class="chip">Passport</span><span class="chip">State ID</span></div>
+      </div>
+
+      <div class="field" style="margin-top:12px"><span class="l">Photo of your ID</span>
+        <div class="card" style="background:var(--aqua-100);border-color:var(--aqua-300);padding:10px 12px;display:flex;gap:12px;align-items:flex-start">
+          <span class="tile t36 t-aqua" style="background:var(--aqua-300);color:var(--ink)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12L10 17L19 8"/></svg></span>
+          <div class="grow"><div class="headline">Photo captured</div><div class="caption" style="margin-top:1px">Deleted from this device as soon as verification completes — never uploaded.</div></div>
+        </div>
+        <div class="link" style="min-height:44px;margin-top:-4px">or choose from your library</div>
+      </div>
+
+      <div class="notice" style="margin-top:0;padding:10px 12px">
+        <span style="color:var(--ink);padding-top:1px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><path d="M12 11V16M12 7V8"/></svg></span>
+        <p>Prototype stage: we don’t read the document automatically yet — type the details below exactly as printed. Automatic scanning replaces this step later.</p>
+      </div>
+
+      <div class="field" style="margin-top:12px"><span class="l">Full name, as printed on the ID</span><div class="input">Alex Morgan</div></div>
+
+      <div class="row2" style="margin-top:10px">
+        <div class="field"><span class="l">Date of birth</span><div class="input date"><span>1997-06-03</span><span class="cal"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15"/><path d="M4 10H20M8 3V7M16 3V7"/></svg></span></div></div>
+        <div class="field"><span class="l">Expiry date</span><div class="input date err"><span>2025-09-30</span><span class="cal"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15"/><path d="M4 10H20M8 3V7M16 3V7"/></svg></span></div></div>
+      </div>
+      <div class="errtext" style="margin-top:6px"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L21 12L12 21L3 12Z"/><path d="M12 8V13M12 16V17"/></svg><span>This document is expired (or the date is invalid).</span></div>
+    
+      <div class="row2" style="margin-top:16px">
+        <div class="field" style="flex:1.6"><span class="l">Document number</span><div class="input">D4471 2093</div></div>
+        <div class="field" style="flex:1"><span class="l">Issuing country</span><div class="input">US</div></div>
+      </div>
+      <p class="helper" style="margin-top:8px">Sent securely to check that one document can’t verify two accounts. We keep only a scrambled, irreversible check-value — never the number itself.</p>
+      <div class="link" style="margin-top:8px">Not now — go back</div>
+      <div style="height:16px"></div>
+    </div><div class="thumb" style="top:10px;height:300px"></div></div><div class="footer"><div class="btn primary">Review &amp; submit</div></div><div class="homezone"></div></div><figcaption>2 &middot; Verify your ID</figcaption></figure>
+<figure><div class="phone ground"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar home"><div class="t">Thursday</div><div class="acts"><div class="slot bell" role="button" aria-label="Notifications"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18V11L10 7H14L18 11V18Z"/><path d="M4 18H20M10 21H14"/></svg><span class="dot"></span></div><div class="badge-hit"><span class="deeds"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg><b>12</b></span></div></div></div><div class="scroll">
+    <div style="padding:0 16px 8px"><h1 class="display" style="padding-top:12px">Hi, Alex</h1></div>
+
+    <div class="grp" style="margin-top:4px">
+      <div class="card">
+        <div class="band ink"><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="11" height="12"/><rect x="10" y="6" width="11" height="12"/></svg><span class="label">We found you a shift</span></span><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></div>
+        <div class="pad" style="padding-bottom:14px">
+          <div class="title"><span class="nw">Sat, Nov 8 · 9:00 AM,</span> <span class="nw">with Jordan</span></div>
+          <p class="body soft" style="margin-top:4px">Take a look and confirm — it’s held for you for 21 hours.</p>
+          <div style="margin-top:14px"><div class="strip" style="--c:var(--sky-600)"><div class="track"><span class="blk" style="left:18.750%;width:18.750%"></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec"><span class="label">Upcoming</span></div>
+    <div class="grp">
+      <div class="card">
+        <div style="display:flex;gap:12px;padding:12px 16px 0;align-items:flex-start">
+          <span class="tile t36 t-meadow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11H21M4 11V13L8 17H16L20 13V11"/><path d="M9 4V7M15 4V7"/></svg></span>
+          <div class="grow">
+            <div class="headline">Food bank sorting</div>
+            <div class="caption" style="margin-top:1px">Eastside Community Pantry</div>
+            <div class="caption">Wed, Nov 12 · 6:00 PM</div>
+            <div class="caption" style="font-weight:700;color:var(--ink)">With Sam</div>
+          </div>
+          <span class="chev" style="margin-top:6px"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span>
+        </div>
+        <div style="padding:12px 16px 14px"><div class="strip" style="--c:var(--meadow-600)"><div class="track"><span class="blk" style="left:75.000%;width:18.750%"></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div></div></div>
+      </div>
+    </div>
+
+    <div class="sec"><span class="label">Your buddies</span><span class="link sm">See all</span></div>
+    <div class="grp"><div class="card">
+      <div class="row" style="min-height:56px"><span class="avatar">S</span><div class="grow"><div class="headline">Sam</div><div class="caption">2 shifts together</div></div><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+    </div></div>
+
+    <div class="sec"><span class="label">Your impact</span><span class="link sm">Details</span></div>
+    <div class="grp"><div class="card"><div class="stats">
+      <div class="stat"><span class="k">Shifts</span><span class="v">3</span></div>
+      <div class="stat"><span class="k">Hours</span><span class="v">9</span></div>
+      <div class="stat"><span class="k">Orgs</span><span class="v">2</span></div>
+    </div></div></div>
+
+    <div class="grp" style="margin-top:20px">
+      <div class="card pad">
+        <span class="tag ink">Free plan</span>
+        <div class="headline" style="margin-top:10px">1 of 2 matched shifts used this month</div>
+        <div class="meter"><i class="on"></i><i></i></div>
+        <p class="body soft" style="margin-top:10px">12 Deeds available · 5 held for upcoming shifts.</p>
+      </div>
+    </div>
+
+    <div class="grp" style="margin-top:20px">
+      <div class="card">
+        <div class="row"><span class="tile t-violet"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg></span><span class="grow headline">Deeds</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-violet"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L21 12L12 21L3 12Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg></span><span class="grow headline">Premium &amp; referrals</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-aqua"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4H20V12L12 20L4 12Z"/><path d="M12 8V12M12 15V16"/></svg></span><span class="grow headline">Safety &amp; reporting</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-silver"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="4" width="6" height="6"/><path d="M5 20V17L8 14H16L19 17V20Z"/></svg></span><span class="grow headline">Your profile</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-silver"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7H20M4 12H20M4 17H20"/><rect class="f" x="7" y="5" width="4" height="4"/><rect class="f" x="13" y="10" width="4" height="4"/><rect class="f" x="9" y="15" width="4" height="4"/></svg></span><span class="grow headline">Account settings</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+      </div>
+    </div>
+    <div style="height:24px"></div>
+    <div class="thumb" style="top:12px;height:250px"></div></div><div class="homezone"></div></div><figcaption>3 &middot; Home</figcaption></figure>
+<figure><div class="phone ground hasfoot"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar"><div class="slot" role="button" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6L5 12L11 18"/></svg></div><div class="t">Shift proposal</div><div class="slot"></div></div><div class="scroll">
+    <div class="band ink"><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="11" height="12"/><rect x="10" y="6" width="11" height="12"/></svg><span class="label">We found you a shift</span></span></div>
+    <div style="padding:12px 16px 0">
+      <h1 class="display"><span class="nw">Sat, Nov 8 ·</span> <span class="nw">9:00 AM – 12:00 PM</span></h1>
+      <p class="body soft" style="margin-top:4px">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+    </div>
+
+    <div class="grp" style="margin-top:16px">
+      <div class="card">
+        <div class="band sky"><span class="label">The shift</span><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="6" height="6"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M5 5L7 7M17 17L19 19M19 5L17 7M5 19L7 17"/></svg><span class="label">Daytime</span></span></div>
+        <div class="pad" style="padding-top:14px;padding-bottom:6px">
+          <div class="title">Northside Animal Rescue</div>
+          <div style="margin-top:12px"><div class="strip lg" style="--c:var(--sky-600)"><div class="track"><span class="blk" style="left:18.750%;width:18.750%"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="6" height="6"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M5 5L7 7M17 17L19 19M19 5L17 7M5 19L7 17"/></svg></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div><div class="labels"><span style="left:0">6 AM</span><span style="left:37.5%;transform:translateX(-50%)">12 PM</span><span style="left:75%;transform:translateX(-50%)">6 PM</span><span style="right:0">10 PM</span></div></div></div>
+          <div style="margin-top:12px">
+            <div class="kv"><span class="k">Cause</span><span class="v with"><span class="tile t-sky" style="width:24px;height:24px"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20V16L10 13H14L17 16V20Z"/><path d="M5 9V11M9 5V8M15 5V8M19 9V11"/></svg></span>Animal welfare</span></div>
+            <div class="kv"><span class="k">When</span><span class="v">Sat, Nov 8 · 9:00 AM – 12:00 PM</span></div>
+            <div class="kv"><span class="k">Where</span><span class="v">412 Alder St, Northside</span></div>
+            <div class="kv"><span class="k">Task</span><span class="v">Dog walking &amp; kennel care</span></div>
+          </div>
+          <p class="body" style="padding:10px 0 8px;border-top:1px solid var(--rule)">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="grp" style="margin-top:16px">
+      <div class="card pad">
+        <div style="display:flex;gap:12px;align-items:center">
+          <span class="avatar big">J</span>
+          <div class="grow"><div class="title">Jordan, 29</div><div class="caption">Nurse · Female</div></div>
+          <span class="verified"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4H20V12L12 20L4 12Z"/><path d="M8 11L11 14L16 9"/></svg><span>Verified</span></span>
+        </div>
+        <p class="body" style="margin-top:12px">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+          <span class="tag">4 shifts</span>
+          <span class="tag sky"><i></i>Animal welfare</span>
+          <span class="tag meadow"><i></i>Food insecurity</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grp" style="margin-top:16px">
+      <div class="deposit">
+        <div class="dr"><span class="headline">Held from your Deeds when you confirm</span><span class="dv"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg><b>5</b></span></div>
+        <div class="dr"><span class="headline">You have available</span><span class="dv"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg><b>12</b></span></div>
+        <div class="dr" style="display:block"><p class="caption" style="color:var(--ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p></div>
+      </div>
+    </div>
+
+    <div class="grp" style="margin-top:16px">
+      <div class="safety">
+        <div class="band aqua"><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4H20V12L12 20L4 12Z"/><path d="M12 8V12M12 15V16"/></svg><span class="headline">Before your first shift</span></span></div>
+        <div class="pad">
+          <ul class="bul">
+            <li>You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</li>
+            <li>Where we can, we point out shifts that happen in daylight.</li>
+            <li>Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</li>
+            <li>Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</li>
+            <li>If anything feels off, report it from the app — a real person reads every report.</li>
+            <li>A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</li>
+          </ul>
+        </div>
+        <div class="switchrow"><span class="headline">I’ve read this</span><span class="switchhit"><span class="switch"></span></span></div>
+      </div>
+    </div>
+    <div class="grp"><div class="link" style="justify-content:center;margin-top:8px">Not this one — keep looking</div></div>
+    <div style="height:8px"></div>
+    <div class="thumb" style="top:10px;height:220px"></div></div><div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div><div class="homezone"></div></div><figcaption>4 &middot; Shift proposal</figcaption></figure>
+<figure><div class="phone hasfoot"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar"><div class="slot" role="button" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6L5 12L11 18"/></svg></div><div class="t">Your shift</div><div class="slot"></div></div><div class="scroll">
+    <div style="padding:56px 16px 0">
+      <div><div class="strip xl ended" style="--c:var(--ctl)"><div class="track"><span class="blk" style="left:18.750%;width:18.750%"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3H18M6 21H18M8 3V7L12 11L16 7V3M8 21V17L12 13L16 17V21M12 11V13"/></svg></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div></div></div>
+      <h1 class="display" style="margin-top:32px">This proposal expired</h1>
+      <p class="body" style="margin-top:6px">Any Deeds you had on hold for it are back in your balance.</p>
+    </div></div><div class="footer"><div class="btn primary">Back to home</div></div><div class="homezone"></div></div><figcaption>5 &middot; Proposal expired</figcaption></figure>
+<figure><div class="phone tall hasfoot"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar"><div class="slot" role="button" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6L5 12L11 18"/></svg></div><div class="t">Verify your ID</div><div class="slot"></div></div><div class="scroll">
+    <div class="content" style="padding-top:8px">
+      <h1 class="display">Confirm it’s really you</h1>
+      <p class="body soft" style="margin-top:4px">Checked instantly. We never receive or keep your ID photo, and we store only an irreversible check-value of your document number — never the number itself.</p>
+
+      <div class="field" style="margin-top:12px"><span class="l">What are you verifying with?</span>
+        <div class="chips"><span class="chip on"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12L10 17L19 8"/></svg>Driver’s license</span><span class="chip">Passport</span><span class="chip">State ID</span></div>
+      </div>
+
+      <div class="field" style="margin-top:12px"><span class="l">Photo of your ID</span>
+        <div class="card" style="background:var(--aqua-100);border-color:var(--aqua-300);padding:10px 12px;display:flex;gap:12px;align-items:flex-start">
+          <span class="tile t36 t-aqua" style="background:var(--aqua-300);color:var(--ink)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12L10 17L19 8"/></svg></span>
+          <div class="grow"><div class="headline">Photo captured</div><div class="caption" style="margin-top:1px">Deleted from this device as soon as verification completes — never uploaded.</div></div>
+        </div>
+        <div class="link" style="min-height:44px;margin-top:-4px">or choose from your library</div>
+      </div>
+
+      <div class="notice" style="margin-top:0;padding:10px 12px">
+        <span style="color:var(--ink);padding-top:1px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><path d="M12 11V16M12 7V8"/></svg></span>
+        <p>Prototype stage: we don’t read the document automatically yet — type the details below exactly as printed. Automatic scanning replaces this step later.</p>
+      </div>
+
+      <div class="field" style="margin-top:12px"><span class="l">Full name, as printed on the ID</span><div class="input">Alex Morgan</div></div>
+
+      <div class="row2" style="margin-top:10px">
+        <div class="field"><span class="l">Date of birth</span><div class="input date"><span>1997-06-03</span><span class="cal"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15"/><path d="M4 10H20M8 3V7M16 3V7"/></svg></span></div></div>
+        <div class="field"><span class="l">Expiry date</span><div class="input date err"><span>2025-09-30</span><span class="cal"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15"/><path d="M4 10H20M8 3V7M16 3V7"/></svg></span></div></div>
+      </div>
+      <div class="errtext" style="margin-top:6px"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L21 12L12 21L3 12Z"/><path d="M12 8V13M12 16V17"/></svg><span>This document is expired (or the date is invalid).</span></div>
+    
+      <div class="row2" style="margin-top:16px">
+        <div class="field" style="flex:1.6"><span class="l">Document number</span><div class="input">D4471 2093</div></div>
+        <div class="field" style="flex:1"><span class="l">Issuing country</span><div class="input">US</div></div>
+      </div>
+      <p class="helper" style="margin-top:8px">Sent securely to check that one document can’t verify two accounts. We keep only a scrambled, irreversible check-value — never the number itself.</p>
+      <div class="link" style="margin-top:8px">Not now — go back</div>
+      <div style="height:16px"></div>
+    </div></div><div class="footer"><div class="btn primary">Review &amp; submit</div></div><div class="homezone"></div></div><figcaption>2 &middot; Verify your ID (full scroll)</figcaption></figure>
+<figure><div class="phone ground tall"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar home"><div class="t">Thursday</div><div class="acts"><div class="slot bell" role="button" aria-label="Notifications"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18V11L10 7H14L18 11V18Z"/><path d="M4 18H20M10 21H14"/></svg><span class="dot"></span></div><div class="badge-hit"><span class="deeds"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg><b>12</b></span></div></div></div><div class="scroll">
+    <div style="padding:0 16px 8px"><h1 class="display" style="padding-top:12px">Hi, Alex</h1></div>
+
+    <div class="grp" style="margin-top:4px">
+      <div class="card">
+        <div class="band ink"><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="11" height="12"/><rect x="10" y="6" width="11" height="12"/></svg><span class="label">We found you a shift</span></span><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></div>
+        <div class="pad" style="padding-bottom:14px">
+          <div class="title"><span class="nw">Sat, Nov 8 · 9:00 AM,</span> <span class="nw">with Jordan</span></div>
+          <p class="body soft" style="margin-top:4px">Take a look and confirm — it’s held for you for 21 hours.</p>
+          <div style="margin-top:14px"><div class="strip" style="--c:var(--sky-600)"><div class="track"><span class="blk" style="left:18.750%;width:18.750%"></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec"><span class="label">Upcoming</span></div>
+    <div class="grp">
+      <div class="card">
+        <div style="display:flex;gap:12px;padding:12px 16px 0;align-items:flex-start">
+          <span class="tile t36 t-meadow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11H21M4 11V13L8 17H16L20 13V11"/><path d="M9 4V7M15 4V7"/></svg></span>
+          <div class="grow">
+            <div class="headline">Food bank sorting</div>
+            <div class="caption" style="margin-top:1px">Eastside Community Pantry</div>
+            <div class="caption">Wed, Nov 12 · 6:00 PM</div>
+            <div class="caption" style="font-weight:700;color:var(--ink)">With Sam</div>
+          </div>
+          <span class="chev" style="margin-top:6px"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span>
+        </div>
+        <div style="padding:12px 16px 14px"><div class="strip" style="--c:var(--meadow-600)"><div class="track"><span class="blk" style="left:75.000%;width:18.750%"></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div></div></div>
+      </div>
+    </div>
+
+    <div class="sec"><span class="label">Your buddies</span><span class="link sm">See all</span></div>
+    <div class="grp"><div class="card">
+      <div class="row" style="min-height:56px"><span class="avatar">S</span><div class="grow"><div class="headline">Sam</div><div class="caption">2 shifts together</div></div><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+    </div></div>
+
+    <div class="sec"><span class="label">Your impact</span><span class="link sm">Details</span></div>
+    <div class="grp"><div class="card"><div class="stats">
+      <div class="stat"><span class="k">Shifts</span><span class="v">3</span></div>
+      <div class="stat"><span class="k">Hours</span><span class="v">9</span></div>
+      <div class="stat"><span class="k">Orgs</span><span class="v">2</span></div>
+    </div></div></div>
+
+    <div class="grp" style="margin-top:20px">
+      <div class="card pad">
+        <span class="tag ink">Free plan</span>
+        <div class="headline" style="margin-top:10px">1 of 2 matched shifts used this month</div>
+        <div class="meter"><i class="on"></i><i></i></div>
+        <p class="body soft" style="margin-top:10px">12 Deeds available · 5 held for upcoming shifts.</p>
+      </div>
+    </div>
+
+    <div class="grp" style="margin-top:20px">
+      <div class="card">
+        <div class="row"><span class="tile t-violet"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg></span><span class="grow headline">Deeds</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-violet"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L21 12L12 21L3 12Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg></span><span class="grow headline">Premium &amp; referrals</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-aqua"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4H20V12L12 20L4 12Z"/><path d="M12 8V12M12 15V16"/></svg></span><span class="grow headline">Safety &amp; reporting</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-silver"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="4" width="6" height="6"/><path d="M5 20V17L8 14H16L19 17V20Z"/></svg></span><span class="grow headline">Your profile</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+        <div class="row"><span class="tile t-silver"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7H20M4 12H20M4 17H20"/><rect class="f" x="7" y="5" width="4" height="4"/><rect class="f" x="13" y="10" width="4" height="4"/><rect class="f" x="9" y="15" width="4" height="4"/></svg></span><span class="grow headline">Account settings</span><span class="chev"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L15 12L9 18"/></svg></span></div>
+      </div>
+    </div>
+    <div style="height:24px"></div>
+    </div><div class="homezone"></div></div><figcaption>3 &middot; Home (full scroll)</figcaption></figure>
+<figure><div class="phone ground tall hasfoot"><div class="island"></div><div class="statusbar"><span class="time">9:41</span><span class="sys"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="0" y="8" width="3" height="4" fill="#0F2A4A"/><rect x="5" y="5" width="3" height="7" fill="#0F2A4A"/><rect x="10" y="2.5" width="3" height="9.5" fill="#0F2A4A"/><rect x="15" y="0" width="3" height="12" fill="#0F2A4A"/></svg><svg width="27" height="13" viewBox="0 0 27 13" aria-hidden="true"><rect x="0.75" y="0.75" width="22.5" height="11.5" rx="2" fill="none" stroke="#0F2A4A" stroke-width="1.5"/><rect x="3" y="3" width="18" height="7" rx="1" fill="#0F2A4A"/><rect x="24.5" y="4" width="2" height="5" rx="1" fill="#0F2A4A"/></svg></span></div><div class="topbar"><div class="slot" role="button" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 6L5 12L11 18"/></svg></div><div class="t">Shift proposal</div><div class="slot"></div></div><div class="scroll">
+    <div class="band ink"><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="11" height="12"/><rect x="10" y="6" width="11" height="12"/></svg><span class="label">We found you a shift</span></span></div>
+    <div style="padding:12px 16px 0">
+      <h1 class="display"><span class="nw">Sat, Nov 8 ·</span> <span class="nw">9:00 AM – 12:00 PM</span></h1>
+      <p class="body soft" style="margin-top:4px">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+    </div>
+
+    <div class="grp" style="margin-top:16px">
+      <div class="card">
+        <div class="band sky"><span class="label">The shift</span><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="6" height="6"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M5 5L7 7M17 17L19 19M19 5L17 7M5 19L7 17"/></svg><span class="label">Daytime</span></span></div>
+        <div class="pad" style="padding-top:14px;padding-bottom:6px">
+          <div class="title">Northside Animal Rescue</div>
+          <div style="margin-top:12px"><div class="strip lg" style="--c:var(--sky-600)"><div class="track"><span class="blk" style="left:18.750%;width:18.750%"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="6" height="6"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M5 5L7 7M17 17L19 19M19 5L17 7M5 19L7 17"/></svg></span></div><div class="ticks"><span class="tk m" style="left:0.000%"></span><span class="tk" style="left:6.250%"></span><span class="tk" style="left:12.500%"></span><span class="tk" style="left:18.750%"></span><span class="tk" style="left:25.000%"></span><span class="tk" style="left:31.250%"></span><span class="tk m" style="left:37.500%"></span><span class="tk" style="left:43.750%"></span><span class="tk" style="left:50.000%"></span><span class="tk" style="left:56.250%"></span><span class="tk" style="left:62.500%"></span><span class="tk" style="left:68.750%"></span><span class="tk m" style="left:75.000%"></span><span class="tk" style="left:81.250%"></span><span class="tk" style="left:87.500%"></span><span class="tk" style="left:93.750%"></span><span class="tk m" style="left:calc(100% - 1px)"></span></div><div class="labels"><span style="left:0">6 AM</span><span style="left:37.5%;transform:translateX(-50%)">12 PM</span><span style="left:75%;transform:translateX(-50%)">6 PM</span><span style="right:0">10 PM</span></div></div></div>
+          <div style="margin-top:12px">
+            <div class="kv"><span class="k">Cause</span><span class="v with"><span class="tile t-sky" style="width:24px;height:24px"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20V16L10 13H14L17 16V20Z"/><path d="M5 9V11M9 5V8M15 5V8M19 9V11"/></svg></span>Animal welfare</span></div>
+            <div class="kv"><span class="k">When</span><span class="v">Sat, Nov 8 · 9:00 AM – 12:00 PM</span></div>
+            <div class="kv"><span class="k">Where</span><span class="v">412 Alder St, Northside</span></div>
+            <div class="kv"><span class="k">Task</span><span class="v">Dog walking &amp; kennel care</span></div>
+          </div>
+          <p class="body" style="padding:10px 0 8px;border-top:1px solid var(--rule)">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="grp" style="margin-top:16px">
+      <div class="card pad">
+        <div style="display:flex;gap:12px;align-items:center">
+          <span class="avatar big">J</span>
+          <div class="grow"><div class="title">Jordan, 29</div><div class="caption">Nurse · Female</div></div>
+          <span class="verified"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4H20V12L12 20L4 12Z"/><path d="M8 11L11 14L16 9"/></svg><span>Verified</span></span>
+        </div>
+        <p class="body" style="margin-top:12px">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+          <span class="tag">4 shifts</span>
+          <span class="tag sky"><i></i>Animal welfare</span>
+          <span class="tag meadow"><i></i>Food insecurity</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grp" style="margin-top:16px">
+      <div class="deposit">
+        <div class="dr"><span class="headline">Held from your Deeds when you confirm</span><span class="dv"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg><b>5</b></span></div>
+        <div class="dr"><span class="headline">You have available</span><span class="dv"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H16L21 8V16L16 21H8L3 16V8Z"/><path d="M12 8L16 12L12 16L8 12Z"/></svg><b>12</b></span></div>
+        <div class="dr" style="display:block"><p class="caption" style="color:var(--ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p></div>
+      </div>
+    </div>
+
+    <div class="grp" style="margin-top:16px">
+      <div class="safety">
+        <div class="band aqua"><span class="lft"><svg class="i s20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4H20V12L12 20L4 12Z"/><path d="M12 8V12M12 15V16"/></svg><span class="headline">Before your first shift</span></span></div>
+        <div class="pad">
+          <ul class="bul">
+            <li>You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</li>
+            <li>Where we can, we point out shifts that happen in daylight.</li>
+            <li>Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</li>
+            <li>Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</li>
+            <li>If anything feels off, report it from the app — a real person reads every report.</li>
+            <li>A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</li>
+          </ul>
+        </div>
+        <div class="switchrow"><span class="headline">I’ve read this</span><span class="switchhit"><span class="switch"></span></span></div>
+      </div>
+    </div>
+    <div class="grp"><div class="link" style="justify-content:center;margin-top:8px">Not this one — keep looking</div></div>
+    <div style="height:8px"></div>
+    </div><div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div><div class="homezone"></div></div><figcaption>4 &middot; Shift proposal (full scroll)</figcaption></figure>
+</main>
+</body>
+</html>

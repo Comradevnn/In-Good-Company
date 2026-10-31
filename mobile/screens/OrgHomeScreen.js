@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { radii, type } from '../theme/tokens';
 import { api } from '../api/client';
-import { ErrorText, InfoCard, Loading, PillButton, Screen, SectionTitle, StatRow } from '../components/AppParts';
+import PrimaryButton from '../components/PrimaryButton';
+import {
+  Card, ErrorText, Headline, Icon, InfoCard, LinkButton, Loading, PillButton, Screen, SectionTitle, StatRow, Tag,
+} from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
 import WaiverPicker, { waiverBody } from '../components/WaiverPicker';
 
@@ -55,45 +59,58 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
   const now = Date.now();
   const upcoming = shifts.filter((sh) => Date.parse(sh.ends_at) > now - 24 * 3600000);
   const pct = (v) => (v == null ? '—' : `${v}%`);
+  const hasLocation = !(org.location_lat == null || org.location_lng == null);
 
   return (
-    <Screen onRefresh={load} refreshing={false}>
-      <Text style={s.eyebrow}>For organizations</Text>
-      <Text style={s.h2}>{org.name}</Text>
+    <Screen
+      onRefresh={load}
+      refreshing={false}
+      footer={hasLocation ? <PrimaryButton label="List a shift" onPress={() => navigate('orgShiftForm')} /> : undefined}
+    >
+      <Headline>{org.name}</Headline>
       {org.verified ? (
-        <InfoCard tone="ok" title="✓ Verified" body="Your shifts are visible to volunteers and in the matching pool." />
+        <InfoCard tone="ok" title="Verified" body="Your shifts are visible to volunteers and in the matching pool." />
       ) : (
         <InfoCard tone="warn" title="Verification pending" body="You can list shifts now; volunteers will see them as soon as we've verified your organization." />
       )}
 
       {!org.waiver ? (
-        <InfoCard tone="warn" title="Add your liability waiver" body="Volunteers need a waiver or consent form on file for your shifts. Upload a photo of yours, or use our default.">
-          <WaiverPicker value={waiver} onChange={setWaiver} />
-          <PillButton label="Save waiver" onPress={saveWaiver} disabled={!waiver || savingWaiver} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
-        </InfoCard>
+        <>
+          <InfoCard tone="warn" title="Add your liability waiver" body="Volunteers need a waiver or consent form on file for your shifts. Upload a photo of yours, or use our default." />
+          <View style={styles.waiver}>
+            <WaiverPicker value={waiver} onChange={setWaiver} />
+            <PillButton label="Save waiver" ghost onPress={saveWaiver} disabled={!waiver || savingWaiver} style={styles.saveWaiver} />
+          </View>
+        </>
       ) : (
-        <Text style={[s.rationale, { marginTop: 10 }]}>
+        <Text style={[s.rationale, { marginTop: 16 }]}>
           Waiver on file: {org.waiver.kind === 'platform_default' ? "the platform's default form" : 'your uploaded waiver'}.
         </Text>
       )}
 
-      {org.location_lat == null || org.location_lng == null ? (
+      {!hasLocation ? (
         <InfoCard tone="warn" title="Add your location first" body="Your organization has no map location yet, so volunteers' travel distance can't be checked. Contact us to add it before listing shifts." />
-      ) : (
-        <PillButton label="List a shift" onPress={() => navigate('orgShiftForm')} style={{ marginTop: 18 }} />
-      )}
+      ) : null}
 
       <SectionTitle title="Your shifts" />
       {upcoming.length === 0 ? <Text style={s.rationale}>No upcoming shifts yet.</Text> : null}
       {upcoming.map((sh) => (
-        <TouchableOpacity key={sh.id} style={app.discoverCard} onPress={() => navigate('orgRoster', { shiftId: sh.id })}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={[app.discoverTitle, { flex: 1 }]}>{sh.title}</Text>
-            <Text style={app.buddySub}>{sh.capacity_booked}/{sh.capacity_total} booked</Text>
+        <Pressable
+          key={sh.id}
+          style={({ pressed }) => [styles.shiftCard, pressed && { backgroundColor: colors.tintPressed }]}
+          onPress={() => navigate('orgRoster', { shiftId: sh.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`${sh.title}, ${sh.when_label}, ${sh.capacity_booked} of ${sh.capacity_total} booked. Roster and check-in`}
+        >
+          <Tag label={`${sh.capacity_booked}/${sh.capacity_total} booked`} />
+          <Text style={styles.shiftTitle}>{sh.title}</Text>
+          <Text style={styles.shiftFact}>{sh.when_label}</Text>
+          <Text style={styles.shiftFact}>{sh.cause_tags.join(', ')}</Text>
+          <View style={styles.shiftLink}>
+            <Text style={styles.shiftLinkText}>Roster & check-in</Text>
+            <Icon name="chevron-right" size={24} color={colors.ink} />
           </View>
-          <Text style={app.discoverOrg}>{sh.when_label} · {sh.cause_tags.join(', ')}</Text>
-          <Text style={app.discoverMeta}>Roster & check-in ›</Text>
-        </TouchableOpacity>
+        </Pressable>
       ))}
 
       {metrics ? (
@@ -104,14 +121,35 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
           <SectionTitle title="Monthly payouts" />
           {metrics.payouts.length === 0 ? (
             <Text style={s.rationale}>Nothing yet. When a volunteer forfeits Deeds on one of your shifts, your share is paid out at the end of the month.</Text>
-          ) : metrics.payouts.map((p) => (
-            <View key={p.month} style={app.depositLine}><Text style={app.depositLabel}>{p.month}</Text><Text style={app.depositTotal}>${p.usd.toFixed(2)}</Text></View>
-          ))}
+          ) : (
+            <Card tone="ink">
+              {metrics.payouts.map((p, i) => (
+                <View key={p.month} style={[styles.payLine, i > 0 && { marginTop: 12 }]}>
+                  <Text style={styles.payMonth}>{p.month}</Text>
+                  <Text style={styles.payAmount}>${p.usd.toFixed(2)}</Text>
+                </View>
+              ))}
+            </Card>
+          )}
         </>
       ) : null}
       <ErrorText error={error} />
-      <Text style={{ marginTop: 26, textAlign: 'center', color: '#B4543A', fontFamily: 'Inter_600SemiBold' }} onPress={onLogOut}>Log out</Text>
-      <DevClockBar sessionToken={sessionToken} onAdvanced={load} jumps={upcoming[0] ? [['→ next shift', upcoming[0].starts_at]] : []} />
+      <LinkButton label="Log out" danger onPress={onLogOut} style={styles.logout} />
+      <DevClockBar sessionToken={sessionToken} onAdvanced={load} jumps={upcoming[0] ? [['To next shift', upcoming[0].starts_at]] : []} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  waiver: { marginTop: 16 },
+  saveWaiver: { marginTop: 12 },
+  shiftCard: { borderRadius: radii.card, padding: 20, marginTop: 8, backgroundColor: colors.tint, alignItems: 'flex-start' },
+  shiftTitle: { ...type.subtitleL, color: colors.ink, marginTop: 12 },
+  shiftFact: { ...type.bodyS, color: colors.ink2, marginTop: 2 },
+  shiftLink: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48, marginTop: 4 },
+  shiftLinkText: { ...type.label, color: colors.ink },
+  payLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  payMonth: { ...type.body, color: colors.onInk2 },
+  payAmount: { ...type.subtitle, color: colors.onInk },
+  logout: { marginTop: 16 },
+});

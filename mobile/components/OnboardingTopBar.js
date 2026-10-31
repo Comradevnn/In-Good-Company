@@ -1,84 +1,87 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
+import { DEEDS_BADGE_RESERVE, HEAD_TEXT, touch, type } from '../theme/tokens';
+import { BackButton } from './Controls';
 
-// Shared topbar across onboarding screens — back button + step progress
-// dots, matching specs/plotline.html's .topbar/.progress styling.
+// Shared top bar across onboarding screens: a 48 back circle plus step progress as a row of small
+// pills, below the status bar (it applies the top inset itself).
 //
 // Two modes:
-// - Linear onboarding: pass step/total and onBack (a step back, or from
-//   the first step back to sign-in).
-// - Reopened from Settings to edit one section: pass title + onBack
-//   instead of step/total — shows a plain title and a working back button
-//   that returns to Settings, rather than a step-progress readout that
-//   wouldn't mean anything outside the linear flow.
-export default function OnboardingTopBar({ step, total, title, onBack }) {
+// - Linear onboarding: pass step/total and onBack (a step back, or from the first step back to
+//   sign-in).
+// - Reopened from Settings to edit one section: pass title + onBack instead of step/total, which
+//   shows the title beside the back button rather than a step-progress readout that wouldn't mean
+//   anything outside the linear flow.
+//
+// The title and the progress pills stop short of the right edge by DEEDS_BADGE_RESERVE, where App.js
+// floats the Deeds badge. insetTop (default true) adds the status-bar inset; pass false for a bar
+// placed inside a HeroField, which already pads for it.
+export default function OnboardingTopBar({ step, total, title, onBack, insetTop = true }) {
   const isEditMode = step == null;
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.topbar}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack} disabled={!onBack} accessibilityRole="button" accessibilityLabel="Back">
-        <Text style={styles.backBtnText}>←</Text>
-      </TouchableOpacity>
-      {isEditMode ? (
-        <Text style={styles.editTitle}>{title}</Text>
-      ) : (
-        <View style={styles.progress}>
-          {Array.from({ length: total }).map((_, i) => (
-            <View key={i} style={[styles.progressDot, i < step && styles.progressDotDone]} />
-          ))}
-        </View>
-      )}
-      <View style={styles.spacer32} />
+    <View style={[styles.topbar, insetTop && { paddingTop: insets.top }]}>
+      <View style={styles.bar}>
+        <BackButton onPress={onBack} />
+        {isEditMode ? (
+          <Text style={styles.editTitle} numberOfLines={1} {...HEAD_TEXT} accessibilityRole="header">
+            {title}
+          </Text>
+        ) : (
+          <View
+            style={styles.progress}
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel={`Step ${step} of ${total}`}
+            accessibilityValue={{ min: 1, max: total, now: step }}
+          >
+            {Array.from({ length: total }).map((_, i) => (
+              <View key={i} style={[styles.progressPill, i < step && styles.progressPillDone]} />
+            ))}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   topbar: {
+    backgroundColor: 'transparent',
+  },
+  bar: {
+    height: touch.topBar,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnText: {
-    color: colors.ink,
-    fontSize: 16,
+    gap: 12,
+    paddingHorizontal: 12,
   },
   editTitle: {
+    ...type.subtitleL,
     flex: 1,
-    textAlign: 'center',
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
     color: colors.ink,
+    paddingRight: DEEDS_BADGE_RESERVE,
   },
   progress: {
+    flex: 1,
     flexDirection: 'row',
     gap: 6,
+    paddingRight: DEEDS_BADGE_RESERVE,
+  },
+  // To do: an empty pill with a 2px edge outline. Done: solid ink. Same box either way.
+  progressPill: {
     flex: 1,
-    justifyContent: 'center',
+    maxWidth: 40,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.edge,
+    backgroundColor: 'transparent',
   },
-  progressDot: {
-    width: 22,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.line,
-  },
-  progressDotDone: {
-    backgroundColor: colors.moss,
-  },
-  spacer32: {
-    width: 32,
+  progressPillDone: {
+    borderColor: colors.ink,
+    backgroundColor: colors.ink,
   },
 });

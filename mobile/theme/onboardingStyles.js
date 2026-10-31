@@ -1,214 +1,107 @@
 import { StyleSheet } from 'react-native';
 import { colors } from './colors';
+import { font, radii, touch, type } from './tokens';
 
-// Shared text/field styles across onboarding screens, matching
-// specs/plotline.html's .eyebrow / h2 / p.rationale / .field conventions.
+// Shared text, field and control styles across the onboarding and form screens, in direction B
+// ("Overprint"): design-candidates/B/direction.md. Keys are used by many screens; the shared
+// components in components/Controls.js build on the same values.
 export const onboardingStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.paper,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 22,
-    paddingTop: 26,
-    paddingBottom: 18,
-  },
-  eyebrow: {
-    fontFamily: 'IBMPlexMono_500Medium',
-    fontSize: 11,
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
-    color: colors.mossDark,
-    marginBottom: 8,
-  },
-  h2: {
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 24,
-    lineHeight: 29,
-    color: colors.ink,
-    marginBottom: 6,
+    paddingHorizontal: touch.pageMargin,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   rationale: {
-    fontFamily: 'Inter_400Regular',
-    color: colors.inkSoft,
-    fontSize: 12.5,
-    lineHeight: 18,
+    ...type.bodyS,
+    color: colors.ink2,
     marginTop: 4,
   },
   field: {
-    marginTop: 18,
+    marginTop: 16,
   },
   row: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   label: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: colors.inkSoft,
-    marginBottom: 6,
+    ...type.label,
+    color: colors.ink,
+    marginBottom: 8,
   },
+  // No lineHeight on purpose: a line height on a single-line TextInput shifts the text on iOS.
   input: {
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14.5,
+    height: touch.field,
+    borderWidth: 2,
+    borderColor: colors.edge,
+    borderRadius: radii.field,
+    paddingHorizontal: 16,
+    paddingVertical: 0,
+    fontFamily: font.textSemiBold,
+    fontSize: 17,
     color: colors.ink,
     backgroundColor: colors.surface,
+    textAlignVertical: 'center',
   },
   textarea: {
-    minHeight: 70,
+    height: undefined,
+    minHeight: 112,
+    paddingTop: 14,
+    paddingBottom: 14,
     textAlignVertical: 'top',
   },
-  errorText: {
-    fontFamily: 'Inter_400Regular',
-    color: colors.danger,
-    fontSize: 13,
-    marginTop: 16,
-  },
   successText: {
-    fontFamily: 'Inter_600SemiBold',
-    color: colors.mossDark,
-    fontSize: 13,
-    marginTop: 16,
-  },
-  // chip-grid / chip (causes screen)
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 9,
-    marginTop: 16,
-  },
-  chip: {
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 999,
-  },
-  chipSelected: {
-    backgroundColor: colors.moss,
-    borderColor: colors.moss,
-  },
-  chipText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13.5,
-    color: colors.ink,
-  },
-  chipTextSelected: {
-    color: '#F6F4EA',
-  },
-  // toggle-row (prefs screen)
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 15,
+    ...type.bodyS,
+    fontFamily: font.textBold,
+    color: colors.success,
     marginTop: 12,
   },
-  toggleLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: colors.ink,
-    flex: 1,
-  },
+  // 56 x 32 track, 2px ink border; the thumb is positioned inside it
   switchTrack: {
-    width: 42,
-    height: 24,
-    borderRadius: 999,
-    backgroundColor: colors.line,
-    justifyContent: 'center',
-    padding: 3,
-  },
-  switchTrackOn: {
-    backgroundColor: colors.moss,
-  },
-  switchThumb: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#fff',
-  },
-  switchThumbOn: {
-    alignSelf: 'flex-end',
-  },
-  // option-card (org-or-cause screen)
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    borderWidth: 1.5,
-    borderColor: colors.line,
+    width: 56,
+    height: 32,
     borderRadius: 16,
-    padding: 16,
-    marginTop: 14,
+    borderWidth: 2,
+    borderColor: colors.ink,
     backgroundColor: colors.surface,
   },
-  optionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.mossTint,
-    alignItems: 'center',
-    justifyContent: 'center',
+  switchTrackOn: {
+    backgroundColor: colors.selected,
   },
-  optionIconText: {
-    fontSize: 19,
+  switchThumb: {
+    position: 'absolute',
+    left: 6,
+    top: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.ink,
   },
-  optionTextWrap: {
-    flex: 1,
+  switchThumbOn: {
+    left: 28,
+    top: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
+  // nav-row title (the waiver picker)
   optionTitle: {
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 15.5,
+    ...type.subtitle,
     color: colors.ink,
-  },
-  optionSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12.5,
-    color: colors.inkSoft,
-    marginTop: 2,
-  },
-  optionArrow: {
-    color: colors.inkSoft,
-    fontSize: 16,
   },
   // locate-card (location screen)
   locateCard: {
-    marginTop: 18,
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    borderStyle: 'dashed',
-    borderRadius: 16,
+    marginTop: 16,
+    borderRadius: radii.card,
     padding: 20,
     alignItems: 'center',
-    backgroundColor: colors.mossTint,
-  },
-  pin: {
-    fontSize: 26,
-  },
-  valuePill: {
-    fontFamily: 'IBMPlexMono_500Medium',
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: colors.mossDark,
-    backgroundColor: colors.mossTint,
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: 999,
+    backgroundColor: colors.tint,
   },
   labelRow: {
     flexDirection: 'row',
@@ -218,11 +111,10 @@ export const onboardingStyles = StyleSheet.create({
   fitLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 4,
   },
   fitLabelText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: colors.inkSoft,
+    ...type.caption,
+    color: colors.ink2,
   },
 });

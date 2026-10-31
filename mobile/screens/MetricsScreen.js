@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
-import { onboardingStyles as s } from '../theme/onboardingStyles';
-import { app } from '../theme/appStyles';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors } from '../theme/colors';
+import { type } from '../theme/tokens';
 import { api } from '../api/client';
-import { ErrorText, Loading, Screen, SectionTitle, StatRow, TagPill } from '../components/AppParts';
+import { Card, ErrorText, Headline, Loading, Screen, SectionTitle, StatRow, TagPill } from '../components/AppParts';
 
 // Your impact: aggregate numbers about your own volunteering only.
 export default function MetricsScreen({ sessionToken, onBack }) {
@@ -17,11 +17,10 @@ export default function MetricsScreen({ sessionToken, onBack }) {
   const pct = (v) => (v == null ? '—' : `${v}%`);
   return (
     <Screen title="Your impact" onBack={onBack}>
-      <Text style={s.eyebrow}>Your impact</Text>
-      <Text style={s.h2}>What you've done so far</Text>
+      <Headline>What you've done so far</Headline>
       <StatRow stats={[[m.shifts_completed, 'Shifts'], [m.hours, 'Hours'], [m.orgs, 'Orgs']]} />
       <SectionTitle title="How it's going" />
-      <View style={app.depositBox}>
+      <Card tone="ink">
         {[
           ['Matched shifts you showed up for', pct(m.match_to_attendance_pct)],
           ['Shifts back at an org you\'d been to', pct(m.repeat_same_org_pct)],
@@ -29,18 +28,25 @@ export default function MetricsScreen({ sessionToken, onBack }) {
           ['Days from signup to first shift', m.days_to_first_shift ?? '—'],
           ['Came back for another shift', m.came_back_for_another_shift ? 'Yes' : 'Not yet'],
         ].map(([label, value]) => (
-          <View key={label} style={app.depositLine}>
-            <Text style={[app.depositLabel, { flex: 1 }]}>{label}</Text>
-            <Text style={app.depositTotal}>{value}</Text>
+          <View key={label} style={styles.line}>
+            <Text style={styles.label}>{label}</Text>
+            <Text style={styles.value}>{value}</Text>
           </View>
         ))}
-      </View>
+      </Card>
       {m.causes.length ? (
         <>
           <SectionTitle title="Causes you've volunteered in" />
-          <View style={app.historyRow}>{m.causes.map((c) => <TagPill key={c} label={c} />)}</View>
+          <View style={styles.tags}>{m.causes.map((c) => <TagPill key={c} label={c} />)}</View>
         </>
       ) : null}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  label: { ...type.bodyS, color: colors.onInk2, flex: 1 },
+  value: { ...type.subtitle, color: colors.onInk },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+});

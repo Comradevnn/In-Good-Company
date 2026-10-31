@@ -1,0 +1,91 @@
+Scheme check: cool/index.html
+Tokens read: 37
+
+CONTRAST (WCAG 2.x; text 4.5:1, large text 3:1, UI boundary 3:1)
+  PASS 15.30  ink #06283A on paper #FFFFFF  [text >= 4.5]  body text on the ground
+  PASS 15.30  ink #06283A on surface #FFFFFF  [text >= 4.5]  text in fields, chips, tags, secondary buttons
+  PASS 13.67  ink #06283A on tint #E9F4F8  [text >= 4.5]  cards, list rows, stats
+  PASS  7.06  ink #06283A on field #00C2D6  [text >= 4.5]  text on the field (hero, Home status card)
+  PASS 11.81  ink #06283A on field-tint #B5ECEF  [text >= 4.5]  plan card, safety notice
+  PASS 13.74  ink #06283A on person-1-tint #FFF3C2  [text >= 4.5]  partner card
+  PASS 13.74  ink #06283A on accent-tint #FFF3C2  [text >= 4.5]  prototype-stage notice
+  PASS 10.60  ink #06283A on accent #FFD23F  [text >= 4.5]  Deeds badge, Daytime and Free plan tags
+  PASS  7.06  ink #06283A on selected #00C2D6  [text >= 4.5]  selected chip label
+  PASS 13.60  ink #06283A on success-tint #E3F6EC  [text >= 4.5]  photo captured card
+  PASS 13.20  ink #06283A on danger-tint #FFE9EC  [text >= 4.5]  value in a field with an error
+  PASS 10.60  ink #06283A on person-1 #FFD23F  [text >= 4.5]  initial on person-1 disc / avatar
+  PASS  6.05  ink #06283A on person-2 #FF7B6B  [text >= 4.5]  initial on person-2 disc
+  PASS  5.64  ink #06283A on person-3 #A58BFF  [text >= 4.5]  initial on person-3 disc
+  PASS  7.50  ink #06283A on lens-others #FF9F43  [text >= 4.5]  text on the lens of two other people
+  PASS  8.07  ink-2 #2B5568 on paper #FFFFFF  [text >= 4.5]  secondary text
+  PASS  8.07  ink-2 #2B5568 on surface #FFFFFF  [text >= 4.5]  secondary text on surfaces
+  PASS  7.21  ink-2 #2B5568 on tint #E9F4F8  [text >= 4.5]  secondary text on cards
+  PASS  6.23  ink-2 #2B5568 on field-tint #B5ECEF  [text >= 4.5]  secondary text on field tint
+  PASS  7.24  ink-2 #2B5568 on person-1-tint #FFF3C2  [text >= 4.5]  secondary text on partner card
+  PASS  7.24  ink-2 #2B5568 on accent-tint #FFF3C2  [text >= 4.5]  secondary text on notice
+  PASS  5.21  ink-3 #4A7284 on surface #FFFFFF  [text >= 4.5]  placeholder in a field
+  PASS  4.65  ink-3 #4A7284 on tint #E9F4F8  [text >= 4.5]  placeholder on tint
+  PASS 15.30  on-ink #FFFFFF on ink #06283A  [text >= 4.5]  primary button label, ink tags and cards
+  PASS 12.22  on-ink-2 #CDEBF3 on ink #06283A  [text >= 4.5]  fine print on the ink deposit card
+  PASS 10.60  accent #FFD23F on ink #06283A  [large >= 3]  the hold numeral on the ink card (56px)
+  PASS  4.95  on-lens #FFFFFF on lens-1 #3E7F08  [large >= 3]  shift time on the you + person-1 lens (22-38px bold)
+  PASS  4.95  on-lens #FFFFFF on lens-1 #3E7F08  [text >= 4.5]  small clock glyph and any body text on lens-1
+  PASS  6.72  on-lens #FFFFFF on lens-2 #A02A7E  [text >= 4.5]  text or glyph on the you + person-2 lens
+  PASS  4.84  on-lens #FFFFFF on lens-3 #8A4DEB  [text >= 4.5]  text or glyph on the you + person-3 lens
+  PASS  8.19  on-you #FFFFFF on you #1E3CCB  [ui >= 3]  person icon on your disc
+  PASS  8.27  on-success #FFFFFF on success #0B5A3A  [ui >= 3]  check icon on the success disc
+  PASS  7.16  danger #B3001B on paper #FFFFFF  [text >= 4.5]  error message
+  PASS  7.16  danger #B3001B on surface #FFFFFF  [text >= 4.5]  error icon on a field
+  PASS  6.18  danger #B3001B on danger-tint #FFE9EC  [text >= 4.5]  error inside a field
+  PASS  4.52  off-fg #4A6E7E on off-bg #DFEBEF  [text >= 4.5]  disabled button (exempt; B holds it at 4.5)
+  PASS  3.74  edge #4F8CA3 on surface #FFFFFF  [ui >= 3]  field and chip borders
+  PASS  3.34  edge #4F8CA3 on tint #E9F4F8  [ui >= 3]  borders on tint
+  PASS 15.30  ink #06283A on surface #FFFFFF  [ui >= 3]  back button, switch, secondary button outline
+  PASS  7.35  success #0B5A3A on success-tint #E3F6EC  [ui >= 3]  dashed border of the photo card
+  PASS  6.18  danger #B3001B on danger-tint #FFE9EC  [ui >= 3]  error field border
+  PASS  3.81  unread #E4503E on surface #FFFFFF  [ui >= 3]  unread dot on the bell button
+  PASS  3.86  empty-ring #0A8F9E on paper #FFFFFF  [ui >= 3]  dashed ring on the expired screen
+  PASS  3.13  scrollbar #5E9AAE on paper #FFFFFF  [ui >= 3]  scroll indicator (informational)
+
+COLOUR-BLIND SEPARATION (CIEDE2000 after simulation; FLAG < 10, WARN < 20)
+  PASS  you #1E3CCB vs person-1 #FFD23F  (two people)  norm 82.1, prot 76.6, deut 81.9, trit 56.2
+  PASS  you #1E3CCB vs person-2 #FF7B6B  (two people)  norm 52.9, prot 52.3, deut 67.3, trit 59.0
+  PASS  you #1E3CCB vs person-3 #A58BFF  (two people)  norm 31.7, prot 25.6, deut 30.3, trit 28.6
+  WARN  person-1 #FFD23F vs person-2 #FF7B6B  (two people)  norm 40.4, prot 24.3, deut 15.5, trit 20.7
+  PASS  person-1 #FFD23F vs person-3 #A58BFF  (two people)  norm 65.7, prot 61.3, deut 61.9, trit 30.4
+  PASS  person-2 #FF7B6B vs person-3 #A58BFF  (two people)  norm 37.7, prot 43.6, deut 50.8, trit 35.6
+  PASS  you #1E3CCB vs field #00C2D6  (a disc on the field)  norm 49.6, prot 35.3, deut 35.3, trit 36.0
+  PASS  person-1 #FFD23F vs field #00C2D6  (a disc on the field)  norm 46.3, prot 43.4, deut 49.6, trit 45.5
+  PASS  person-2 #FF7B6B vs field #00C2D6  (a disc on the field)  norm 52.5, prot 31.4, deut 39.9, trit 64.3
+  WARN  person-3 #A58BFF vs field #00C2D6  (a disc on the field)  norm 34.3, prot 16.2, deut 10.3, trit 23.8
+  WARN  lens-1 #3E7F08 vs you #1E3CCB  (lens vs its disc)  norm 61.5, prot 61.7, deut 61.5, trit 19.1
+  PASS  lens-1 #3E7F08 vs person-1 #FFD23F  (lens vs its disc)  norm 39.9, prot 28.8, deut 34.0, trit 50.4
+  WARN  lens-2 #A02A7E vs you #1E3CCB  (lens vs its disc)  norm 25.2, prot 10.1, deut 17.0, trit 51.4
+  PASS  lens-2 #A02A7E vs person-2 #FF7B6B  (lens vs its disc)  norm 37.6, prot 44.7, deut 43.1, trit 24.1
+  WARN  lens-3 #8A4DEB vs you #1E3CCB  (lens vs its disc)  norm 15.3, prot 10.4, deut 13.9, trit 22.8
+  WARN  lens-3 #8A4DEB vs person-3 #A58BFF  (lens vs its disc)  norm 17.0, prot 14.3, deut 15.0, trit 17.1
+  PASS  lens-1 #3E7F08 vs lens-2 #A02A7E  (two lenses)  norm 75.1, prot 49.2, deut 36.4, trit 54.1
+  PASS  lens-1 #3E7F08 vs lens-3 #8A4DEB  (two lenses)  norm 83.3, prot 60.4, deut 57.7, trit 27.6
+  WARN  lens-2 #A02A7E vs lens-3 #8A4DEB  (two lenses)  norm 20.4, prot 17.8, deut 17.8, trit 29.2
+  PASS  lens-1 #3E7F08 vs field #00C2D6  (lens on the field)  norm 43.0, prot 45.3, deut 47.1, trit 26.1
+  WARN  success #0B5A3A vs lens-1 #3E7F08  (success state vs the main lens)  norm 19.5, prot 19.1, deut 19.8, trit 11.9
+  PASS  success #0B5A3A vs field #00C2D6  (success state vs the field)  norm 43.7, prot 46.0, deut 45.4, trit 39.7
+
+LENS HUES (informational: a lens should read as the overprint of its two discs; judge by eye)
+  lens-1 #3E7F08 hue 93  from you hue 230 + person-1 hue 46
+  lens-2 #A02A7E hue 317  from you hue 230 + person-2 hue 6
+  lens-3 #8A4DEB hue 263  from you hue 230 + person-3 hue 253
+
+SIMULATED COLOURS (people, lenses, field)
+  you         #1E3CCB  prot #0057CF  deut #0047C8  trit #00657F
+  person-1    #FFD23F  prot #EACF24  deut #F5DC48  trit #FFC0B6
+  person-2    #FF7B6B  prot #9C9169  deut #BCAD68  trit #FF6478
+  person-3    #A58BFF  prot #639FFF  deut #669BFC  trit #8FA1B9
+  lens-1      #3E7F08  prot #847300  deut #7B6E1B  trit #3B7A6B
+  lens-2      #A02A7E  prot #354F80  deut #5A637B  trit #AA2C50
+  lens-3      #8A4DEB  prot #0073F0  deut #006FE8  trit #717396
+  lens-others #FF9F43  prot #BCA837  deut #D3BE44  trit #FF8A8C
+  field       #00C2D6  prot #AFBAD7  deut #97A9D6  trit #00CCC8
+  success     #0B5A3A  prot #595238  deut #504C3C  trit #005A52
+
+RESULT: 0 contrast FAIL, 0 colour-blind FLAG, 8 WARN

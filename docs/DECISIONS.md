@@ -4,6 +4,39 @@ Decisions the owner has made that aren't (or aren't yet) in the private
 specs, with what was built for each. Newest first. The private specs
 remain the source of truth for everything else (see README "Specs").
 
+## 2026-10-23 — App redesign to direction B ("Overprint"), Calm tonal shade palette
+
+- **Direction.** The owner chose design candidate B, "Overprint"
+  (design-candidates/B/direction.md), coloured with the round-2 palette
+  "Calm, tonal, with the shade" (design-candidates/B-round2/calm-tonal-shade/).
+  The owner explicitly authorized replacing the app's visual identity:
+  specs/plotline.html and the earlier look are now the previous direction.
+  The redesign is visual only: data, API calls, validation, navigation,
+  features and copy stay as they were (any copy shortened for layout is
+  listed in the pull request).
+- **Swappable palette.** Every palette the founders reviewed is installed
+  under mobile/theme/palettes/ with identical role-token keys.
+  mobile/theme/colors.js alone picks the active one: a `DEFAULT_PALETTE`
+  constant, overridable with the `EXPO_PUBLIC_PALETTE` env var when
+  starting Metro. Selection is static (no in-app switcher). Screens use
+  role tokens only; a test fails on colour literals outside the palette
+  folder. See docs/THEMING.md.
+- **Round-1 palettes included too.** Besides the six palettes named for
+  the switch (calm tonal shade, calm tonal, calm, moss shade tonal, moss
+  shade, moss), the other round-1 schemes the founders saw (moss linen,
+  cool, warm) are installed the same way, since they share the key set.
+  The original B colours have no role-token export and are not installed.
+- **Person colours are derived on the client.** Each person's disc colour
+  comes from a stable hash of their user id over the palette's person
+  colours ("you" always uses the you colour), and each pair's overlap
+  colour is the palette's pre-mixed lens. Nothing is stored, so the colour
+  is the same on every device but two other people can share a colour; a
+  stored per-user colour would need a backend change.
+- **Dependencies added.** react-native-svg (the overlapping discs and
+  icons), react-native-safe-area-context (edge-to-edge insets), and the
+  Gabarito and Figtree font packages. The old font packages are left
+  installed for the owner to remove.
+
 ## 2026-10-18 — Owner feedback from testing on an Android phone
 
 Fixed: fields no longer hide behind the Android keyboard, and the ID

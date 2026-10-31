@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Gabarito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ===== SCHEME COLOURS: a scheme changes ONLY the values in this block ===== */
+  /* ink: text, primary buttons, outlines, icons */
+  --ink:#331A45; --ink-2:#5A3E72; --ink-3:#6F5683;
+  --on-ink:#FFFFFF; --on-ink-2:#E6D9F0; --on-ink-line:#7C5E94;
+  /* grounds and surfaces */
+  --paper:#FFFFFF; --surface:#FFFFFF; --tint:#F4F0F9; --edge:#867099;
+  /* the field: the loud region (hero, Home status card) and its tint */
+  --field:#B6A3DB; --field-tint:#E8E0F5;
+  --selected:#B6A3DB; --unread:#7A5CB5; --ring:#FFFFFF; --empty-ring:#8266BA;
+  /* people: you + a fixed pool (person-1 = Jordan, person-2 = Sam, person-3 = next person) */
+  --you:#35599A; --on-you:#FFFFFF;
+  --person-1:#EBC45A; --person-1-tint:#F7EBCB; --person-2:#D4806B; --person-3:#D6E8CE;
+  /* lenses: one solid pre-mixed colour per pairing */
+  --lens-1:#617B37; --lens-2:#9A4A68; --lens-3:#2A8080; --lens-others:#D9A26C; --on-lens:#FFFFFF;
+  /* accent: Deeds badge, small tags, notice icon, the hold numeral */
+  --accent:#EBC45A; --accent-tint:#F7EBCB;
+  /* states */
+  --success:#14573C; --success-tint:#E2F0E8; --on-success:#FFFFFF;
+  --danger:#A3213F; --danger-tint:#F9E7EA;
+  --off-bg:#EAE5F0; --off-fg:#6A587C;
+  --scrollbar:#A898BC;
+  /* ===== end scheme colours ===== */
+  /* presentation only (page around the phones): not part of a scheme */
+  --page-bg:#E9E9EE; --page-ink:#1B1B26; --page-ink-2:#3A3A48; --device-frame:#14152B;
+  --font-display:'Gabarito','Trebuchet MS',sans-serif;
+  --font-text:'Figtree','Helvetica Neue',Arial,sans-serif;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --r-field:20px; --r-card:28px; --r-hero:32px; --r-pill:999px;
+  --shadow-bar:0 -4px 16px rgba(0,0,0,.10);
+  --t-display:56px; --t-headline:36px; --t-title:24px; --t-subtitle:18px;
+  --t-body:16px; --t-body-s:15px; --t-label:15px; --t-caption:13px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--page-bg)}
+body{font-family:var(--font-text);color:var(--page-ink);background:var(--page-bg);padding:48px 32px 72px;-webkit-font-smoothing:antialiased}
+.page-head{max-width:1100px;margin:0 auto 40px}
+.page-head h1{font-family:var(--font-display);font-weight:900;font-size:40px;line-height:44px;letter-spacing:-.01em;color:var(--page-ink)}
+.page-head p{font-weight:500;font-size:17px;line-height:26px;margin-top:8px;max-width:680px;color:var(--page-ink-2)}
+.row-title{max-width:2200px;margin:0 auto 20px;font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--page-ink)}
+.frames{display:flex;flex-wrap:wrap;gap:40px 36px;justify-content:center;align-items:flex-start;margin:0 auto 56px}
+figure{display:flex;flex-direction:column;align-items:center;gap:14px}
+figcaption{font-size:15px;line-height:20px;font-weight:600;color:var(--page-ink-2)}
+
+/* device */
+.device{position:relative;width:390px;height:844px;box-sizing:content-box;border:10px solid var(--device-frame);border-radius:56px;overflow:hidden;background:var(--paper)}
+.device.tall{height:auto}
+.screen{position:relative;width:390px;height:844px;overflow:hidden;background:var(--paper);font-family:var(--font-text);color:var(--ink)}
+.tall .screen{height:auto;min-height:844px;overflow:visible;padding-bottom:34px}
+.island{position:absolute;top:11px;left:50%;margin-left:-60px;width:120px;height:34px;border-radius:17px;background:var(--device-frame);z-index:20}
+.home-ind{position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:3px;background:var(--ink);z-index:20}
+
+/* status bar */
+.statusbar{height:47px;position:relative;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 40px;font-weight:700;font-size:17px;color:var(--ink)}
+.statusbar .sys{display:flex;gap:6px;align-items:center}
+.top{position:relative;z-index:5}
+.top.pinned{position:absolute;top:0;left:0;right:0}
+.top.pink{background:var(--field)}
+.top.white{background:var(--paper)}
+.bar{height:56px;display:flex;align-items:center;gap:8px;padding:0 12px 0 12px}
+.bar-title{font-family:var(--font-display);font-weight:800;font-size:20px;line-height:26px;color:var(--ink)}
+.back{width:48px;height:48px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;color:var(--ink);flex:none}
+
+/* icons */
+.ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* type roles */
+.t-display{font-family:var(--font-display);font-weight:900;font-size:var(--t-display);line-height:54px;letter-spacing:-.02em}
+.t-headline{font-family:var(--font-display);font-weight:900;font-size:var(--t-headline);line-height:40px;letter-spacing:-.015em}
+.t-title{font-family:var(--font-display);font-weight:800;font-size:var(--t-title);line-height:28px;letter-spacing:-.005em}
+.t-subtitle{font-family:var(--font-display);font-weight:700;font-size:var(--t-subtitle);line-height:24px}
+.t-body{font-size:var(--t-body);line-height:24px;font-weight:500}
+.t-body-s{font-size:var(--t-body-s);line-height:22px;font-weight:500}
+.t-label{font-size:var(--t-label);line-height:20px;font-weight:700}
+.t-caption{font-size:var(--t-caption);line-height:18px;font-weight:700}
+.muted{color:var(--ink-2)}
+
+/* layout */
+.pad{padding:0 24px}
+.stack>*+*{margin-top:var(--s4)}
+
+/* chips and tags */
+.tag{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:var(--r-pill);font-weight:700;font-size:15px;line-height:20px;color:var(--ink);background:var(--surface);white-space:nowrap}
+.tag.yellow{background:var(--accent)}
+.tag.ink{background:var(--ink);color:var(--on-ink)}
+.tag.line{background:var(--surface);border:2px solid var(--ink);height:32px;padding:0 12px}
+.tag.pink{background:var(--field)}
+.chip{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:48px;padding:0 11px;border-radius:var(--r-pill);border:2px solid var(--edge);background:var(--surface);color:var(--ink);font-weight:700;font-size:15px;white-space:nowrap}
+.chip.sel{background:var(--selected);border-color:var(--ink)}
+.chips{display:flex;gap:6px}
+
+/* fields */
+.field{display:flex;flex-direction:column;gap:8px}
+.field>label{font-weight:700;font-size:15px;line-height:20px;color:var(--ink)}
+.input{height:56px;border-radius:var(--r-field);border:2px solid var(--edge);background:var(--surface);padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:17px;font-weight:600;color:var(--ink);white-space:nowrap}
+.input .ph{color:var(--ink-3);font-weight:500}
+.input.focus{border-color:var(--ink);box-shadow:0 0 0 4px var(--selected)}
+.input.err{border-color:var(--danger);background:var(--danger-tint);color:var(--ink)}
+.input.err .ic{color:var(--danger)}
+.dots{display:flex;gap:6px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--ink);display:block}
+.pair{display:flex;gap:12px}
+.pair>*{min-width:0}
+.errmsg{display:flex;gap:8px;align-items:flex-start;color:var(--danger);font-weight:700;font-size:15px;line-height:22px}
+.helper{font-size:15px;line-height:22px;font-weight:500;color:var(--ink-2)}
+
+/* links and buttons */
+.link{display:flex;align-items:center;min-height:48px;font-weight:700;font-size:16px;color:var(--ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+.link.center{justify-content:center}
+.link.right{justify-content:flex-end;white-space:nowrap}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:56px;width:100%;border-radius:var(--r-pill);font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:.005em}
+.btn.primary{background:var(--ink);color:var(--on-ink)}
+.btn.secondary{background:var(--surface);color:var(--ink);border:2px solid var(--ink)}
+.btn.disabled{background:var(--off-bg);color:var(--off-fg)}
+.footer{position:absolute;left:0;right:0;bottom:0;padding:16px 24px 34px;background:var(--paper);box-shadow:var(--shadow-bar);z-index:10}
+.tall .footer{position:static;box-shadow:none;padding-bottom:16px}
+.footer .link{margin-bottom:-8px}
+
+/* cards */
+.card{border-radius:var(--r-card);background:var(--tint);padding:20px}
+.card.yellow{background:var(--person-1-tint)}
+.card.pinkt{background:var(--field-tint)}
+.card.ink{background:var(--ink);color:var(--on-ink)}
+.section-h{display:flex;align-items:center;justify-content:space-between;min-height:48px}
+.hero-pink{background:var(--field);border-radius:0 0 var(--r-hero) var(--r-hero);position:relative}
+
+/* notice */
+.notice{display:flex;gap:12px;border-radius:24px;background:var(--accent-tint);padding:16px;color:var(--ink)}
+.notice .ico{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.notice p{font-size:15px;line-height:22px;font-weight:500}
+
+/* upload card */
+.upload{display:flex;gap:14px;align-items:center;border-radius:var(--r-card);border:2px dashed var(--success);background:var(--success-tint);padding:16px}
+.upload .ico{width:48px;height:48px;border-radius:50%;background:var(--success);color:var(--on-success);display:flex;align-items:center;justify-content:center;flex:none}
+
+/* toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;min-height:56px;gap:12px;font-weight:700;font-size:17px}
+.switch{position:relative;width:56px;height:32px;border-radius:16px;border:2px solid var(--ink);background:var(--surface);flex:none}
+.switch::after{content:"";position:absolute;left:6px;top:6px;width:16px;height:16px;border-radius:50%;background:var(--ink)}
+.switch.on{background:var(--selected)}
+.switch.on::after{left:28px;width:20px;height:20px;top:4px}
+
+/* lists */
+.navrow{display:flex;align-items:center;gap:14px;min-height:64px;border-radius:24px;background:var(--tint);padding:0 16px;font-family:var(--font-display);font-weight:700;font-size:18px;color:var(--ink)}
+.navrow .ni{width:40px;height:40px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;flex:none}
+.navrow .chev{margin-left:auto;display:flex}
+.kv{display:flex;gap:14px;align-items:flex-start}
+.kv .ki{width:40px;height:40px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;flex:none}
+.kv .kl{font-weight:700;font-size:14px;line-height:18px;color:var(--ink-2)}
+.kv .kv-v{font-size:16px;line-height:22px;font-weight:600;color:var(--ink)}
+.bul{display:flex;gap:12px;font-size:15px;line-height:22px;font-weight:500}
+.bul::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink);flex:none;margin-top:7px}
+.scrollbar{position:absolute;right:4px;width:4px;border-radius:2px;background:var(--scrollbar);z-index:12}
+.stats{display:flex;border-radius:var(--r-card);background:var(--tint);padding:20px 8px}
+.stats>div{flex:1;text-align:center}
+.stats b{display:block;font-family:var(--font-display);font-weight:900;font-size:56px;line-height:56px;letter-spacing:-.02em;color:var(--ink)}
+.stats span{display:block;margin-top:4px;font-size:15px;line-height:20px;font-weight:700;color:var(--ink-2)}
+.disc-pair{position:relative;flex:none}
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4s2-1.500 2-6.500z"/><path d="M10 19.500a2.200 2.200 0 0 0 4 0"/></symbol>
+<symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.500"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.500v2.500M12 19v2.500M2.500 12H5M19 12h2.500M5.300 5.300l1.800 1.800M16.900 16.900l1.800 1.800M5.300 18.700l1.800-1.800M16.900 7.100l1.800-1.800"/></symbol>
+<symbol id="i-verified" viewBox="0 0 24 24"><path d="M12 3l7.500 3v5.500c0 4.500-3.200 8-7.500 9.500-4.300-1.500-7.500-5-7.500-9.500V6z"/><path d="M8.800 12l2.400 2.400 4.200-4.600"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.500 3v5.500c0 4.500-3.200 8-7.500 9.500-4.300-1.500-7.500-5-7.500-9.500V6z"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.500" width="16" height="14.500" rx="3.500"/><path d="M4 10.500h16M8.500 3.500v4M15.500 3.500v4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.500M12 7.600v.1"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.500V13M12 16.500v.1"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.800"/><path d="M4.500 20c.6-4 3.700-6 7.500-6s6.900 2 7.500 6"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.500l2.600 5.400 5.900.8-4.300 4.100 1 5.900L12 17l-5.200 2.700 1-5.900-4.300-4.100 5.900-.8z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.500-4.600-7.500-10.200A4.200 4.200 0 0 1 12 7.600a4.200 4.200 0 0 1 7.500 2.200C19.500 15.400 12 20 12 20z"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.500-5.600-6.500-11a6.500 6.500 0 0 1 13 0c0 5.400-6.500 11-6.500 11z"/><circle cx="12" cy="10" r="2.400"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M9.500 7H20M9.500 12H20M9.500 17H20"/><path d="M4.500 7v.1M4.500 12v.1M4.500 17v.1"/></symbol>
+<symbol id="i-quote" viewBox="0 0 24 24"><path d="M5 17.500V13a5 5 0 0 1 5-5M13 17.500V13a5 5 0 0 1 5-5"/></symbol>
+</defs></svg>
+
+<header class="page-head"><h1>Overprint</h1><p>Two bright inks, chunky type and big round shapes: finding a volunteer partner feels like an invitation to something fun with someone, not an admin task.</p></header>
+<div class="row-title" style="text-align:center">The five frames</div>
+<div class="frames"><figure><div class="device"><div class="screen"><div class="island"></div>
+<div class="top" style="background:var(--field);height:290px;position:absolute;left:0;right:0;top:0">
+  <div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div>
+  <div style="position:absolute;left:24px;top:59px"><span class="tag">Sign in or get started</span></div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:290px"><svg width="390" height="290" viewBox="0 0 390 290" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="292" cy="150" r="58" style="fill:var(--you)"/><circle cx="356" cy="150" r="58" style="fill:var(--person-1)"/><path d="M324.00,101.63 A58,58 0 0 0 324.00,198.37 A58,58 0 0 0 324.00,101.63Z" style="fill:var(--lens-1)"/></svg></div>
+  <div class="t-display" style="position:absolute;left:24px;top:150px;font-size:48px;line-height:48px;letter-spacing:-.02em;color:var(--ink)">In Good<br>Company</div>
+</div>
+<div style="position:absolute;left:0;right:0;top:262px;bottom:0;z-index:6;background:var(--paper);border-radius:32px 32px 0 0;padding:26px 24px 0">
+  <h1 class="t-headline">What’s your email?</h1>
+  <p class="t-body-s muted" style="margin-top:8px">We’ll use this for shift confirmations, receipts, and getting back into your account.</p>
+  <div style="margin-top:20px" class="stack">
+    <div class="field" ><label>Email</label><div class="input "><span>alex.m@example.com</span></div></div>
+    <div class="field" ><label>Password</label><div class="input "><span><span class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span></div></div>
+  </div>
+  <div style="margin-top:6px">
+    <div class="link">Have a referral code?</div>
+    <div class="link">Signing up an organization? Tap here</div>
+  </div>
+</div>
+<div class="footer"><div class="btn primary">Continue</div></div>
+<div class="home-ind"></div></div></div><figcaption>1 · Sign in</figcaption></figure><figure><div class="device"><div class="screen"><div class="island"></div>
+<div class="top pink pinned"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Verify your ID</span></div></div>
+<div style="position:absolute;left:0;right:0;top:103px;padding:20px 24px 140px">
+<h1 class="t-headline">Confirm it’s<br>really you</h1>
+<p class="t-body-s muted" style="margin-top:10px">Checked instantly. We never receive or keep your ID photo, and we store only an irreversible check-value of your document number — never the number itself.</p>
+<div class="stack" style="margin-top:28px">
+  <div class="field"><label>What are you verifying with?</label><div class="chips"><span class="chip sel"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-check"/></svg>Driver’s license</span><span class="chip">Passport</span><span class="chip">State ID</span></div></div>
+  <div class="field" style="margin-top:24px"><label>Photo of your ID</label>
+    <div class="upload"><span class="ico"><svg class="ic " width="26" height="26" aria-hidden="true"><use href="#i-check"/></svg></span><div><div class="t-subtitle" style="line-height:22px">Photo captured</div><div class="t-body-s" style="margin-top:2px">Deleted from this device as soon as verification completes — never uploaded.</div></div></div>
+    <div class="link center" style="margin-top:-4px">or choose from your library</div>
+  </div>
+  <div class="notice" style="margin-top:12px"><span class="ico"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-info"/></svg></span><p>Prototype stage: we don’t read the document automatically yet — type the details below exactly as printed. Automatic scanning replaces this step later.</p></div>
+  <div class="field" ><label>Full name, as printed on the ID</label><div class="input "><span>Alex Morgan</span></div></div>
+  <div>
+    <div class="pair">
+      <div class="field" style="flex:1"><label>Date of birth</label><div class="input"><span>1997-06-03</span><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-calendar"/></svg></div></div>
+      <div class="field" style="flex:1"><label>Expiry date</label><div class="input err"><span>2025-09-30</span><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-alert"/></svg></div></div>
+    </div>
+    <div class="errmsg" style="margin-top:10px"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-alert"/></svg><span>This document is expired (or the date is invalid).</span></div>
+  </div>
+  <div>
+    <div class="pair">
+      <div class="field" style="flex:1.55"><label>Document number</label><div class="input"><span>D4471 2093</span></div></div>
+      <div class="field" style="flex:1"><label>Issuing country</label><div class="input"><span>US</span></div></div>
+    </div>
+    <p class="helper" style="margin-top:12px">Sent securely to check that one document can’t verify two accounts. We keep only a scrambled, irreversible check-value — never the number itself.</p>
+  </div>
+  <div class="link center">Not now — go back</div>
+</div></div>
+<div class="scrollbar" style="top:130px;height:120px"></div>
+<div class="footer"><div class="btn primary">Review &amp; submit</div></div>
+<div class="home-ind"></div></div></div><figcaption>2 · Verify your ID</figcaption></figure><figure><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="scrollbar" style="top:120px;height:200px"></div>
+<div class="home-ind"></div></div></div><figcaption>3 · Home</figcaption></figure><figure><div class="device"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="scrollbar" style="top:470px;height:120px"></div>
+<div class="footer"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption>4 · Shift proposal</figcaption></figure><figure><div class="device"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Your shift</span></div></div>
+<div style="position:relative;height:380px;margin-top:8px"><svg width="390" height="380" viewBox="0 0 390 380" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="96" cy="140" r="92" style="fill:var(--you)"/><circle cx="296" cy="280" r="92" style="fill:var(--person-1)"/><circle cx="196" cy="210" r="24" fill="none" style="stroke:var(--empty-ring)" stroke-width="4" stroke-dasharray="3 10" stroke-linecap="round"/></svg>
+  <span style="position:absolute;left:64px;top:108px;width:64px;height:64px;color:var(--on-you)"><svg class="ic " width="64" height="64" aria-hidden="true"><use href="#i-user"/></svg></span>
+  <span style="position:absolute;left:256px;top:246px;width:80px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:64px;line-height:68px;color:var(--ink)">J</span>
+</div>
+<div class="pad" style="margin-top:12px">
+  <h1 class="t-headline" style="font-size:40px;line-height:44px">This proposal expired</h1>
+  <p class="t-body" style="margin-top:10px">Any Deeds you had on hold for it are back in your balance.</p>
+</div>
+<div class="footer"><div class="btn primary">Back to home</div></div>
+<div class="home-ind"></div></div></div><figcaption>5 · Proposal expired</figcaption></figure></div>
+<div class="row-title" style="text-align:center">Full-scroll extras</div>
+<div class="frames"><figure><div class="device tall"><div class="screen"><div class="island"></div>
+<div class="top pink"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Verify your ID</span></div></div>
+<div style="padding:20px 24px 24px">
+<h1 class="t-headline">Confirm it’s<br>really you</h1>
+<p class="t-body-s muted" style="margin-top:10px">Checked instantly. We never receive or keep your ID photo, and we store only an irreversible check-value of your document number — never the number itself.</p>
+<div class="stack" style="margin-top:28px">
+  <div class="field"><label>What are you verifying with?</label><div class="chips"><span class="chip sel"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-check"/></svg>Driver’s license</span><span class="chip">Passport</span><span class="chip">State ID</span></div></div>
+  <div class="field" style="margin-top:24px"><label>Photo of your ID</label>
+    <div class="upload"><span class="ico"><svg class="ic " width="26" height="26" aria-hidden="true"><use href="#i-check"/></svg></span><div><div class="t-subtitle" style="line-height:22px">Photo captured</div><div class="t-body-s" style="margin-top:2px">Deleted from this device as soon as verification completes — never uploaded.</div></div></div>
+    <div class="link center" style="margin-top:-4px">or choose from your library</div>
+  </div>
+  <div class="notice" style="margin-top:12px"><span class="ico"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-info"/></svg></span><p>Prototype stage: we don’t read the document automatically yet — type the details below exactly as printed. Automatic scanning replaces this step later.</p></div>
+  <div class="field" ><label>Full name, as printed on the ID</label><div class="input "><span>Alex Morgan</span></div></div>
+  <div>
+    <div class="pair">
+      <div class="field" style="flex:1"><label>Date of birth</label><div class="input"><span>1997-06-03</span><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-calendar"/></svg></div></div>
+      <div class="field" style="flex:1"><label>Expiry date</label><div class="input err"><span>2025-09-30</span><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-alert"/></svg></div></div>
+    </div>
+    <div class="errmsg" style="margin-top:10px"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-alert"/></svg><span>This document is expired (or the date is invalid).</span></div>
+  </div>
+  <div>
+    <div class="pair">
+      <div class="field" style="flex:1.55"><label>Document number</label><div class="input"><span>D4471 2093</span></div></div>
+      <div class="field" style="flex:1"><label>Issuing country</label><div class="input"><span>US</span></div></div>
+    </div>
+    <p class="helper" style="margin-top:12px">Sent securely to check that one document can’t verify two accounts. We keep only a scrambled, irreversible check-value — never the number itself.</p>
+  </div>
+  <div class="link center">Not now — go back</div>
+</div></div>
+<div class="footer"><div class="btn primary">Review &amp; submit</div></div>
+<div class="home-ind"></div></div></div><figcaption>2b · Verify your ID, full scroll</figcaption></figure><figure><div class="device tall"><div class="screen"><div class="island"></div>
+<div class="top white"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div></div>
+
+
+<div style="padding:12px 24px 0 24px;display:flex;align-items:flex-end;justify-content:space-between">
+  <div><div class="t-body" style="font-weight:700;color:var(--ink-2)">Thursday</div><h1 class="t-display" style="font-size:48px;line-height:52px;letter-spacing:-.02em">Hi, Alex</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;padding-bottom:4px">
+    <div style="position:relative"><div class="back" role="button" aria-label="Notifications"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-bell"/></svg></div><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--unread);border:3px solid var(--ring)"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;height:48px;padding:0 14px 0 12px;border-radius:999px;background:var(--accent);font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg>12</div>
+  </div>
+</div>
+<div style="margin-top:20px">
+<div style="position:relative;margin:0 24px;border-radius:32px;background:var(--field);padding:20px;overflow:hidden;height:236px" role="button">
+  <svg width="342" height="90" viewBox="0 0 342 90" aria-hidden="true" style="position:absolute;left:0;top:0"><circle cx="262" cy="26" r="52" style="fill:var(--you)"/><circle cx="326" cy="26" r="52" style="fill:var(--person-1)"/><path d="M294.00,-14.99 A52,52 0 0 0 294.00,66.99 A52,52 0 0 0 294.00,-14.99Z" style="fill:var(--lens-1)"/></svg><span style="position:absolute;left:284px;top:30px;color:var(--on-lens)"><svg class="ic " width="20" height="20" aria-hidden="true"><use href="#i-clock"/></svg></span>
+  <span class="tag" style="position:relative">We found you a shift</span>
+  <div class="t-title" style="position:relative;margin-top:36px;font-size:26px;line-height:30px;font-weight:900;letter-spacing:-.01em">Sat, Nov 8 · 9:00 AM,<br>with Jordan</div>
+  <p class="t-body" style="position:relative;margin-top:8px;padding-right:56px;font-weight:600">Take a look and confirm — it’s held for you for 21 hours.</p>
+  <div style="position:absolute;right:20px;bottom:20px;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:flex;align-items:center;justify-content:center"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></div>
+</div></div>
+<div class="pad" style="margin-top:28px">
+  <h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Upcoming</h2>
+  <div class="card" style="margin-top:12px">
+    <div class="t-subtitle" style="font-size:20px;line-height:26px;font-weight:800">Food bank sorting</div>
+    <div class="t-body-s" style="margin-top:4px;color:var(--ink-2);font-weight:600">Eastside Community Pantry<br>Wed, Nov 12 · 6:00 PM</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:14px;height:14px;border-radius:50%;background:var(--person-2);display:block"></span>With Sam</div>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your buddies</h2><div class="link right">See all</div></div>
+  <div class="card" style="margin-top:4px;display:flex;align-items:center;gap:16px;padding:14px 20px">
+    <div class="disc-pair" style="width:76px;height:48px"><svg width="76" height="48" viewBox="0 0 76 48" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="24" cy="24" r="24" style="fill:var(--you)"/><circle cx="52" cy="24" r="24" style="fill:var(--person-2)"/><path d="M38.00,4.51 A24,24 0 0 0 38.00,43.49 A24,24 0 0 0 38.00,4.51Z" style="fill:var(--lens-2)"/></svg><span style="position:absolute;left:0;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--on-you)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span><span style="position:absolute;left:28px;top:0;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:22px;color:var(--ink);padding-left:12px">S</span></div>
+    <div><div class="t-subtitle" style="font-size:20px;font-weight:800">Sam</div><div class="t-body-s muted" style="font-weight:600">2 shifts together</div></div>
+    <span style="margin-left:auto;color:var(--ink)"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span>
+  </div>
+</div>
+<div class="pad" style="margin-top:24px">
+  <div class="section-h"><h2 class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Your impact</h2><div class="link right">Details</div></div>
+  <div class="stats" style="margin-top:4px"><div><b>3</b><span>Shifts</span></div><div><b>9</b><span>Hours</span></div><div><b>2</b><span>Orgs</span></div></div>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card pinkt">
+    <span class="tag yellow">Free plan</span>
+    <div class="t-title" style="margin-top:12px;font-size:22px;line-height:28px;font-weight:900">1 of 2 matched shifts used this month</div>
+    <p class="t-body-s" style="margin-top:6px;font-weight:600">12 Deeds available · 5 held for upcoming shifts.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px;display:flex;flex-direction:column;gap:8px">
+  <div class="navrow"><span class="ni"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-coin"/></svg></span>Deeds<span class="chev"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span></div>
+  <div class="navrow"><span class="ni"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-star"/></svg></span>Premium &amp; referrals<span class="chev"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span></div>
+  <div class="navrow"><span class="ni"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg></span>Safety &amp; reporting<span class="chev"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span></div>
+  <div class="navrow"><span class="ni"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-user"/></svg></span>Your profile<span class="chev"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span></div>
+  <div class="navrow"><span class="ni"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-sliders"/></svg></span>Account settings<span class="chev"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-chev"/></svg></span></div>
+</div>
+<div style="height:24px"></div>
+<div class="home-ind"></div></div></div><figcaption>3b · Home, full scroll</figcaption></figure><figure><div class="device tall"><div class="screen"><div class="island"></div>
+
+<div class="hero-pink" style="height:462px">
+  <div class="top"><div class="statusbar"><span>9:41</span><span class="sys"><svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="fill:var(--ink)"><rect x="0" y="8.500" width="3.500" height="4.500" rx="1"/><rect x="5.500" y="5.500" width="3.500" height="7.500" rx="1"/><rect x="11" y="2.500" width="3.500" height="10.500" rx="1"/><rect x="16.500" y="0" width="3.500" height="13" rx="1"/></svg><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><rect x="1" y="1" width="25" height="12" rx="4" fill="none" style="stroke:var(--ink)" stroke-width="2"/><rect x="3.500" y="3.500" width="17" height="7" rx="2" style="fill:var(--ink)"/><rect x="27.500" y="4.500" width="2" height="5" rx="1" style="fill:var(--ink)"/></svg></span></div><div class="bar"><div class="back" role="button" aria-label="Back"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-back"/></svg></div><span class="bar-title">Shift proposal</span></div></div>
+  <div style="position:absolute;left:24px;top:111px"><span class="tag">We found you a shift</span></div>
+  <div style="position:absolute;left:0;top:166px;width:390px;height:300px"><svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true" style="display:block;position:absolute;left:0;top:0"><circle cx="145" cy="150" r="140" style="fill:var(--you)"/><circle cx="245" cy="150" r="140" style="fill:var(--person-1)"/><path d="M195.00,19.23 A140,140 0 0 0 195.00,280.77 A140,140 0 0 0 195.00,19.23Z" style="fill:var(--lens-1)"/></svg>
+    <span style="position:absolute;left:35px;top:130px;width:40px;height:40px;color:var(--on-you)"><svg class="ic " width="40" height="40" aria-hidden="true"><use href="#i-user"/></svg></span>
+    <span style="position:absolute;left:290px;top:108px;width:90px;text-align:center;font-family:var(--font-display);font-weight:900;font-size:60px;line-height:64px;color:var(--ink)">J</span>
+    <h1 style="position:absolute;left:105px;top:92px;width:180px;text-align:center;color:var(--on-lens);font-family:var(--font-display);font-weight:900;letter-spacing:-.015em">
+      <span style="display:block;font-size:22px;line-height:28px">Sat, Nov 8</span>
+      <span style="display:block;font-size:38px;line-height:42px">9:00 AM</span>
+      <span style="display:block;font-size:26px;line-height:32px">– 12:00 PM</span>
+    </h1>
+  </div>
+</div>
+
+<div class="pad" style="padding-top:22px">
+  <p class="t-body">Here’s exactly where you’d go and who with. Nothing is held until you confirm. Respond within 21 hours.</p>
+</div>
+<div class="pad" style="margin-top:28px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="tag ink">The shift</span><span class="tag yellow"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg>Daytime</span></div>
+    <h2 class="t-title" style="margin-top:14px;font-size:28px;line-height:32px;font-weight:900;letter-spacing:-.01em">Northside Animal Rescue</h2>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px"><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-heart"/></svg></span><div><div class="kl">Cause</div><div class="kv-v">Animal welfare</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-calendar"/></svg></span><div><div class="kl">When</div><div class="kv-v">Sat, Nov 8 · 9:00 AM – 12:00 PM</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-pin"/></svg></span><div><div class="kl">Where</div><div class="kv-v">412 Alder St, Northside</div></div></div><div class="kv"><span class="ki"><svg class="ic " width="22" height="22" aria-hidden="true"><use href="#i-list"/></svg></span><div><div class="kl">Task</div><div class="kv-v">Dog walking &amp; kennel care</div></div></div></div>
+    <p class="t-body-s" style="margin-top:18px">Walk the long-stay dogs, refresh kennels, and help with the 11 AM feeding round. Closed-toe shoes, please.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card yellow">
+    <div style="display:flex;gap:14px;align-items:center">
+      <span style="width:64px;height:64px;border-radius:50%;background:var(--person-1);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:900;font-size:30px;flex:none;color:var(--ink)">J</span>
+      <div><div class="t-title" style="font-size:28px;line-height:32px;font-weight:900">Jordan, 29</div><div class="t-body-s muted" style="font-weight:600">Nurse · Female</div></div>
+    </div>
+    <div style="margin-top:12px"><span class="tag line"><svg class="ic " width="18" height="18" aria-hidden="true"><use href="#i-verified"/></svg>Verified</span></div>
+    <p class="t-body" style="margin-top:14px;font-weight:600">“Night shifts mean my Saturdays are free, and I’d rather spend them outside with a few dogs.”</p>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"><span class="tag line">4 shifts</span><span class="tag line">Animal welfare</span><span class="tag line">Food insecurity</span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card ink" style="padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span class="t-body" style="font-weight:700;max-width:200px">Held from your Deeds when you confirm</span><b class="t-display" style="font-size:56px;color:var(--accent)">5</b></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border-top:2px dashed var(--on-ink-line);padding-top:12px"><span class="t-body" style="font-weight:700">You have available</span><b class="t-display" style="font-size:56px">12</b></div>
+    <p class="t-body-s" style="margin-top:16px;color:var(--on-ink-2)">Show up and they all come back. Change your mind shortly after confirming and they’re released, no questions asked. After that, backing out or not showing up means they go to the org. If Jordan cancels, you never pay for it.</p>
+  </div>
+</div>
+<div class="pad" style="margin-top:20px">
+  <div class="card pinkt">
+    <div style="display:flex;align-items:center;gap:10px"><svg class="ic " width="24" height="24" aria-hidden="true"><use href="#i-shield"/></svg><h3 class="t-title" style="font-size:22px;line-height:28px;font-weight:900">Before your first shift</h3></div>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px"><div class="bul">You’ll always meet at the org’s own site, with their staff around — shifts are never at someone’s home.</div><div class="bul">Where we can, we point out shifts that happen in daylight.</div><div class="bul">Your phone number, email and socials stay hidden until you both switch on contact sharing in chat.</div><div class="bul">Tap “Share my plans” to send someone you trust the time, the place and your partner’s verified first name.</div><div class="bul">If anything feels off, report it from the app — a real person reads every report.</div><div class="bul">A verified badge means we’ve checked who someone is. It doesn’t vouch for anything else, so go with your gut and lean on the org’s staff.</div></div>
+    <div class="toggle-row" style="margin-top:14px"><span>I’ve read this</span><span class="switch" role="switch" aria-checked="false"></span></div>
+  </div>
+</div>
+<div class="pad" style="margin-top:12px"><div class="link center">Not this one — keep looking</div></div>
+<div class="footer" style="margin-top:12px"><div class="btn disabled">Confirm &amp; hold 5 Deeds</div></div>
+<div class="home-ind"></div></div></div><figcaption>4b · Shift proposal, full scroll</figcaption></figure></div>
+</body></html>

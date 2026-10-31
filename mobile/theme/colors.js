@@ -1,17 +1,18 @@
-// Palette lifted from specs/plotline.html's :root CSS variables.
-export const colors = {
-  bg: '#EDE7DA',
-  bgDeep: '#E4DCC9',
-  surface: '#FBF9F3',
-  ink: '#20291F',
-  inkSoft: '#5B6459',
-  moss: '#4F6F52',
-  mossDark: '#354E37',
-  mossTint: '#DEE7DB',
-  ochre: '#D98E3F',
-  ochreTint: '#F6E3C7',
-  teal: '#2F5D62',
-  tealTint: '#DCE9E9',
-  line: '#D7CEBB',
-  danger: '#B4543A',
-};
+import { palettes } from './palettes';
+import { withDerived } from './palettes/derive';
+
+// Changing the app's colours is this one line (or EXPO_PUBLIC_PALETTE=<name> when starting Metro).
+export const DEFAULT_PALETTE = 'calmTonalShade';
+
+export function resolvePaletteName(requested) {
+  if (requested && Object.prototype.hasOwnProperty.call(palettes, requested)) return requested;
+  if (requested && typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.warn(`Unknown palette "${requested}", using ${DEFAULT_PALETTE}.`);
+  }
+  return DEFAULT_PALETTE;
+}
+
+// Expo only inlines EXPO_PUBLIC_ variables written exactly like this.
+export const paletteName = resolvePaletteName(process.env.EXPO_PUBLIC_PALETTE);
+
+export const colors = withDerived(palettes[paletteName]);
