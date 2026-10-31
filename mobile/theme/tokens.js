@@ -20,14 +20,18 @@ export const font = {
 // both platforms, and iOS (which draws the glyphs outside the line box) is untouched.
 const androidHeadroom = (size) => Platform.select({ android: { paddingTop: Math.round(size * 0.12) }, default: null });
 
+// Android measures a custom font slightly too narrow under negative letter spacing, so the last word of a
+// heading can wrap onto a line the box has no height for and vanish. The tracking is too fine to miss there.
+const tight = (px) => Platform.select({ android: undefined, default: px });
+
 // Size / line height / tracking per role. letterSpacing is in px (em x size).
 // Colour is left to the caller.
 export const type = {
-  display: { fontFamily: font.black, fontSize: 56, lineHeight: 54, letterSpacing: -1.12, ...androidHeadroom(56) },
-  displayS: { fontFamily: font.black, fontSize: 48, lineHeight: 52, letterSpacing: -0.96, ...androidHeadroom(48) },
-  headline: { fontFamily: font.black, fontSize: 36, lineHeight: 40, letterSpacing: -0.54, ...androidHeadroom(36) },
-  titleL: { fontFamily: font.black, fontSize: 28, lineHeight: 32, letterSpacing: -0.28, ...androidHeadroom(28) },
-  titleM: { fontFamily: font.black, fontSize: 26, lineHeight: 30, letterSpacing: -0.26, ...androidHeadroom(26) },
+  display: { fontFamily: font.black, fontSize: 56, lineHeight: 54, letterSpacing: tight(-1.12), ...androidHeadroom(56) },
+  displayS: { fontFamily: font.black, fontSize: 48, lineHeight: 52, letterSpacing: tight(-0.96), ...androidHeadroom(48) },
+  headline: { fontFamily: font.black, fontSize: 36, lineHeight: 40, letterSpacing: tight(-0.54), ...androidHeadroom(36) },
+  titleL: { fontFamily: font.black, fontSize: 28, lineHeight: 32, letterSpacing: tight(-0.28), ...androidHeadroom(28) },
+  titleM: { fontFamily: font.black, fontSize: 26, lineHeight: 30, letterSpacing: tight(-0.26), ...androidHeadroom(26) },
   titleS: { fontFamily: font.black, fontSize: 22, lineHeight: 28 },
   subtitleL: { fontFamily: font.extraBold, fontSize: 20, lineHeight: 26 },
   subtitle: { fontFamily: font.bold, fontSize: 18, lineHeight: 24 },
