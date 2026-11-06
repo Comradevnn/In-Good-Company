@@ -30,6 +30,7 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
   const [searchError, setSearchError] = useState(false);
   const [retryTick, setRetryTick] = useState(0);
   const [selectedId, setSelectedId] = useState(initialValues?.preferred_org_id ?? null);
+  const [selectedName, setSelectedName] = useState(null);
   const [showLead, setShowLead] = useState(hasLead);
   const [leadName, setLeadName] = useState(initialValues?.prospective_org_name ?? '');
   const [okNearest, setOkNearest] = useState(toAnswer(initialValues?.prospective_org_ok_nearest));
@@ -58,6 +59,13 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
     return () => clearTimeout(timer);
   }, [showOrgSearch, query, retryTick, sessionToken]);
 
+  // On resume only the id is known: look the name up so the pick can be shown.
+  useEffect(() => {
+    const id = initialValues?.preferred_org_id;
+    if (!id) return;
+    api(sessionToken, `/orgs/${id}`).then((o) => { if (o?.name) setSelectedName((n) => n ?? o.name); }).catch(() => {});
+  }, [initialValues?.preferred_org_id, sessionToken]);
+
   const retry = useCallback(() => setRetryTick((n) => n + 1), []);
 
   const leadReady = showLead && leadName.trim().length > 0;
@@ -70,21 +78,32 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
       let updated;
       if (selectedId) {
         updated = await api(sessionToken, '/users/me/preferred-org', { method: 'POST', body: { org_id: selectedId } });
+        // A listed org replaces any "not listed" lead, so the two never coexist.
+        if (hasLead) updated = await patchProfile(sessionToken, { prospective_org_name: null, prospective_org_ok_nearest: null });
       } else {
+        if (initialValues?.preferred_org_id) {
+          await api(sessionToken, '/users/me/preferred-org', { method: 'POST', body: { org_id: null } });
+        }
         const fields = { prospective_org_name: leadName.trim() };
         if (okNearest !== null) fields.prospective_org_ok_nearest = okNearest;
         updated = await patchProfile(sessionToken, fields);
       }
       onKnowsOrg(updated);
     } catch (err) {
+      if (err.code === 'org_not_found') {
+        setSelectedId(null);
+        setSelectedName(null);
+        retry();
+      }
       setError(err.code === 'org_not_found' ? 'That organization is no longer listed. Pick another or tell us who.' : err.message);
     } finally {
       setSubmitting(false);
     }
   }
 
-  function pickOrg(id) {
-    setSelectedId((prev) => (prev === id ? null : id));
+  function pickOrg(org) {
+    setSelectedId((prev) => (prev === org.id ? null : org.id));
+    setSelectedName(org.name);
     setError(null);
   }
 
@@ -99,7 +118,7 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
       );
     }
     if (orgs.length === 0) {
-      return <Text style={[type.body, styles.state, { color: colors.ink2 }]}>No organization by that name yet</Text>;
+      return <Text style={[type.body, styles.state, { color: colors.ink2 }]}>{query.trim() ? 'No organization by that name yet' : 'No organizations listed yet'}</Text>;
     }
     return orgs.map((org) => {
       const picked = org.id === selectedId;
@@ -107,7 +126,7 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
       return (
         <Pressable
           key={org.id}
-          onPress={() => pickOrg(org.id)}
+          onPress={() => pickOrg(org)}
           accessibilityRole="radio"
           accessibilityLabel={[org.name, org.location_label].filter(Boolean).join(', ')}
           accessibilityState={{ checked: picked }}
@@ -170,6 +189,9 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
               autoCorrect={false}
               returnKeyType="search"
             />
+            {selectedId && selectedName && !orgs.some((o) => o.id === selectedId) ? (
+              <Text style={[type.body, { color: colors.ink, marginTop: 8 }]}>Selected: {selectedName}</Text>
+            ) : null}
             <View style={styles.results} accessibilityRole="radiogroup">{renderResults()}</View>
 
             {!showLead ? (

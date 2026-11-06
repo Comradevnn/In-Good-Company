@@ -44,6 +44,7 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
       setOrg(o);
       setShifts(sh.shifts);
       setMetrics(m);
+      setError(null);
     } catch (err) {
       setError(err);
     }

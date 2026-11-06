@@ -85,6 +85,17 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
     }
   }
 
+  // Where the next step is after an org cancel: back to the open search, or a new one.
+  const [hasOpenSearch, setHasOpenSearch] = useState(false);
+  const orgCancelled = Boolean(pairing?.cancelled_by_org);
+  useEffect(() => {
+    if (!orgCancelled) return;
+    api(sessionToken, '/requests/current').then((r) => {
+      const req = r?.request ?? r;
+      setHasOpenSearch(Boolean(req) && ['searching', 'proposed'].includes(req.status));
+    }).catch(() => setHasOpenSearch(false));
+  }, [orgCancelled, sessionToken]);
+
   if (!pairing) return <Screen title="Your shift" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
 
   const p = pairing;
@@ -110,7 +121,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         onBack={onBack}
         footer={(
           <Footer style={{ gap: 12 }}>
-            <Button label="Find another shift" onPress={() => navigate('startMatching')} />
+            <Button label={hasOpenSearch ? 'See your search' : 'Find another shift'} onPress={() => navigate(hasOpenSearch ? 'waiting' : 'startMatching')} />
             <Button label="Back to home" ghost onPress={() => navigate('home', {}, { reset: true })} />
           </Footer>
         )}

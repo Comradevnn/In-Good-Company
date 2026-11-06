@@ -79,13 +79,13 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
         <Headline>What do you care about?</Headline>
         <Text style={s.rationale}>
           {initialValues?.prospective_org_name
-            ? `Which causes are closest to ${initialValues.prospective_org_name}? Pick at least ${MIN_CAUSES} — we'll match you with something similar while we reach out to them.`
+            ? `Which causes are closest to ${initialValues.prospective_org_name}? Pick at least ${MIN_CAUSES}${initialValues.prospective_org_ok_nearest === 0 || initialValues.prospective_org_ok_nearest === false ? '.' : " — we'll match you with something similar while we reach out to them."}`
             : `Pick at least ${MIN_CAUSES} — this is what we'll use to find shifts and people you'll click with. Change these anytime.`}
         </Text>
         {orgName ? (
           <Text style={[s.rationale, { marginTop: 8 }]}>
             {selected.length < MIN_CAUSES
-              ? `We added ${orgName}'s causes. Add at least one more if you like.`
+              ? `We added ${orgName}'s causes. Add at least one more.`
               : `Includes ${orgName}'s causes.`}
           </Text>
         ) : null}

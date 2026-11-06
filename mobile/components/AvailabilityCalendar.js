@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { font, touch, type } from '../theme/tokens';
@@ -28,6 +28,15 @@ function Dot({ kind, size = DOT }) {
   return <View style={[{ width: size, height: size, backgroundColor: k.color() }, shape]} />;
 }
 
+// A dot on a small surface-coloured backing so it reads on any day fill.
+function BackedDot({ kind }) {
+  return (
+    <View style={styles.dotBacking}>
+      <Dot kind={kind} />
+    </View>
+  );
+}
+
 // start/end: YYYY-MM-DD. today: Date at local midnight. weekdays: chosen day numbers (empty = any).
 // dots: { 'YYYY-MM-DD': 'green' | 'yellow' | 'red' } (may be empty). loadFailed: show the grid without marks.
 export default function AvailabilityCalendar({ start, end, today, weekdays, dots, loadFailed, onPickDay }) {
@@ -38,6 +47,8 @@ export default function AvailabilityCalendar({ start, end, today, weekdays, dots
   const lastMonth = lastDate.getFullYear() * 12 + lastDate.getMonth();
   const startDate = parseDate(start);
   const [shown, setShown] = useState(() => Math.min(Math.max(startDate.getFullYear() * 12 + startDate.getMonth(), firstMonth), lastMonth));
+  const clampMonth = (d) => Math.min(Math.max(d.getFullYear() * 12 + d.getMonth(), firstMonth), lastMonth);
+  useEffect(() => { setShown(clampMonth(parseDate(start))); }, [start]); // eslint-disable-line react-hooks/exhaustive-deps
   const year = Math.floor(shown / 12);
   const month = shown % 12;
   const weeks = useMemo(() => monthGrid(year, month), [year, month]);
@@ -50,7 +61,8 @@ export default function AvailabilityCalendar({ start, end, today, weekdays, dots
     const isEdge = day === start || day === end;
     const inRange = day > start && day < end;
     const muted = !disabled && weekdays.length > 0 && !weekdays.includes(date.getDay());
-    const kind = !disabled && !muted ? dots?.[day] : null;
+    const rawKind = !disabled && !muted ? dots?.[day] : null;
+    const kind = rawKind && Object.prototype.hasOwnProperty.call(DOT_KINDS, rawKind) ? rawKind : null;
     const parts = [dayLabel(day)];
     if (disabled) parts.push(day < first ? 'passed' : 'too far ahead');
     else {
@@ -75,7 +87,7 @@ export default function AvailabilityCalendar({ start, end, today, weekdays, dots
           <View style={[styles.dayInner, inRange && styles.inRange, isEdge && styles.edge, pressed && !disabled && !isEdge && { backgroundColor: colors.tintPressed }]}>
             <Text style={[styles.num, (disabled || muted) && styles.numOff, isEdge && styles.numEdge]}>{num}</Text>
             <View style={styles.dotSlot}>
-              {kind ? <Dot kind={kind} /> : null}
+              {kind ? <BackedDot kind={kind} /> : null}
             </View>
           </View>
         )}
@@ -153,6 +165,7 @@ const styles = StyleSheet.create({
   num: { fontFamily: font.textBold, fontSize: 16, lineHeight: 22, color: colors.ink },
   numOff: { color: colors.ink3 },
   numEdge: { color: colors.onInk },
+  dotBacking: { backgroundColor: colors.surface, borderRadius: 6, paddingHorizontal: 3, paddingVertical: 2 },
   dotSlot: { height: 12, marginTop: 2, alignItems: 'center', justifyContent: 'center' },
   legend: { marginTop: 12, gap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },

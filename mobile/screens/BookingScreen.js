@@ -26,6 +26,17 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
     return () => clearInterval(timer);
   }, [load]);
 
+  // Where the next step is after an org cancel: back to the open search, or a new one.
+  const [hasOpenSearch, setHasOpenSearch] = useState(false);
+  const orgCancelled = Boolean(booking?.shift_cancelled);
+  useEffect(() => {
+    if (!orgCancelled) return;
+    api(sessionToken, '/requests/current').then((r) => {
+      const req = r?.request ?? r;
+      setHasOpenSearch(Boolean(req) && ['searching', 'proposed'].includes(req.status));
+    }).catch(() => setHasOpenSearch(false));
+  }, [orgCancelled, sessionToken]);
+
   if (!booking) return <Screen title="Your spot" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
   const toHome = () => navigate('home', {}, { reset: true });
   if (booking.shift_cancelled) {
@@ -35,7 +46,7 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
         onBack={onBack}
         footer={(
           <Footer style={{ gap: 12 }}>
-            <Button label="Find another shift" onPress={() => navigate('startMatching')} />
+            <Button label={hasOpenSearch ? 'See your search' : 'Find another shift'} onPress={() => navigate(hasOpenSearch ? 'waiting' : 'startMatching')} />
             <Button label="Back to home" ghost onPress={toHome} />
           </Footer>
         )}

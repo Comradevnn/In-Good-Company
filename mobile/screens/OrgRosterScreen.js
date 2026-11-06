@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
@@ -22,7 +22,12 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
   const [cancelling, setCancelling] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  const load = useCallback(() => api(sessionToken, `/orgs/mine/shifts/${shiftId}/roster`).then(setData).catch(setError), [sessionToken, shiftId]);
+  const loadFailed = useRef(false);
+  // A recovered load clears only the error a failed load left, not one from an action.
+  const load = useCallback(() => api(sessionToken, `/orgs/mine/shifts/${shiftId}/roster`).then((d) => {
+    setData(d);
+    if (loadFailed.current) { loadFailed.current = false; setError(null); }
+  }).catch((err) => { loadFailed.current = true; setError(err); }), [sessionToken, shiftId]);
   useEffect(() => {
     load();
     const timer = setInterval(load, 6000);
@@ -132,7 +137,7 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
             onChangeText={setReason}
             maxLength={REASON_MAX}
             multiline
-            placeholder="Only your team and ours see this"
+            placeholder="Volunteers don't see this."
             wrapperStyle={{ marginTop: 16 }}
           />
           <Button label="Cancel this shift" onPress={cancelShift} disabled={cancelling} loading={cancelling} style={{ marginTop: 16 }} />

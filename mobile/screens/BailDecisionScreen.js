@@ -28,7 +28,7 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
     } catch (err) {
       setError(err);
       // A closed decision: reload so the choice buttons give way to what happened.
-      if (err.code === 'decision_expired') await load();
+      if (err.code === 'decision_expired' || err.code === 'no_decision') await load();
     } finally {
       setBusy(false);
     }
@@ -105,13 +105,9 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
         </View>
       </Card>
       <ShiftCard shift={pairing.shift} />
-      {open ? (
-        <Text style={[type.body, { fontFamily: font.textSemiBold, color: colors.ink, marginTop: 16 }]}>
-          Want us to find you someone new, or would you rather get your Deeds back? You have {timeUntil(pairing.bail.deadline, Date.parse(pairing.now))} to decide — if we don't hear from you, we'll give them back.
-        </Text>
-      ) : (
-        <Text style={[type.body, { color: colors.ink2, marginTop: 16 }]}>This decision has already been made.</Text>
-      )}
+      <Text style={[type.body, { fontFamily: font.textSemiBold, color: colors.ink, marginTop: 16 }]}>
+        Want us to find you someone new, or would you rather get your Deeds back? You have {timeUntil(pairing.bail.deadline, Date.parse(pairing.now))} to decide — if we don't hear from you, we'll give them back.
+      </Text>
     </Screen>
   );
 }
