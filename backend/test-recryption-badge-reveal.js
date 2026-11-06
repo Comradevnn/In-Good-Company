@@ -107,7 +107,7 @@ async function verifyAccount(token, run, label) {
   const attest = await api('/verification/attest', {
     method: 'POST',
     token,
-    body: { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2031-01-01' },
+    body: { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2031-01-01' },
   });
   return attest;
 }

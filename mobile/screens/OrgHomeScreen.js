@@ -6,7 +6,7 @@ import { radii, type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
 import {
-  Card, ErrorText, Headline, Icon, InfoCard, LinkButton, Loading, PillButton, Screen, SectionTitle, StatRow, Tag,
+  Card, ErrorState, ErrorText, Headline, Icon, InfoCard, LinkButton, Loading, PillButton, Screen, SectionTitle, StatRow, Tag,
 } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
 import WaiverPicker, { waiverBody } from '../components/WaiverPicker';
@@ -44,6 +44,7 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
       setOrg(o);
       setShifts(sh.shifts);
       setMetrics(m);
+      setError(null);
     } catch (err) {
       setError(err);
     }
@@ -55,9 +56,25 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
     return () => clearInterval(timer);
   }, [load]);
 
-  if (!org) return <Screen>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!org) {
+    if (!error) return <Screen title="Your organization"><Loading /></Screen>;
+    // Only the server's own messages are written for people; a failed connection's is not.
+    const errorBody = error.status && error.message ? error.message : 'Check your connection and try again.';
+    return (
+      <Screen title="Your organization">
+        <ErrorState
+          title="We couldn't load your page"
+          body={errorBody}
+          retryLabel="Try again"
+          onRetry={() => { setError(null); load(); }}
+        />
+        <LinkButton label="Log out" danger onPress={onLogOut} style={styles.logout} />
+      </Screen>
+    );
+  }
   const now = Date.now();
   const upcoming = shifts.filter((sh) => Date.parse(sh.ends_at) > now - 24 * 3600000);
+  const nextLive = upcoming.find((sh) => sh.status !== 'cancelled');
   const pct = (v) => (v == null ? '—' : `${v}%`);
   const hasLocation = !(org.location_lat == null || org.location_lng == null);
 
@@ -100,14 +117,14 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
           style={({ pressed }) => [styles.shiftCard, pressed && { backgroundColor: colors.tintPressed }]}
           onPress={() => navigate('orgRoster', { shiftId: sh.id })}
           accessibilityRole="button"
-          accessibilityLabel={`${sh.title}, ${sh.when_label}, ${sh.capacity_booked} of ${sh.capacity_total} booked. Roster and check-in`}
+          accessibilityLabel={sh.status === 'cancelled' ? `${sh.title}, ${sh.when_label}, cancelled` : `${sh.title}, ${sh.when_label}, ${sh.capacity_booked} of ${sh.capacity_total} booked. Roster and check-in`}
         >
-          <Tag label={`${sh.capacity_booked}/${sh.capacity_total} booked`} />
-          <Text style={styles.shiftTitle}>{sh.title}</Text>
+          {sh.status === 'cancelled' ? <Tag label="Cancelled" tone="ink" /> : <Tag label={`${sh.capacity_booked}/${sh.capacity_total} booked`} />}
+          <Text style={[styles.shiftTitle, sh.status === 'cancelled' && { color: colors.ink2 }]}>{sh.title}</Text>
           <Text style={styles.shiftFact}>{sh.when_label}</Text>
           <Text style={styles.shiftFact}>{sh.cause_tags.join(', ')}</Text>
           <View style={styles.shiftLink}>
-            <Text style={styles.shiftLinkText}>Roster & check-in</Text>
+            <Text style={styles.shiftLinkText}>{sh.status === 'cancelled' ? 'View shift' : 'Roster & check-in'}</Text>
             <Icon name="chevron-right" size={24} color={colors.ink} />
           </View>
         </Pressable>
@@ -135,7 +152,7 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
       ) : null}
       <ErrorText error={error} />
       <LinkButton label="Log out" danger onPress={onLogOut} style={styles.logout} />
-      <DevClockBar sessionToken={sessionToken} onAdvanced={load} jumps={upcoming[0] ? [['To next shift', upcoming[0].starts_at]] : []} />
+      <DevClockBar sessionToken={sessionToken} onAdvanced={load} jumps={nextLive ? [['To next shift', nextLive.starts_at]] : []} />
     </Screen>
   );
 }

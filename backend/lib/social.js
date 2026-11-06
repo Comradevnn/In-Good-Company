@@ -16,7 +16,8 @@ const reliability = require('./reliability');
 const { notify } = require('./notify');
 const { getShift } = require('./shifts');
 const { safeParseArray } = require('../matching/engine');
-const { LifecycleError, getBooking, getPairing, getUser, cancelBooking } = require('./lifecycle');
+const { LifecycleError, getBooking, getPairing, getUser, cancelBooking, endProposal } = require('./lifecycle');
+const { runMatching } = require('./matchingRunner');
 const { isBlockedPair } = require('./blocks');
 
 const RATING_LABELS = { 1: 'bad', 2: 'leaning bad', 3: 'neutral', 4: 'leaning good', 5: 'good' };
@@ -208,20 +209,52 @@ const SAFETY_NOTICE = {
 // person's matching until staff review it (one report alone never does, so
 // a single bad-faith report can't). They are told neutrally, as for any
 // account review; nothing says who reported them or why.
+//
+// When the hold newly starts, every shift proposal the person hasn't
+// confirmed yet is withdrawn (see withdrawUnconfirmedProposals). Returns true
+// if any proposal was withdrawn.
 function pauseIfRepeatedlyReported(userId) {
   const reporters = db.prepare(`
     SELECT COUNT(DISTINCT reporter_user_id) AS n FROM safety_reports WHERE reported_user_id = ? AND status = 'open'
   `).get(userId).n;
   const user = getUser(userId);
-  if (reporters < rules.SAFETY_PAUSE_DISTINCT_REPORTERS || !user) return;
+  if (reporters < rules.SAFETY_PAUSE_DISTINCT_REPORTERS || !user) return false;
   // Already held for this very reason: nothing new to say. A hold for another
   // reason (e.g. no-shows) doesn't stop this one being added alongside it.
-  if (reliability.reviewReasons(userId).includes('safety_reports')) return;
+  if (reliability.reviewReasons(userId).includes('safety_reports')) return false;
   reliability.addReviewReason(userId, 'safety_reports');
+  const withdrew = withdrawUnconfirmedProposals(userId);
   // Someone already told they're under review isn't told a second time.
-  if (user.account_review) return;
-  notify(userId, 'account_review', 'Your account is under review',
-    'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
+  if (!user.account_review) {
+    notify(userId, 'account_review', 'Your account is under review',
+      'A person on our team is reviewing your account, so matching is paused for now. We will be in touch.');
+  }
+  return withdrew;
+}
+
+// The automatic safety hold withdraws proposals the held person hasn't
+// confirmed. It runs only when that hold newly starts (staff and no-show
+// reviews never call it). The held person's own request simply ends: they are
+// on hold, and get no message beyond the neutral review notice. The would-be
+// partner goes back to searching with nothing against them (no shift
+// exclusion, no reliability mark) and is told the same neutral line as for
+// any proposal that falls through; any Deeds they had on hold are released in
+// full. Anything the held person already confirmed is left as it is, as are
+// confirmed pairings and bookings. "Confirmed" here is the same test confirm()
+// uses: a held paired booking (which includes a rematch spot the person
+// already held).
+function withdrawUnconfirmedProposals(userId) {
+  const proposals = db.prepare(`
+    SELECT * FROM pairings WHERE status = 'proposed' AND (user_a_id = ? OR user_b_id = ?)
+  `).all(userId, userId);
+  let withdrew = false;
+  for (const pairing of proposals) {
+    const mine = getBooking(pairing[`booking_${pairing.user_a_id === userId ? 'a' : 'b'}_id`]);
+    if (mine?.status === 'confirmed' && mine.hold_id && mine.kind === 'paired') continue;
+    endProposal(pairing, 'withdrawn', userId, { keepLooking: false });
+    withdrew = true;
+  }
+  return withdrew;
 }
 
 // Staff review lifts the automatic safety hold only once NO open reports
@@ -257,6 +290,7 @@ const fileReport = db.transaction((user, body) => {
     `).get(user.id, reportedId, reportedId, user.id);
     if (!shared) throw new LifecycleError('not_found', 'User not found.', 404);
   }
+  let withdrew = false;
   const reportId = require('node:crypto').randomBytes(16).toString('hex');
   db.prepare(`
     INSERT INTO safety_reports (id, reporter_user_id, reported_user_id, pairing_id, category, description, created_at)
@@ -283,10 +317,10 @@ const fileReport = db.transaction((user, body) => {
       UPDATE pairings SET contact_share_a = 0, contact_share_b = 0
       WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
     `).run(user.id, reportedId, reportedId, user.id);
-    pauseIfRepeatedlyReported(reportedId);
+    withdrew = pauseIfRepeatedlyReported(reportedId);
   }
   notify(user.id, 'report_received', 'We got your report', 'A person on our team will review it. Thank you for telling us.');
-  return { report_id: reportId, reported_user_id: reportedId, pairing };
+  return { report_id: reportId, reported_user_id: reportedId, pairing, withdrew };
 });
 
 // Reporting a partner can also take the reporter out of the pairing, at no
@@ -295,10 +329,15 @@ const fileReport = db.transaction((user, body) => {
 // the pairing then fails, that is returned alongside the stored report
 // rather than as an error (a retry would file a duplicate report).
 function submitReport(user, body) {
-  const { report_id, pairing } = fileReport(user, body);
+  const { report_id, pairing: filed, withdrew } = fileReport(user, body);
+  // The report may just have paused the other person and withdrawn this very
+  // proposal; the reporter is then already out of it, at no cost.
+  const pairing = filed ? getPairing(filed.id) : null;
   let cancelled = false;
   let cancelError;
-  if (body.cancel_pairing && pairing && ['confirmed', 'proposed'].includes(pairing.status)) {
+  if (body.cancel_pairing && pairing?.status === 'withdrawn') {
+    cancelled = true;
+  } else if (body.cancel_pairing && pairing && ['confirmed', 'proposed'].includes(pairing.status)) {
     try {
       const side = pairing.user_a_id === user.id ? 'a' : 'b';
       const booking = getBooking(pairing[`booking_${side}_id`]);
@@ -314,6 +353,7 @@ function submitReport(user, body) {
       cancelError = err.message;
     }
   }
+  if (withdrew) runMatching(); // partners of withdrawn proposals are searching again
   return { report_id, cancelled, ...(cancelError ? { cancel_error: cancelError } : {}) };
 }
 

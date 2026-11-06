@@ -9,7 +9,9 @@ const db = require('../db');
 const clock = require('../lib/clock');
 const lifecycle = require('../lib/lifecycle');
 const metrics = require('../lib/metrics');
+const { notify } = require('../lib/notify');
 const services = require('../lib/services');
+const shiftCancel = require('../lib/shiftCancel');
 const { requireAuth, requireOrg } = require('../lib/auth');
 const { orgShifts, publicOrg, parseArray } = require('../lib/shifts');
 const { zonedToUtc } = require('../lib/time');
@@ -172,6 +174,16 @@ router.get('/orgs/mine/shifts', orgAccount, (req, res) => {
   res.json({ shifts: orgShifts(req.org.id), verified: Boolean(req.org.verified) });
 });
 
+// Cancel one of the org's own shifts. Volunteers' Deeds are released in full
+// and they're told neutrally; the optional reason is kept for the org and the
+// platform only, never shown to volunteers.
+router.post('/orgs/mine/shifts/:id/cancel', orgAccount, wrap((req, res) => {
+  const reason = optionalText(req.body ?? {}, 'reason', 200);
+  if (reason.error) return res.status(400).json({ error: reason.error });
+  if (!orgShifts(req.org.id).some((s) => s.id === req.params.id)) return res.status(404).json({ error: 'Shift not found.' });
+  res.json(shiftCancel.cancelShift(req.org, req.params.id, reason.value));
+}));
+
 // Shift-day roster: first name and verification status only — the minimum
 // an org needs for check-in. No raw ID data, no contact details.
 router.get('/orgs/mine/shifts/:id/roster', orgAccount, wrap(async (req, res) => {
@@ -222,10 +234,17 @@ router.post('/orgs/mine/bookings/:id/rate', orgAccount, wrap((req, res) => {
   const attendance = scale(req.body?.attendance);
   const contribution = scale(req.body?.contribution);
   if (!attendance || !contribution) return res.status(400).json({ error: 'attendance and contribution must each be 1-5.' });
+  const firstRating = !db.prepare('SELECT 1 FROM org_volunteer_ratings WHERE booking_id = ?').get(booking.id);
   db.prepare(`
     INSERT INTO org_volunteer_ratings (booking_id, org_id, user_id, attendance, contribution, created_at) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(booking_id) DO UPDATE SET attendance = excluded.attendance, contribution = excluded.contribution
   `).run(booking.id, req.org.id, booking.user_id, attendance, contribution, clock.isoNow());
+  // Neutral heads-up so the volunteer can find the rating and choose whether
+  // it shows on their history. Only the first time; later edits stay quiet.
+  if (firstRating) {
+    notify(booking.user_id, 'org_rated_you', `${req.org.name} rated your shift`,
+      'You can choose whether it shows on your volunteer history.', { type: 'booking', id: booking.id });
+  }
   res.json({ ok: true });
 }));
 

@@ -73,6 +73,14 @@ async function main() {
     await api(`/orgs/mine/bookings/${one.ba.id}/rate`, { method: 'POST', token: org.token, body: { attendance: 5, contribution: 5 } });
     const form = await api(`/bookings/${one.ba.id}/rating-form`, { token: ann.token });
     check('Ann sees the org\'s rating of her', form.body.org_rating_of_you?.attendance === 'good');
+    const annOrgNote = (await api('/notifications', { token: ann.token })).body.notifications.find((n) => n.kind === 'org_rated_you');
+    check('the org rating after the volunteer has rated sends a neutral notification with the booking ref',
+      annOrgNote?.ref_type === 'booking' && annOrgNote.ref_id === one.ba.id && annOrgNote.title.includes('rated your shift')
+        && !/good|great|poor|bad|\d/.test(annOrgNote.body ?? ''), annOrgNote);
+    check('…the rating form still returns it after the volunteer finished rating', form.body.org_rated === true && form.body.org_rating_public === false);
+    await api(`/orgs/mine/bookings/${one.ba.id}/rate`, { method: 'POST', token: org.token, body: { attendance: 4, contribution: 4 } });
+    check('re-rating does not send a second notification',
+      (await api('/notifications', { token: ann.token })).body.notifications.filter((n) => n.kind === 'org_rated_you').length === 1);
     const cal = await h.makeVolunteer({ name: 'Cal', deeds: 5 });
     isolate();
     await h.makeShift(org, { daysAhead: 3 });
@@ -83,6 +91,8 @@ async function main() {
     check("by default the org's rating isn't on Ann's partner card", cardBefore.history.public_org_ratings.length === 0, cardBefore.history);
     check('the partner card shows a shift count and causes, but never org names', cardBefore.history.shift_count === 1 && !JSON.stringify(cardBefore).includes('Ratings Org'));
     await api(`/bookings/${one.ba.id}/org-rating-visibility`, { method: 'POST', token: ann.token, body: { public: true } });
+    check('the visibility choice is saved on the rating form after the volunteer has rated',
+      (await api(`/bookings/${one.ba.id}/rating-form`, { token: ann.token })).body.org_rating_public === true);
     const cardAfter = (await api(`/pairings/${annCalPid}`, { token: cal.token })).body.partner;
     check('once Ann makes it public, it shows on her card (cause-level, no org name)',
       cardAfter.history.public_org_ratings.length === 1 && !JSON.stringify(cardAfter).includes('Ratings Org'), cardAfter.history);

@@ -28,12 +28,13 @@ export function determineResumeStep(profile) {
 
   const causeTags = parseJsonArray(profile.cause_tags);
   const hasOrgLead = Boolean(profile.prospective_org_name);
+  const hasPreferredOrg = Boolean(profile.preferred_org_id);
   const hasCauses = causeTags.length >= 2;
-  const flow = hasOrgLead ? ORG_FLOW : CAUSE_FLOW;
+  const flow = hasOrgLead || hasPreferredOrg ? ORG_FLOW : CAUSE_FLOW;
 
   const locationDone = Boolean(profile.location_city) ||
     (profile.location_lat != null && profile.location_lng != null);
-  const orgOrCauseDone = hasOrgLead || hasCauses;
+  const orgOrCauseDone = hasOrgLead || hasPreferredOrg || hasCauses;
   const partnerPrefsDone = Boolean(profile.partner_prefs_confirmed);
   const availabilityDone = Boolean(profile.availability_window_start) &&
     Boolean(profile.availability_window_end);
@@ -42,7 +43,7 @@ export function determineResumeStep(profile) {
   // full_name/age/gender are NOT NULL, so the row can't exist without them.
   if (!locationDone) return { flow, stepIndex: flow.indexOf('location') };
   if (!orgOrCauseDone) return { flow, stepIndex: flow.indexOf('orgOrCause') };
-  // An org lead alone isn't enough to match on — the causes step follows.
+  // An org lead or a chosen org alone isn't enough to match on — the causes step follows.
   if (!hasCauses) return { flow, stepIndex: flow.indexOf('causes') };
   if (!partnerPrefsDone) return { flow, stepIndex: flow.indexOf('partnerPrefs') };
   if (!availabilityDone) return { flow, stepIndex: flow.indexOf('availability') };

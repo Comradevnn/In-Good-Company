@@ -42,7 +42,15 @@ function primaryCard(home, navigate) {
       onPress: () => navigate('pairing', { pairingId: proposal.pairing_id }),
     };
   }
-  const today = home.bookings.find((b) => b.is_today && !b.ended && b.status === 'confirmed');
+  const today = home.bookings.find((b) => b.is_today && !b.ended && (b.status === 'confirmed' || b.status === 'attended'));
+  if (today?.status === 'attended') {
+    return {
+      eyebrow: 'Happening now',
+      title: `${today.shift.when_label.split(' · ')[1] ?? ''} · ${today.shift.org_name}`,
+      body: "You're checked in.",
+      onPress: () => navigate(today.pairing ? 'pairing' : 'booking', { pairingId: today.pairing?.id, bookingId: today.booking_id }),
+    };
+  }
   if (today) {
     return {
       eyebrow: today.started ? 'Happening now' : 'Today',
@@ -173,7 +181,12 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
           title="You've used this month's matched shifts"
           body={`Your plan includes ${premium.cap.cap} matched shift${premium.cap.cap === 1 ? '' : 's'} a month. You can look again next month${premium.tier === 'premium' ? '' : ', or go Premium for more'}.`}
         >
-          {premium.tier !== 'premium' ? <PillButton label="See Premium" ghost onPress={() => navigate('premium')} style={{ marginTop: 12, alignSelf: 'flex-start' }} /> : null}
+          <PillButton
+            label={premium.tier !== 'premium' ? 'See Premium' : 'See your Deeds'}
+            ghost
+            onPress={() => navigate(premium.tier !== 'premium' ? 'premium' : 'deeds')}
+            style={{ marginTop: 12, alignSelf: 'flex-start' }}
+          />
         </InfoCard>
       ) : null}
 
@@ -190,13 +203,20 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
         <>
           <SectionTitle title="Upcoming" />
           {upcoming.map((b) => {
-            const status = b.pairing
-              ? b.pairing.status === 'proposed'
-                ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
-                : b.pairing.status === 'cancelled'
-                  ? `${b.pairing.partner_name} can't make it — tap to choose what's next`
-                  : `With ${b.pairing.partner_name}`
-              : b.status === 'attended' ? 'Checked in' : 'Solo spot';
+            // The "choose what's next" line is only for a decision that is mine to make.
+            const mineToDecide = Boolean(b.pairing) && home.actions.some((a) => a.type === 'bail_decision' && a.pairing_id === b.pairing.id);
+            const orgCancelled = b.shift_cancelled || b.pairing?.cancelled_by_org;
+            const status = orgCancelled
+              ? 'Cancelled by the org'
+              : b.pairing
+                ? b.pairing.status === 'proposed'
+                  ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
+                  : b.pairing.status === 'cancelled'
+                    ? mineToDecide ? `${b.pairing.partner_name} can't make it — tap to choose what's next` : 'This match ended — tap to see what happened'
+                    : b.ended && b.status === 'confirmed'
+                      ? `Waiting for ${b.shift.org_name} to confirm you were there`
+                      : `With ${b.pairing.partner_name}`
+                : b.status === 'attended' ? 'Checked in' : 'Solo spot';
             return (
             <Pressable
               key={b.booking_id}

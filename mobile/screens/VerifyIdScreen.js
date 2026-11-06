@@ -322,6 +322,7 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
             onChange={(value) => { setDob(value); setError(null); }}
             initialDate={DOB_PICKER_START}
             maximumDate={new Date()}
+            showYear
           />
         </View>
         <View style={styles.flex}>
@@ -329,6 +330,7 @@ export default function VerifyIdScreen({ sessionToken, profile, onVerified, onCa
             label="Expiry date"
             value={expiry}
             onChange={(value) => { setExpiry(value); setError(null); }}
+            showYear
           />
         </View>
       </View>

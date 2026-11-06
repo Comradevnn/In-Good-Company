@@ -10,11 +10,13 @@ const { requireAuth, requireProfile } = require('./lib/auth');
 const rateLimit = require('./lib/rateLimit');
 const services = require('./lib/services');
 const clock = require('./lib/clock');
+const rules = require('./lib/rules');
 const { ownProfile } = require('./lib/serialize');
 const { CAUSES } = require('./lib/causes');
 const { isRealDate } = require('./lib/time');
 const { containsContactInfo } = require('./lib/chat');
 const referrals = require('./lib/referrals');
+const premium = require('./lib/premium');
 const lifecycle = require('./lib/lifecycle');
 const volunteerRoutes = require('./routes/volunteer');
 const orgRoutes = require('./routes/org');
@@ -287,6 +289,8 @@ const PATCHABLE_FIELDS = [
   'availability_window_start',
   'availability_window_end',
   'travel_radius_miles',
+  'availability_weekdays',
+  'prospective_org_ok_nearest',
 ];
 
 app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
@@ -328,6 +332,22 @@ app.patch('/users/me', requireAuth, requireProfile, (req, res) => {
         return res.status(400).json({ error: `${field} must be a real date (YYYY-MM-DD)` });
       }
       updates[field] = body[field];
+    } else if (field === 'availability_weekdays') {
+      // Days of the week the volunteer is free, 0 = Sunday .. 6 = Saturday.
+      // Stored as JSON text; empty or null means any day (NULL).
+      const days = body.availability_weekdays;
+      if (days === null || (Array.isArray(days) && days.length === 0)) {
+        updates.availability_weekdays = null;
+      } else if (!Array.isArray(days) || !days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6) || new Set(days).size !== days.length) {
+        return res.status(400).json({ error: 'availability_weekdays must be a list of unique day numbers from 0 (Sunday) to 6 (Saturday), or null.', code: 'invalid_weekdays' });
+      } else {
+        updates.availability_weekdays = JSON.stringify([...days].sort((a, b) => a - b));
+      }
+    } else if (field === 'prospective_org_ok_nearest') {
+      if (body[field] !== null && typeof body[field] !== 'boolean') {
+        return res.status(400).json({ error: 'prospective_org_ok_nearest must be true, false or null.' });
+      }
+      updates[field] = body[field] === null ? null : body[field] ? 1 : 0;
     } else if (field === 'location_city' || field === 'prospective_org_name') {
       if (body[field] !== null && (typeof body[field] !== 'string' || body[field].trim().length > 80)) {
         return res.status(400).json({ error: `${field} must be text of 80 characters or fewer` });
@@ -438,6 +458,10 @@ app.post('/verification/document-check', requireAuth, requireProfile, async (req
   if (fieldsInvalid) {
     return res.status(400).json(staticFieldError);
   }
+  // Only government ID types are accepted; compared after trim + lowercase.
+  if (!rules.ACCEPTED_DOCUMENT_TYPES.includes(document_type.trim().toLowerCase())) {
+    return res.status(400).json(staticFieldError);
+  }
 
   const user = db.prepare('SELECT id FROM users WHERE account_id = ?').get(req.account.id);
 
@@ -458,7 +482,12 @@ app.post('/verification/document-check', requireAuth, requireProfile, async (req
 
   if (result.duplicate) {
     // The other account's identity (result.existing_subject_id) is
-    // deliberately not returned to the client.
+    // deliberately not returned to the client. The account is flagged so it
+    // is credited no trial or Premium Deeds it could not spend.
+    // Only an account that is not already verified: someone already verified
+    // keeps their grants and free Deeds when a re-check hits another document.
+    const { verified } = db.prepare('SELECT verified FROM users WHERE id = ?').get(user.id);
+    if (!verified) premium.flagDuplicateDocument(user.id);
     return res.status(200).json({ duplicate: true });
   }
 
@@ -489,11 +518,16 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
   const { name_match, dob_match, doc_type_confirmed, dob_is_adult, expiry_date } = req.body ?? {};
 
   // The device decides adulthood from the ID's own date of birth (which never
-  // leaves the device) and sends only this boolean. Anything present that
-  // isn't exactly true is refused before anything is staged or issued. A
-  // missing field is still accepted for older clients and the Recryption
-  // suites; see the open question on closing that gap.
-  if (dob_is_adult !== undefined && dob_is_adult !== true) {
+  // leaves the device) and sends only this boolean. The answer is required: a
+  // missing (or null) answer is refused, and so is anything present that
+  // isn't exactly true, before anything is staged or issued.
+  if (dob_is_adult === undefined || dob_is_adult === null) {
+    return res.status(400).json({
+      error: 'Please answer the adult question before verifying.',
+      code: 'adult_answer_required',
+    });
+  }
+  if (dob_is_adult !== true) {
     return res.status(400).json({
       error: 'In Good Company is for adults only, so this document can\'t be used to verify.',
       code: 'underage_document',
@@ -566,6 +600,7 @@ app.post('/verification/attest', requireAuth, requireProfile, async (req, res) =
     WHERE account_id = @account_id
   `).run({ badge: JSON.stringify(signedBadge), account_id: req.account.id });
   pendingDocChecks.delete(req.account.id);
+  premium.clearDuplicateDocument(user.id);
   // Referral credit is earned at verification, so a duplicate-document
   // account (blocked above) can never earn a self-referral.
   referrals.creditOnVerification(user.id);

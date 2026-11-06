@@ -18,12 +18,13 @@ const chat = require('./chat');
 const { notify } = require('./notify');
 const { runResurfacing } = require('./resurface');
 const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shifts');
-const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
+const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch, parseWeekdays, windowHasWeekday, weekdayOf } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
 const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray, tagMatchLevel, hardFiltersPass } = require('../matching/engine');
 const { isBlockedPair } = require('./blocks');
 const { pressure } = require('../matching/assign');
+const { normaliseInterest } = require('../matching/person');
 
 class LifecycleError extends Error {
   constructor(code, message, status = 409, extra = {}) {
@@ -94,6 +95,34 @@ function validateWindow(windowStart, windowEnd, nowMs) {
   return deadlineMs;
 }
 
+// Days of the week the person is free: an array of unique integers 0 (Sunday)
+// to 6 (Saturday). [] means any day. Returns the sorted list.
+function parseWeekdayInput(value) {
+  const ok = Array.isArray(value) && value.length <= 7 && value.every((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+    && new Set(value).size === value.length;
+  if (!ok) throw new LifecycleError('invalid_weekdays', 'Pick the days of the week you are free.', 400);
+  return [...value].sort();
+}
+
+function requireWeekdayInWindow(windowStart, windowEnd, weekdays) {
+  if (!windowHasWeekday(windowStart, windowEnd, weekdays)) {
+    throw new LifecycleError('no_weekday_in_window', 'None of the days you picked fall between your start and end dates. Widen your dates or pick other days.', 400);
+  }
+}
+
+// Premium: up to three hobbies a partner must share one of. Absent, null or
+// [] means no filter. Returns the normalised list, or null.
+const { HOBBY_FILTER_MAX, HOBBY_MAX_LENGTH } = rules;
+function parseHobbyFilter(value) {
+  if (value == null || (Array.isArray(value) && value.length === 0)) return null;
+  const ok = Array.isArray(value) && value.length <= HOBBY_FILTER_MAX
+    && value.every((v) => typeof v === 'string' && v.trim().length > 0 && v.trim().length <= HOBBY_MAX_LENGTH);
+  if (!ok) {
+    throw new LifecycleError('invalid_hobby_filter', `Pick up to ${HOBBY_FILTER_MAX} hobbies, each up to ${HOBBY_MAX_LENGTH} characters.`, 400);
+  }
+  return [...new Set(value.map(normaliseInterest))];
+}
+
 function activeBuddyIds(userId) {
   return db.prepare(`
     SELECT CASE WHEN user_low_id = ? THEN user_high_id ELSE user_low_id END AS other
@@ -120,13 +149,17 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   const mine = safeParseArray(user.cause_tags);
   const nowMs = clock.nowMs();
   const others = db.prepare(`
-    SELECT u.*, r.age_min AS req_age_min, r.age_max AS req_age_max, r.travel_radius_miles AS req_radius
+    SELECT u.*, r.age_min AS req_age_min, r.age_max AS req_age_max, r.travel_radius_miles AS req_radius,
+      r.window_start AS req_start, r.window_end AS req_end, r.weekdays AS req_weekdays
     FROM availability_requests r JOIN users u ON u.id = r.user_id
     WHERE r.status = 'searching' AND r.kind = 'standard' AND r.user_id != ? AND r.buddy_user_id IS NULL
       AND r.window_start <= ? AND r.window_end >= ?
   `).all(user.id, windowEnd, windowStart);
   const inBand = (min, max, age) => (min == null || (age != null && age >= min)) && (max == null || (age != null && age <= max));
+  const myWeekdays = parseWeekdays(request ? request.weekdays : user.availability_weekdays);
   const myRadius = request?.travel_radius_miles ?? user.travel_radius_miles ?? null;
+  // A search with a hobby filter only ever pairs with someone sharing one of them.
+  const myHobbies = new Set(safeParseArray(request?.hobby_filter).map(normaliseInterest).filter(Boolean));
   const unfit = db.prepare(`
     SELECT 1 FROM pairings WHERE status IN ('proposed', 'confirmed')
       AND ((user_a_id = @me AND user_b_id = @other) OR (user_a_id = @other AND user_b_id = @me))
@@ -137,6 +170,10 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   return others.some((o) => {
     if (tagMatchLevel(mine, safeParseArray(o.cause_tags)) === 'none') return false;
     if (isBlockedPair(user.id, o.id)) return false;
+    if (myHobbies.size > 0 && !safeParseArray(o.interest_tags).some((h) => myHobbies.has(normaliseInterest(h)))) return false;
+    // Cheap day check: some day in both windows is free for both people.
+    if (!windowHasWeekday(windowStart > o.req_start ? windowStart : o.req_start, windowEnd < o.req_end ? windowEnd : o.req_end,
+      myWeekdays, parseWeekdays(o.req_weekdays))) return false;
     if (!hardFiltersPass(user, o).pass) return false;
     if (!inBand(o.req_age_min, o.req_age_max, user.age) || !inBand(request?.age_min, request?.age_max, o.age)) return false;
     if (user.location_lat != null && user.location_lng != null && o.location_lat != null && o.location_lng != null) {
@@ -197,21 +234,33 @@ const createRequest = db.transaction((user, body) => {
     }
   }
 
+  const hobbyFilter = parseHobbyFilter(body.hobby_filter);
+  if (hobbyFilter && premium.state(user).tier !== 'premium') {
+    throw new LifecycleError('premium_required', 'Partner hobby filters are a Premium feature.', 403);
+  }
+
+  // No weekdays sent: fall back to the profile's last choice, like the dates.
+  const weekdays = body.weekdays != null ? parseWeekdayInput(body.weekdays) : parseWeekdays(user.availability_weekdays);
+  requireWeekdayInWindow(windowStart, windowEnd, weekdays);
+  const weekdaysJson = weekdays.length > 0 ? JSON.stringify(weekdays) : null;
+
   const preference = parsePreference(body.match_preference) ?? 'best';
 
   const requestId = id();
   db.prepare(`
     INSERT INTO availability_requests (id, user_id, kind, window_start, window_end, travel_radius_miles, buddy_user_id,
-      age_min, age_max, match_preference, status, search_deadline, created_at)
-    VALUES (?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?)
-  `).run(requestId, user.id, windowStart, windowEnd, radius, buddyId, ageMin, ageMax, preference, new Date(deadlineMs).toISOString(), nowIso());
+      age_min, age_max, match_preference, weekdays, hobby_filter, status, search_deadline, created_at)
+    VALUES (?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?)
+  `).run(requestId, user.id, windowStart, windowEnd, radius, buddyId, ageMin, ageMax, preference, weekdaysJson,
+    hobbyFilter ? JSON.stringify(hobbyFilter) : null, new Date(deadlineMs).toISOString(), nowIso());
   // Keep the profile's "latest availability" in step, so the availability
   // screen pre-fills with what the user last submitted.
   db.prepare(`
-    UPDATE users SET availability_window_start = ?, availability_window_end = ?, travel_radius_miles = ?, updated_at = datetime('now')
+    UPDATE users SET availability_window_start = ?, availability_window_end = ?, travel_radius_miles = ?,
+      availability_weekdays = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(windowStart, windowEnd, radius, user.id);
-  logMatch(`${user.display_name} started looking: ${windowStart} → ${windowEnd}, ${radius} mi${buddyId ? ' (with a buddy)' : ''}`);
+  `).run(windowStart, windowEnd, radius, weekdaysJson, user.id);
+  logMatch(`${user.display_name} started looking: ${windowStart} → ${windowEnd}${weekdays.length ? ` on weekdays ${weekdays.join(',')}` : ''}, ${radius} mi${buddyId ? ' (with a buddy)' : ''}`);
   return requestId;
 });
 
@@ -274,17 +323,27 @@ const adjustRequest = db.transaction((user, body) => {
       db.prepare('UPDATE users SET cause_tags = ? WHERE id = ?').run(JSON.stringify(causes), user.id);
     }
   }
+  if (body.weekdays != null) {
+    const weekdays = parseWeekdayInput(body.weekdays);
+    updates.weekdays = weekdays.length > 0 ? JSON.stringify(weekdays) : null;
+    db.prepare('UPDATE users SET availability_weekdays = ? WHERE id = ?').run(updates.weekdays, user.id);
+  }
   if (body.drop_buddy) updates.buddy_user_id = null;
   const preference = parsePreference(body.match_preference);
   if (preference) updates.match_preference = preference;
 
   const nowMs = clock.nowMs();
-  const deadlineMs = validateWindow(updates.window_start ?? request.window_start, updates.window_end ?? request.window_end, nowMs);
+  const newStart = updates.window_start ?? request.window_start;
+  const newEnd = updates.window_end ?? request.window_end;
+  const deadlineMs = validateWindow(newStart, newEnd, nowMs);
+  requireWeekdayInWindow(newStart, newEnd, parseWeekdays('weekdays' in updates ? updates.weekdays : request.weekdays));
   // Moving the deadline out must not push the match bar back up: remember how
   // much of its search time the request had used (never lowering an earlier floor).
   updates.pressure_floor = pressure({
     createdAtMs: Date.parse(request.created_at), deadlineMs: Date.parse(request.search_deadline), pressureFloor: request.pressure_floor,
   }, nowMs);
+  // A search revived after its time limit starts with no match bar.
+  if (request.status === 'no_match') updates.pressure_floor = 1;
   updates.search_deadline = new Date(deadlineMs).toISOString();
   updates.status = 'searching';
   updates.last_reason = null;
@@ -724,12 +783,14 @@ const checkIn = db.transaction((org, bookingId) => {
     throw new LifecycleError('too_early', 'Check-in opens two hours before the shift starts.');
   }
   const now = nowIso();
-  if (booking.hold_id) deeds.resolveHold(booking.hold_id, 'returned', 'attended', shift.org_id);
+  // Only a hold that was still held is returned now; a spot kept solo after a
+  // back-out has its hold resolved already (and maybe forfeited), so say nothing.
+  const deedsReturned = booking.hold_id ? deeds.resolveHold(booking.hold_id, 'returned', 'attended', shift.org_id) === 'returned' : false;
   db.prepare("UPDATE bookings SET status = 'attended', checked_in_at = ?, resolved_at = ? WHERE id = ?").run(now, now, booking.id);
   reliability.record(booking.user_id, 'attended', booking.id);
   updateVolunteerHistory(booking.user_id, shift);
   notify(booking.user_id, 'checked_in', "You're checked in",
-    `${shift.org.name} checked you in.${booking.hold_id ? ' Your Deeds are back in your balance.' : ''} Have a great shift!`, { type: 'booking', id: booking.id });
+    `${shift.org.name} checked you in.${deedsReturned ? ' Your Deeds are back in your balance.' : ''} Have a great shift!`, { type: 'booking', id: booking.id });
   completePairingIfResolved(booking.pairing_id);
   return getBooking(booking.id);
 });
@@ -870,13 +931,16 @@ function alternatives(user, request) {
     const day = localDate(new Date(s.starts_at), s.timezone);
     return day >= request.window_start && day <= request.window_end;
   };
+  // The search's chosen weekdays (none = any day): suggestions must land on one.
+  const weekdays = parseWeekdays(request.weekdays);
+  const onChosenDay = (s) => weekdays.length === 0 || weekdays.includes(weekdayOf(localDate(new Date(s.starts_at), s.timezone)));
   const radius = request.travel_radius_miles ?? user.travel_radius_miles;
   const distance = (s) => (user.location_lat != null && s.location
     ? haversineMiles({ lat: user.location_lat, lng: user.location_lng }, s.location) : null);
   const withinRadius = (s) => distance(s) == null || radius == null || distance(s) <= radius;
 
   const result = [];
-  const solo = shifts.filter((s) => aligned(s) && inWindow(s) && withinRadius(s)).slice(0, 3);
+  const solo = shifts.filter((s) => aligned(s) && inWindow(s) && onChosenDay(s) && withinRadius(s)).slice(0, 3);
   if (solo.length) {
     result.push({
       type: 'solo_rsvp',
@@ -885,12 +949,12 @@ function alternatives(user, request) {
       shifts: solo.map(shiftSummary),
     });
   }
-  const farther = shifts.filter((s) => aligned(s) && inWindow(s) && !withinRadius(s)).map(distance).filter((d) => d != null).sort((a, b) => a - b);
+  const farther = shifts.filter((s) => aligned(s) && inWindow(s) && onChosenDay(s) && !withinRadius(s)).map(distance).filter((d) => d != null).sort((a, b) => a - b);
   if (farther.length) {
     const miles = Math.ceil(farther[0]);
     result.push({ type: 'widen_radius', title: `Travel up to ${miles} miles`, body: 'There are matching shifts just outside your current distance.', travel_radius_miles: miles });
   }
-  const outside = shifts.filter((s) => aligned(s) && withinRadius(s) && !inWindow(s)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const outside = shifts.filter((s) => aligned(s) && withinRadius(s) && !inWindow(s) && onChosenDay(s)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   if (outside.length) {
     const day = localDate(new Date(outside[0].starts_at), outside[0].timezone);
     result.push({ type: 'nearby_date', title: 'Try nearby dates', body: `There are shifts that fit you around ${day}.`, window_start: day, window_end: addDays(day, 3) });
@@ -898,7 +962,7 @@ function alternatives(user, request) {
   // The cause area with the most open spots in the user's window that they
   // haven't picked — density makes matching faster.
   const density = {};
-  for (const s of shifts.filter(inWindow)) {
+  for (const s of shifts.filter((x) => inWindow(x) && onChosenDay(x))) {
     for (const tag of s.cause_tags) if (!causes.includes(tag)) density[tag] = (density[tag] ?? 0) + s.capacity_remaining;
   }
   const busiest = Object.entries(density).sort((a, b) => b[1] - a[1])[0];
@@ -967,9 +1031,11 @@ function requestStatus(user) {
     id: request.id,
     kind: request.kind,
     status: request.status,
+    anchor_booking_id: request.anchor_booking_id ?? null,
     window_start: request.window_start,
     window_end: request.window_end,
     travel_radius_miles: request.travel_radius_miles,
+    weekdays: parseWeekdays(request.weekdays).length ? parseWeekdays(request.weekdays) : null,
     buddy_name: request.buddy_user_id ? getUser(request.buddy_user_id)?.display_name : null,
     created_at: request.created_at,
     search_deadline: request.search_deadline,
@@ -1002,6 +1068,7 @@ function dismissNoMatch(user) {
 module.exports = {
   LifecycleError,
   anyonePartnerLikely,
+  endProposal,
   openRequest,
   submitRequest,
   cancelRequest,

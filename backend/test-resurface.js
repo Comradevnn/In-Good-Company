@@ -131,7 +131,11 @@ async function main() {
     check('once-a-month volunteer is still waiting', (await nudges(byLabel['Once a month'])).length === 0);
 
     await h.advance({ days: 14 });
-    await h.makeShift(org, { daysAhead: 4, ...sanJose });
+    // The shift is made well ahead (7 days) because the clock then moves 3 days:
+    // at 4 days ahead it could land inside the minimum lead (which nudges skip)
+    // depending on the wall-clock hour the suite runs, but 7 leaves it a clear
+    // 3-4 days out, past the lead and inside the nudge horizon, at any hour.
+    await h.makeShift(org, { daysAhead: 7, ...sanJose });
     await h.advance({ days: 3 }); // past 30 days since joining
     check('once-a-month volunteer is nudged after a month', (await nudges(byLabel['Once a month'])).length === 1);
     check('a nudge is a notification only: the weekly volunteer has no search or booking from it',

@@ -175,6 +175,7 @@ Colours are roles, not values. `docs/THEMING.md` has the full token table; the v
 - **People** (`you`, `onYou`, `person1`, `person2`, `person3`): disc colours. `you` is reserved for the signed-in user. `person1Tint` fills the partner card.
 - **Lenses** (`lens1`, `lens2`, `lens3`, `lensOthers`, `onLens`): the pre-mixed solid overlaps of a pair. `lens1` to `lens3` are you plus person 1, 2 or 3 and carry `onLens`; `lensOthers` is two people who are not you and carries ink.
 - **Status** (`success`, `successTint`, `onSuccess`, `danger`, `dangerTint`): confirmed outcomes and errors.
+- **Caution** (`caution`): one fixed amber, derived identically for every palette in `mobile/theme/palettes/derive.js`. Used only for the search calendar's "spots, but filling up or no partner yet" day marker, beside `success` (good chance) and `danger` (nothing fits). Calendar markers also differ by shape (round, diamond, square), so colour is never the only signal.
 
 ### Neutral
 - **Paper and surface** (`paper`, `surface`): the ground, and fields, chips, tags, the back button and icon wells set on it or on a card.

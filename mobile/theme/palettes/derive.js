@@ -9,6 +9,10 @@ export function mix(a, b, t) {
   return `#${channels.join('').toUpperCase()}`;
 }
 
+// An amber for "in between" states (a yellow dot on the availability calendar). Fixed rather than
+// mixed from a palette so every palette gets the same one; it reads as a small mark on paper.
+export const CAUTION = '#9A5B00';
+
 export function withDerived(p) {
   return {
     ...p,
@@ -17,5 +21,6 @@ export function withDerived(p) {
     tintPressed: mix(p.tint, p.ink, 0.08),
     fieldPressed: mix(p.field, p.ink, 0.12),
     accentPressed: mix(p.accent, p.ink, 0.10),
+    caution: CAUTION,
   };
 }

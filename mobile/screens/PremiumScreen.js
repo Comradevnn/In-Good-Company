@@ -3,7 +3,7 @@ import { Share, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
-import { Card, ErrorText, Headline, Loading, PillButton, Screen, SectionTitle, Tag } from '../components/AppParts';
+import { Card, ErrorState, ErrorText, Headline, Loading, PillButton, Screen, SectionTitle, Tag } from '../components/AppParts';
 
 // Premium (mock subscription — no payment processor, no card details) and
 // referrals. Premium only expands what your own account can do; it never
@@ -13,8 +13,10 @@ export default function PremiumScreen({ sessionToken, onBack }) {
   const [referral, setReferral] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const [p, r] = await Promise.all([api(sessionToken, '/premium'), api(sessionToken, '/referral')]);
       setPremium(p);
@@ -30,18 +32,27 @@ export default function PremiumScreen({ sessionToken, onBack }) {
   async function subscribe(plan) {
     setBusy(true);
     setError(null);
+    setAlreadySubscribed(false);
     try {
       await api(sessionToken, '/premium/subscribe', { method: 'POST', body: { plan } });
       await load();
     } catch (err) {
-      setError(err);
+      if (err.code === 'already_subscribed') {
+        setAlreadySubscribed(true);
+        await load();
+      } else {
+        setError(err);
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  if (!premium) return <Screen title="Premium" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!premium) return <Screen title="Premium" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={load} retryLabel="Try again" /> : <Loading />}</Screen>;
   const isPremium = premium.tier === 'premium';
+  // A subscription taken out during the trial is booked to start when the trial ends,
+  // so `source` stays 'trial' until then; premium_until says it is booked.
+  const booked = premium.source === 'trial' && premium.premium_until && Date.parse(premium.premium_until) > Date.parse(premium.trial_ends_at);
   return (
     <Screen title="Premium" onBack={onBack}>
       <Headline>{isPremium ? (premium.source === 'trial' ? "You're on the Premium trial" : "You're Premium") : "You're on the free plan"}</Headline>
@@ -66,10 +77,17 @@ export default function PremiumScreen({ sessionToken, onBack }) {
         ))}
       </Card>
 
-      {premium.source !== 'subscription' ? (
+      {booked ? (
+        <Card tone="field" style={{ marginTop: 12 }}>
+          <Text style={styles.planTitle}>You're subscribed</Text>
+          <Text style={[styles.label, { marginTop: 4 }]}>
+            Your {premium.plan === 'annual' ? 'annual' : 'monthly'} plan starts when your trial ends on {new Date(premium.trial_ends_at).toLocaleDateString()} and runs through {new Date(premium.premium_until).toLocaleDateString()}. Demo only: nothing is charged.
+          </Text>
+        </Card>
+      ) : premium.source !== 'subscription' ? (
         <>
           <SectionTitle title="Go Premium" />
-          <Text style={styles.lede}>More matched shifts each month, weekly free Deeds, more buddy slots, a partner age filter, and a penalty-free late cancel each month.</Text>
+          <Text style={styles.lede}>More matched shifts each month, weekly free Deeds, more buddy slots, a partner age filter, a partner hobby filter, and a penalty-free late cancel each month.</Text>
           {premium.plans.map((plan) => (
             <Card key={plan.plan} style={{ marginTop: 8 }}>
               <Text style={styles.planTitle}>{plan.plan === 'monthly' ? 'Monthly' : 'Annual'}</Text>
@@ -102,6 +120,11 @@ export default function PremiumScreen({ sessionToken, onBack }) {
             onPress={() => Share.share({ message: `Volunteer with me on In Good Company — use my code ${referral.code} when you sign up.` })}
           />
         </>
+      ) : null}
+      {alreadySubscribed ? (
+        <Text style={styles.lede}>
+          {premium.premium_until ? `You're already subscribed until ${new Date(premium.premium_until).toLocaleDateString()}.` : "You're already subscribed."}
+        </Text>
       ) : null}
       <ErrorText error={error} />
     </Screen>

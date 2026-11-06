@@ -423,6 +423,16 @@ subscription, weekly Deeds, monthly cap, buddy slots, a penalty-free late
 cancel), referrals, the reliability signal with escalation, safety
 reports, share my plans, and user/org/platform metrics.
 
+Added in version 1: choosing the weekdays you're free (or any day,
+soonest first) when starting a search; an availability calendar with a
+marker under each day; org-first onboarding (search verified orgs, or
+name one that isn't listed yet); a Premium partner hobby filter;
+org-side shift cancellation (Deeds released in full, volunteers told and
+offered a new search); a safety hold that withdraws unconfirmed
+proposals; a required adult answer at verification and a server-side
+document-type check; and no Premium grants for duplicate-document
+accounts. See `docs/DECISIONS.md` (2026-11-06) for what is provisional.
+
 **Not built yet:**
 
 - Calibrated ranking weights: the soft ranking and match bar are built,
@@ -430,14 +440,14 @@ reports, share my plans, and user/org/platform metrics.
 - Account deletion (a "close, don't erase" design is proposed in
   `docs/DECISIONS.md`), and matching guarantees on planned dates beyond the
   "anyone" option.
-- Premium's advanced filters beyond a partner age range (hobbies/values,
-  badge tier).
+- Premium's values and badge-tier filters (values are free text with
+  nothing structured to filter on; only one badge level exists). The
+  partner age range and hobby filters are built.
 - Paid org tiers, billing, corporate CSR packages, org payouts as real
   money movement, and the minors / institutional partnership line (all out
   of the first prototype's scope).
 - Real payments of any kind — Deeds purchases and Premium are mock.
-- Push notifications (the app polls), real-time chat (polling), and an
-  org-side shift cancellation flow.
+- Push notifications (the app polls) and real-time chat (polling).
 - A real admin/staff tool: org verification and safety-report review are a
   minimal page behind a shared `ADMIN_TOKEN`.
 - Everything listed under *Identity verification & security → Not built
@@ -478,7 +488,8 @@ node test-recryption-keymanager.js   # also: duplicates, badges, badge-reveal
 node test-journey.js                 # also: capacity, matching-filters, deeds, pairing-flows,
                                      #       ratings-buddies, safety, authz, engine,
                                      #       match-score, match-assign, match-ranking, id-checks,
-                                     #       spec-coverage, resurface, abuse
+                                     #       spec-coverage, resurface, abuse, search-filters,
+                                     #       calendar-orgs, org-cancel, v1-journey, v1-guarantees
 ```
 
 Or run every suite in sequence with a one-line result each:
@@ -488,7 +499,8 @@ npm test
 ```
 
 From `mobile/`, pure logic has `node --test` suites: `onboarding/resume.test.mjs`,
-`verification/localChecks.test.mjs`, `screens/dates.test.mjs` and `api/client.test.mjs`.
+`verification/localChecks.test.mjs`, `screens/dates.test.mjs`, `screens/availabilityPrefill.test.mjs`, `theme/palettes.test.mjs`
+and `api/client.test.mjs`.
 
 The lifecycle suites (`test-*.js` other than `test-recryption-*`) each use
 their own throwaway database file (`DB_PATH`), so matching runs never touch

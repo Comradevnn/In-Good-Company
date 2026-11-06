@@ -4,6 +4,118 @@ Decisions the owner has made that aren't (or aren't yet) in the private
 specs, with what was built for each. Newest first. The private specs
 remain the source of truth for everything else (see README "Specs").
 
+## 2026-11-06 — Version 1 build (overnight, branch v1/build)
+
+Built the items below that were already decided (2026-10-18 entries),
+closed the in-scope gaps against the private master spec, and met its
+verification bar. Nothing already decided was changed.
+
+Built as decided:
+
+- **Weekdays I'm free** and **any day, soonest first** when starting a
+  search (a hard filter on shift days inside the date window).
+- **Availability calendar** on the search date picker: a marker under each
+  day, and only the colour is revealed about other people.
+- **Duplicate-document accounts** are credited no Premium grants, and any
+  unspent grant Deeds are withdrawn once.
+- **A safety hold withdraws unconfirmed proposals.** The would-be partner
+  goes back to searching with a neutral message and no penalty.
+- **The adult answer is required** at verification attest.
+- **A revived search starts with no match bar.**
+
+Built to the private spec, minimal and reversible:
+
+- **Org-first onboarding.** People can search verified orgs and pick one,
+  or name one that isn't listed (kept as a lead) and answer whether
+  they're happy to be paired with the nearest matching org meanwhile.
+- **Premium hobby filter.** A partner must share one of the person's
+  chosen hobbies, applied one-sided like the partner age range.
+- **Orgs can cancel an upcoming shift.** Volunteers' held Deeds are
+  released in full, nothing counts against them (no reliability event, no
+  monthly-cap use), pairings end, both sides are told neutrally, and
+  volunteers are offered a new search. The org's reason is kept for the
+  org and staff only.
+- **Server-side document-type allowlist**, matching the app's picker
+  (passport, driver's license, state ID).
+- The time-of-day failure in the resurfacing tests was the test fixture,
+  not the product: its shift could fall inside the minimum lead at some
+  hours. The cadence is unchanged.
+
+Provisional defaults, awaiting owner OK (each is a named constant or one
+small code path, so it can change in one place):
+
+- **Soonest first and the match bar.** The bar is unchanged. Soonest first
+  only orders candidate shifts that are otherwise equal by date, which in
+  practice means exact ties.
+- **"Nearly full"** for the calendar is `CALENDAR_NEARLY_FULL_SPOTS = 2`
+  in `backend/lib/rules.js`, meaning room for one more pair. This is
+  conservative: a day shows the good-chance marker only when there is room
+  beyond a single pair. The good-chance marker also needs the viewer to be
+  verified, because only verified people count as likely partners.
+- **Weekdays** are local calendar days in each shift's own timezone.
+  Picking none means any day. A new search reuses the last saved days,
+  like the dates do.
+- **A chosen org** adds its causes to the person's causes, and its shifts
+  win ties between otherwise equal candidates. It is never a hard filter
+  and never changes ranking weights. A shift an org called off does not
+  count as a previous pairing.
+- **The "nearest org meanwhile" answer** is recorded only. Matching
+  happens only when the person starts a search themselves, so no other
+  behaviour hangs on it.
+- **Premium filters:** the hobby filter offers the person's own hobbies
+  and matches them exactly after normalising. The values filter was not
+  built, because values are free text in people's own words with nothing
+  structured to filter on. The badge-tier filter was not built, because
+  only one verification level exists.
+- **Duplicate-document flag:** set only for an account that isn't
+  verified yet, and cleared when that account later verifies with its
+  own document. Grants skipped while it was flagged are never
+  back-credited.
+- **New colour role `caution`** (one fixed amber, identical in every
+  palette) for the calendar's middle marker. Markers also differ by shape.
+
+Questions for the owner:
+
+- The search time limit vs early bookings is still open. It is now
+  visible: a search for dates a week out says it will stop before the
+  window starts.
+- New free users get 2 trial Deeds, but a shift holds 5, so they must buy
+  before their first search. Is that intended?
+- The cause minimum: onboarding asks for at least two causes, but
+  matching only refuses a profile with none. A profile with one cause is
+  matched.
+- Should a pending "your match can't make it" decision hide the "find your
+  next shift" button?
+- The safety-hold withdrawal leaves a proposal alone when the held person
+  is on a rematch spot (their Deeds are already held). Withdraw it too?
+- Some numeric expectations in the private test plan may not match how
+  the engine combines its scoring factors; to confirm against the private
+  repo.
+- A profile with no cause list and one with an empty list both get the
+  same incomplete-profile reason today; whether they should differ is for
+  the private test plan.
+- Calendar: should days inside the minimum lead time be greyed out? And
+  should "nothing fits yet" use a neutral mark instead of the error red?
+- The back-out cutoff before a shift is only a label today: a confirmed
+  booking can still be cancelled (and forfeited) up to the start. Should
+  it be a hard block?
+- Orgs can rate a volunteer only from the recent-shifts list, and
+  attendance resolves itself a day after the shift. Should orgs get a
+  longer window or a past-shifts list?
+- The waiver is required by the org onboarding screen but not enforced by
+  the server, and volunteers never see it. Where should a volunteer see or
+  acknowledge it?
+- Terms of service and the "verification confirms identity, not
+  suitability" wording for orgs need counsel's text.
+- Partner preferences collect the same-gender option only (no orientation
+  preference). Referral credit is earned at verification, not signup.
+  "New to this org" in org metrics has no time period. Confirm each.
+
+Also built after the final audit: when an org rates a volunteer, the
+volunteer gets a neutral notice that opens the rating, where they choose
+whether it shows on their history; and keeping a spot solo after a late
+back-out no longer says the Deeds came back.
+
 ## 2026-10-23 — App redesign to direction B ("Overprint"), Calm tonal shade palette
 
 - **Direction.** The owner chose design candidate B, "Overprint"

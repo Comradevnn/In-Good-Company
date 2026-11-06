@@ -7,7 +7,7 @@ ship as a release with published API docs. When that happens, this file
 should be rebuilt from those docs plus the code below, and should still
 describe only the API contract.
 
-**Generated against:** Recryption `0.1.0`, commit `fd4251e` (local checkout
+**Generated against:** Recryption `0.1.0`, commit `8e74343` (local checkout
 `../../Recryption`, linked via `"recryption": "file:../../Recryption"` in
 `backend/package.json`).
 
@@ -30,6 +30,28 @@ suites (see `backend/CLAUDE.md`).
   `DocumentHashStore` interfaces, and this app implements them over SQLite in
   the three wiring modules below.
 
+## Public entry points
+
+The package exposes four entry points (its `exports` map). This app imports
+only the root one.
+
+| Entry point | Contents | Used by this app |
+|---|---|---|
+| `recryption` | Key lifecycle, badges, duplicate detection, plus the newer phone-side, evaluator and backend components and their store interfaces | Yes (the subset in the next section) |
+| `recryption/client` | Phone-side verification flow | No |
+| `recryption/attestation` | Device-attestation verifiers (marked unstable by the library) | No |
+| `recryption/testing` | Fakes for the library's own test suites | No |
+
+The newer components (an OPRF-based verification flow and its evaluator and
+backend pieces, the badge-revocation hook, an optional keyed claims digest,
+an optional boolean-only claims policy) are available but not used by this
+app. They are not wired into any route, so their presence does not affect
+the behaviour described below. The root entry marks the server-side
+duplicate-detection path (`DuplicateDetector` and its store and pepper
+types) as deprecated in favour of that flow, while stating that it keeps
+working; this app still uses it. Moving to the newer flow would be a
+separate decision, not part of regenerating this file.
+
 ## What the app uses
 
 | Library export | Wired in | App table(s) | Used for |
@@ -51,24 +73,32 @@ on. Re-check each one when regenerating this file.
   This is what fixed the old same-document 409.
 - **Plaintext never retained.** The document number exists only inside
   `checkDuplicate()`, and is never stored, logged or returned.
-- **Versioned pepper (library D5).** Each stored hash carries its
+- **Versioned pepper.** Each stored hash carries its
   `pepper_id`. Lookups can check `previous` peppers, but this app configures
   none.
-- **Pull-based revocation (library D4).** `verify()` checks the signature,
+- **Pull-based revocation.** `verify()` checks the signature,
   the key's status and the badge's status, and recomputes the claims digest
   against current source values, on every call. Never cache a "valid"
   result.
-- **Key lifecycle (library D3).** Keys go `active → retired`, or from either
+- **Key lifecycle.** Keys go `active → retired`, or from either
   of those to `revoked`. Retired keys still verify, while revoked keys fail
   immediately. `key_id` is derived from the public key, so every machine that
   generates its own key gets a different `key_id`.
 - **`issue()` is additive.** It never revokes older badges. The app
   enforces one valid badge per subject itself (D9 below).
+- **Default claims and digest behaviour.** `issue()` accepts any claims map
+  unless the service is built with the optional boolean-only claims policy,
+  which this app does not set. The claims digest is an unkeyed SHA-256 over
+  the registered source fields unless a digest secret is passed per call,
+  which this app does not do. `issue()` defaults `verification_method` to
+  `"manual"`. All three defaults are what the wiring code relies on.
+- **`revokeBadge()` reason.** With no reason argument it records `"manual"`.
+  The app passes none.
 
 ## App-level decisions layered on top (D6–D10)
 
-These are this app's decisions, separate from the library's D1–D5. They're
-documented inline where they're made:
+These are this app's own decisions, independent of the library's design
+decisions. They're documented inline where they're made:
 
 - **D6**: document hashing happens on the server. The pepper is never sent to
   clients, and checks are velocity-limited per account (`index.js`).
@@ -85,7 +115,8 @@ documented inline where they're made:
 
 ## Known gaps
 
-- The library's revocation-reason enum has no "superseded" value, so D9
-  records `"manual"`.
+- The library's revocation-reason set (`claim_change`, `manual`,
+  `key_compromise`, plus `retracted` and `admin` for its record-lifecycle
+  link) still has no "superseded" value, so D9 records `"manual"`.
 - No KMS. The signing key is a local PEM file, gitignored, and created per
   machine.

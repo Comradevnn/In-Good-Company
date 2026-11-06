@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import OnboardingTopBar from '../components/OnboardingTopBar';
 import { Chip, Headline, KeyboardScroll } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
+import { api } from '../api/client';
 
 // Matches the chip-grid part of the "causes" screen in specs/plotline.html.
 // Dropped the org-listing section below the chips — there's no org
@@ -34,6 +35,19 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [orgName, setOrgName] = useState(null);
+  const preferredOrgId = initialValues?.preferred_org_id ?? null;
+
+  // The chosen org's causes are already in cause_tags (merged by the server). The name is only for
+  // the note below, so a failed lookup just leaves the note out.
+  useEffect(() => {
+    if (!preferredOrgId) return undefined;
+    let live = true;
+    api(sessionToken, `/orgs/${preferredOrgId}`)
+      .then((data) => { if (live) setOrgName(data?.org?.name ?? data?.name ?? null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [sessionToken, preferredOrgId]);
 
   function toggle(cause) {
     setSelected((prev) =>
@@ -65,9 +79,16 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
         <Headline>What do you care about?</Headline>
         <Text style={s.rationale}>
           {initialValues?.prospective_org_name
-            ? `Which causes are closest to ${initialValues.prospective_org_name}? Pick at least ${MIN_CAUSES} — we'll match you with something similar while we reach out to them.`
+            ? `Which causes are closest to ${initialValues.prospective_org_name}? Pick at least ${MIN_CAUSES}${initialValues.prospective_org_ok_nearest === 0 || initialValues.prospective_org_ok_nearest === false ? '.' : " — we'll match you with something similar while we reach out to them."}`
             : `Pick at least ${MIN_CAUSES} — this is what we'll use to find shifts and people you'll click with. Change these anytime.`}
         </Text>
+        {orgName ? (
+          <Text style={[s.rationale, { marginTop: 8 }]} accessibilityLiveRegion="polite">
+            {selected.length < MIN_CAUSES
+              ? `We added ${orgName}'s causes. Add at least one more.`
+              : `Includes ${orgName}'s causes.`}
+          </Text>
+        ) : null}
 
         <View style={styles.chipGrid}>
           {CAUSE_OPTIONS.map((cause) => {
@@ -83,5 +104,5 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
 }
 
 const styles = StyleSheet.create({
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 16 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
 });

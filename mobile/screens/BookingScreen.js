@@ -13,10 +13,24 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState(null);
 
+  // True only while a search for a partner is running for this very spot.
+  const [pairingSearch, setPairingSearch] = useState(false);
+
   const load = useCallback(() => {
     api(sessionToken, `/bookings/${bookingId}`).then((b) => {
-      if (b.pairing && b.pairing.status !== 'cancelled') navigate('pairing', { pairingId: b.pairing.id }, { replace: true });
-      else setBooking(b);
+      if (b.pairing && b.pairing.status !== 'cancelled') {
+        navigate('pairing', { pairingId: b.pairing.id }, { replace: true });
+        return;
+      }
+      setBooking(b);
+      if (b.status !== 'confirmed' || b.started || b.shift_cancelled) {
+        setPairingSearch(false);
+        return;
+      }
+      api(sessionToken, '/requests/current').then((r) => {
+        const req = r?.request ?? r;
+        setPairingSearch(Boolean(req) && req.status === 'searching' && req.kind === 'solo_rsvp' && req.anchor_booking_id === bookingId);
+      }).catch(() => setPairingSearch(false));
     }).catch(setError);
   }, [sessionToken, bookingId, navigate]);
 
@@ -26,9 +40,38 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
     return () => clearInterval(timer);
   }, [load]);
 
+  // Where the next step is after an org cancel: back to the open search, or a new one.
+  const [hasOpenSearch, setHasOpenSearch] = useState(false);
+  const orgCancelled = Boolean(booking?.shift_cancelled);
+  useEffect(() => {
+    if (!orgCancelled) return;
+    api(sessionToken, '/requests/current').then((r) => {
+      const req = r?.request ?? r;
+      setHasOpenSearch(Boolean(req) && ['searching', 'proposed'].includes(req.status));
+    }).catch(() => setHasOpenSearch(false));
+  }, [orgCancelled, sessionToken]);
+
   if (!booking) return <Screen title="Your spot" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
-  const attended = booking.status === 'attended';
   const toHome = () => navigate('home', {}, { reset: true });
+  if (booking.shift_cancelled) {
+    return (
+      <Screen
+        title="Your spot"
+        onBack={onBack}
+        footer={(
+          <Footer style={{ gap: 12 }}>
+            <Button label={hasOpenSearch ? 'See your search' : 'Find another shift'} onPress={() => navigate(hasOpenSearch ? 'waiting' : 'startMatching')} />
+            <Button label="Back to home" ghost onPress={toHome} />
+          </Footer>
+        )}
+      >
+        <Headline>The org had to cancel this shift</Headline>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>Any Deeds you had on hold are back in your balance.</Text>
+        <ShiftCard shift={booking.shift} />
+      </Screen>
+    );
+  }
+  const attended = booking.status === 'attended';
   const canRate = attended && booking.ended;
   return (
     <Screen
@@ -44,7 +87,7 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
       <Tag label={booking.kind === 'solo' ? 'Solo spot' : 'Your shift'} tone="accent" style={{ marginBottom: 12 }} />
       <Headline>{factLines(booking.shift.when_label)}</Headline>
       {booking.status === 'confirmed' && !booking.started ? (
-        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>You're booked. We'll still try to pair you with someone before it starts — if we do, you'll get a proposal to confirm.</Text>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>You're booked.{pairingSearch ? " We'll still try to pair you with someone before it starts — if we do, you'll get a proposal to confirm." : ''}</Text>
       ) : null}
       <ShiftCard shift={booking.shift} />
       {booking.started && booking.status === 'confirmed' ? (

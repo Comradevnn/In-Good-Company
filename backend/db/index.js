@@ -121,6 +121,28 @@ ensureColumns('availability_requests', [['match_preference', "TEXT NOT NULL DEFA
 // Share of its search time a search had used when last adjusted (keeps its match bar from rising).
 ensureColumns('availability_requests', [['pressure_floor', 'REAL']]);
 
+// v1 additions (see docs/DECISIONS.md).
+ensureColumns('availability_requests', [
+  // Days of the week the person is free, as a JSON array of 0 (Sunday) to 6
+  // (Saturday) in each shift's own timezone. NULL or empty: any day.
+  ['weekdays', 'TEXT'],
+  // Premium: hobbies a partner must share (JSON array of strings), or NULL.
+  ['hobby_filter', 'TEXT'],
+]);
+ensureColumns('users', [
+  // Last weekdays chosen for a search (pre-fills the availability screen).
+  ['availability_weekdays', 'TEXT'],
+  // Set when this account's ID document already verified another account.
+  ['duplicate_document', 'INTEGER NOT NULL DEFAULT 0'],
+  // Org lead: whether the person is happy to be paired with the nearest org
+  // matching their interests until the org they named joins (1/0, NULL = not asked).
+  ['prospective_org_ok_nearest', 'INTEGER'],
+]);
+ensureColumns('shifts', [
+  ['cancelled_at', 'TEXT'],
+  ['cancel_reason', 'TEXT'],
+]);
+
 
 // Pairings created by the old demo matcher point at hardcoded demo shift ids
 // that have no row in shifts. Retire them so they never read as an active

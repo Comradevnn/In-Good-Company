@@ -26,6 +26,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [visibilityError, setVisibilityError] = useState(null);
 
   useEffect(() => {
     api(sessionToken, `/bookings/${bookingId}/rating-form`).then(setForm).catch(setError);
@@ -47,11 +48,46 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   }
 
   async function togglePublic() {
-    await api(sessionToken, `/bookings/${bookingId}/org-rating-visibility`, { method: 'POST', body: { public: !form.org_rating_public } });
-    setForm((f) => ({ ...f, org_rating_public: !f.org_rating_public }));
+    setVisibilityError(null);
+    const next = !form.org_rating_public;
+    setForm((f) => ({ ...f, org_rating_public: next }));
+    try {
+      await api(sessionToken, `/bookings/${bookingId}/org-rating-visibility`, { method: 'POST', body: { public: next } });
+    } catch (err) {
+      setForm((f) => ({ ...f, org_rating_public: !next }));
+      setVisibilityError(err);
+    }
   }
 
   if (!form) return <Screen title="Rate your shift" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+
+  // The org's rating of you: yours to see, and public on your history only if you choose.
+  // Shown on the form and again once you are done, so it stays reachable.
+  const orgRatingCard = form.org_rating_of_you ? (
+    <InfoCard
+      tone="warn"
+      title={`What ${form.shift.org_name} said about your shift`}
+      body={`Attendance: ${form.org_rating_of_you.attendance}\nContribution: ${form.org_rating_of_you.contribution}`}
+    >
+      <PillButton
+        label={form.org_rating_public ? 'Shown on your profile — hide it' : 'Show it on your profile'}
+        ghost
+        onPress={togglePublic}
+        style={{ marginTop: 12 }}
+      />
+      <ErrorText error={visibilityError} />
+    </InfoCard>
+  ) : null;
+
+  // A shift that can't be rated (e.g. marked absent) can still carry the org's rating to look at.
+  if (!result && !form.can_rate && !form.org_rated && form.org_rating_of_you) {
+    return (
+      <Screen key="feedback" title="Your shift" onBack={onBack} footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}>
+        <Headline>{`Feedback from ${form.shift.org_name}`}</Headline>
+        {orgRatingCard}
+      </Screen>
+    );
+  }
 
   if (result || (form.org_rated && (!form.partner || form.partner_rated))) {
     return (
@@ -66,6 +102,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
           {form.hours} hours at {form.shift.org_name}{form.partner ? `, with ${form.partner.display_name}` : ''}.
           {result?.became_buddies ? ` You and ${form.partner.display_name} both said yes — you're volunteer buddies now.` : ' See you again soon.'}
         </Text>
+        {orgRatingCard}
         <LinkButton label="Go to your dashboard" onPress={() => navigate('home', {}, { reset: true })} style={{ marginTop: 16 }} />
       </Screen>
     );
@@ -105,20 +142,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
         </>
       ) : null}
 
-      {form.org_rating_of_you ? (
-        <InfoCard
-          tone="warn"
-          title={`What ${form.shift.org_name} said about your shift`}
-          body={`Attendance: ${form.org_rating_of_you.attendance}\nContribution: ${form.org_rating_of_you.contribution}`}
-        >
-          <PillButton
-            label={form.org_rating_public ? 'Shown on your profile — hide it' : 'Show it on your profile'}
-            ghost
-            onPress={togglePublic}
-            style={{ marginTop: 12 }}
-          />
-        </InfoCard>
-      ) : null}
+      {orgRatingCard}
     </Screen>
   );
 }

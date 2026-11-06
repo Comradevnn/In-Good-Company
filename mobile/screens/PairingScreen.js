@@ -10,7 +10,7 @@ import { api, timeUntil } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
 import PartnerCard from '../components/PartnerCard';
 import {
-  Bullet, Button, Card, DiscPair, DiscPairApart, ErrorText, factLines, Headline, Icon, InfoCard, KeyboardScroll, LinkButton, ListRow, Loading,
+  Bullet, Button, Card, DiscPair, DiscPairApart, ErrorText, factLines, Footer, Headline, Icon, InfoCard, KeyboardScroll, LinkButton, ListRow, Loading,
   Screen, ShiftCard, Tag, Toggle, TopBar,
 } from '../components/AppParts';
 import DevClockBar from '../components/DevClockBar';
@@ -25,7 +25,18 @@ const POLL_MS = 5000;
 const ERROR_ACTIONS = {
   insufficient_deeds: ['Get Deeds', 'deeds'],
   monthly_cap_reached: ['See Premium', 'premium'],
+  overlap: ['Back to home', 'home'],
 };
+
+// Confirm errors that need a clearer next step than the server's sentence.
+const CLOSED_PROPOSAL = ['expired', 'not_proposed'];
+function friendlyError(err) {
+  if (err?.code === 'safety_notice_required') {
+    return { code: err.code, message: "Please read the safety notice below and switch on \"I've read this\", then confirm." };
+  }
+  if (CLOSED_PROPOSAL.includes(err?.code)) return { code: err.code, message: 'This proposal has closed. Check Home to see what is next.' };
+  return err;
+}
 
 // The shift label is "Day · start–end"; the hero lens shows it as up to three lines.
 function lensLines(label) {
@@ -67,11 +78,23 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
       await fn();
       await load();
     } catch (err) {
-      setError(err);
+      setError(friendlyError(err));
+      if (CLOSED_PROPOSAL.includes(err?.code)) await load();
     } finally {
       setBusy(false);
     }
   }
+
+  // Where the next step is after an org cancel: back to the open search, or a new one.
+  const [hasOpenSearch, setHasOpenSearch] = useState(false);
+  const orgCancelled = Boolean(pairing?.cancelled_by_org);
+  useEffect(() => {
+    if (!orgCancelled) return;
+    api(sessionToken, '/requests/current').then((r) => {
+      const req = r?.request ?? r;
+      setHasOpenSearch(Boolean(req) && ['searching', 'proposed'].includes(req.status));
+    }).catch(() => setHasOpenSearch(false));
+  }, [orgCancelled, sessionToken]);
 
   if (!pairing) return <Screen title="Your shift" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
 
@@ -86,6 +109,29 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
   async function sharePlans() {
     const plan = await api(sessionToken, `/pairings/${pairingId}/share-plan`);
     await Share.share({ message: plan.message });
+  }
+
+  // ── The org called the shift off: nobody is at fault, Deeds are back ──
+  if (p.cancelled_by_org) {
+    const apartR = Math.min(85, Math.floor((width - 2 * touch.pageMargin) / 4.17));
+    return (
+      <Screen
+        key="org-cancelled"
+        title="Your shift"
+        onBack={onBack}
+        footer={(
+          <Footer style={{ gap: 12 }}>
+            <Button label={hasOpenSearch ? 'See your search' : 'Find another shift'} onPress={() => navigate(hasOpenSearch ? 'waiting' : 'startMatching')} />
+            <Button label="Back to home" ghost onPress={() => navigate('home', {}, { reset: true })} />
+          </Footer>
+        )}
+      >
+        <DiscPairApart r={apartR} colourA={colors.you} colourB={colors[partnerKey]} youIcon initial={partnerName} style={{ marginTop: 8 }} />
+        <Headline style={{ marginTop: 24 }}>The org had to cancel this shift</Headline>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 10 }]}>Any Deeds you had on hold are back in your balance.</Text>
+        <ShiftCard shift={p.shift} />
+      </Screen>
+    );
   }
 
   // ── Proposal: confirm or decline ──
@@ -184,7 +230,7 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
               </Card>
             ) : null}
 
-            {errorAction ? <Button label={errorAction[0]} onPress={() => navigate(errorAction[1])} ghost style={{ marginTop: 12 }} /> : null}
+            {errorAction ? <Button label={errorAction[0]} onPress={() => (errorAction[1] === 'home' ? navigate('home', {}, { reset: true }) : navigate(errorAction[1]))} ghost style={{ marginTop: 12 }} /> : null}
 
             <LinkButton
               label="Not this one — keep looking"
@@ -234,8 +280,8 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
   }
 
   // ── Ended states ──
-  if (['declined', 'expired'].includes(p.status) || (p.status === 'cancelled' && p.backed_out_by_me)) {
-    const titles = { declined: 'This proposal was declined', expired: 'This proposal expired', cancelled: 'You cancelled this shift' };
+  if (['declined', 'expired', 'withdrawn'].includes(p.status) || (p.status === 'cancelled' && p.backed_out_by_me)) {
+    const titles = { declined: 'This proposal was declined', expired: 'This proposal expired', withdrawn: 'This proposal is no longer open', cancelled: 'You cancelled this shift' };
     const apartR = Math.min(85, Math.floor((width - 2 * touch.pageMargin) / 4.17));
     return (
       <Screen
@@ -245,12 +291,29 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}
       >
         <DiscPairApart r={apartR} colourA={colors.you} colourB={colors[partnerKey]} youIcon initial={partnerName} style={{ marginTop: 8 }} />
-        <Headline style={{ marginTop: 24, fontSize: 40, lineHeight: 44 }}>{titles[p.status]}</Headline>
-        <Text style={[type.body, { color: colors.ink, marginTop: 10 }]}>
+        <Headline style={{ marginTop: 24 }}>{titles[p.status]}</Headline>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 10 }]}>
           {p.status === 'cancelled'
             ? `${partnerName} has been told and offered a new partner or their Deeds back.`
             : 'Any Deeds you had on hold for it are back in your balance.'}
         </Text>
+      </Screen>
+    );
+  }
+
+  // ── Cancelled with nothing for me to decide (not expected): a neutral ended state ──
+  if (p.status === 'cancelled') {
+    return (
+      <Screen
+        key="ended-neutral"
+        title="Your shift"
+        onBack={onBack}
+        footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}
+      >
+        <Tag label="Shift ended" tone="accent" style={{ marginBottom: 12 }} />
+        <Headline>{factLines(p.shift.when_label)}</Headline>
+        <ShiftCard shift={p.shift} />
+        <Text style={[type.body, { color: colors.ink2, marginTop: 16 }]}>This shift is no longer on. Check Home to see what is next.</Text>
       </Screen>
     );
   }

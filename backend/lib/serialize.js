@@ -16,6 +16,7 @@ const INTERNAL_USER_COLUMNS = [
   'premium_grant_next_at',
   'active_buddy_id',
   'buddy_requested_this_slot',
+  'duplicate_document',
 ];
 
 const SECRET_PATTERN = /(password|token|secret|hash|pepper)/i;

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { radii, type } from '../theme/tokens';
 import { api } from '../api/client';
-import { EmptyState, ErrorText, Loading, Screen } from '../components/AppParts';
+import { EmptyState, ErrorState, Loading, Screen } from '../components/AppParts';
 
 // In-app inbox (no push infrastructure in the prototype). Tapping an item
 // opens the pairing or booking it's about.
@@ -11,7 +11,8 @@ export default function NotificationsScreen({ sessionToken, navigate, onBack }) 
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
     api(sessionToken, '/notifications')
       .then((data) => {
         setItems(data.notifications);
@@ -19,14 +20,17 @@ export default function NotificationsScreen({ sessionToken, navigate, onBack }) 
       })
       .catch(setError);
   }, [sessionToken]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   function open(n) {
     if (n.ref_type === 'pairing') navigate(n.kind === 'bail_decision' ? 'bail' : 'pairing', { pairingId: n.ref_id });
-    else if (n.ref_type === 'booking') navigate(n.kind === 'rate_shift' ? 'rating' : 'booking', { bookingId: n.ref_id });
+    else if (n.ref_type === 'booking') navigate((n.kind === 'rate_shift' || n.kind === 'org_rated_you') ? 'rating' : 'booking', { bookingId: n.ref_id });
     else if (n.ref_type === 'matching') navigate('startMatching');
   }
 
-  if (!items) return <Screen title="Notifications" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!items) return <Screen title="Notifications" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={load} retryLabel="Try again" /> : <Loading />}</Screen>;
   return (
     <Screen title="Notifications" onBack={onBack}>
       {items.length === 0 ? (

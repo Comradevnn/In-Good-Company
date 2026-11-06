@@ -77,9 +77,41 @@ function freeLateCancelAvailable(user, atMs = clock.nowMs()) {
   return used < rules.PREMIUM_FREE_LATE_CANCELS_PER_MONTH;
 }
 
+// An account whose ID document matched an existing one can never verify, so
+// it is credited nothing it could not spend. The flag lives on
+// users.duplicate_document: set by a duplicate document check, cleared when
+// the same account attests successfully with its own document.
+function isDuplicateFlagged(userId) {
+  return db.prepare('SELECT duplicate_document FROM users WHERE id = ?').get(userId)?.duplicate_document === 1;
+}
+
+// First time an account is flagged, withdraw the Premium-grant free Deeds it
+// was credited and has not spent: one debit entry in the free bucket,
+// never more than the free balance, never touching purchased Deeds.
+const flagDuplicateDocument = db.transaction((userId) => {
+  if (isDuplicateFlagged(userId)) return 0;
+  db.prepare('UPDATE users SET duplicate_document = 1 WHERE id = ?').run(userId);
+  const granted = db.prepare(`
+    SELECT COALESCE(SUM(available_delta), 0) AS n FROM deeds_ledger WHERE user_id = ? AND entry_type = 'premium_grant'
+  `).get(userId).n;
+  const withdrawn = db.prepare(`
+    SELECT COALESCE(SUM(-available_delta), 0) AS n FROM deeds_ledger WHERE user_id = ? AND entry_type = 'duplicate_document'
+  `).get(userId).n;
+  const free = db.prepare('SELECT deeds_free FROM users WHERE id = ?').get(userId).deeds_free;
+  const amount = Math.min(free, Math.max(0, granted - withdrawn));
+  if (amount > 0) deeds.credit(userId, 'free', -amount, 'duplicate_document', { reason: 'duplicate_document' });
+  return amount;
+});
+
+function clearDuplicateDocument(userId) {
+  db.prepare('UPDATE users SET duplicate_document = 0 WHERE id = ?').run(userId);
+}
+
 // Weekly grant, applied lazily: every grant that came due while the user was
 // Premium (trial included) is credited, once, in order. The first grant is
-// due when Premium starts.
+// due when Premium starts. While the account is flagged as a duplicate
+// document, due grants are skipped (the cursor still advances), so clearing
+// the flag later never back-credits them.
 const applyGrants = db.transaction((user, atMs = clock.nowMs()) => {
   let nextMs = user.premium_grant_next_at ? clock.parseTime(user.premium_grant_next_at) : null;
   if (nextMs == null) {
@@ -89,14 +121,17 @@ const applyGrants = db.transaction((user, atMs = clock.nowMs()) => {
     const trialStart = trialEndsAtMs(user) - rules.TRIAL_MS;
     nextMs = atMs < trialEndsAtMs(user) ? trialStart : atMs;
   }
+  const skipCredit = isDuplicateFlagged(user.id);
   let granted = 0;
   while (nextMs <= atMs) {
     if (!premiumActiveAt(user, nextMs)) {
       nextMs = null;
       break;
     }
-    deeds.credit(user.id, 'free', rules.PREMIUM_WEEKLY_GRANT, 'premium_grant', { due_at: new Date(nextMs).toISOString() });
-    granted++;
+    if (!skipCredit) {
+      deeds.credit(user.id, 'free', rules.PREMIUM_WEEKLY_GRANT, 'premium_grant', { due_at: new Date(nextMs).toISOString() });
+      granted++;
+    }
     nextMs += rules.PREMIUM_GRANT_INTERVAL_MS;
   }
   db.prepare('UPDATE users SET premium_grant_next_at = ? WHERE id = ?')
@@ -123,4 +158,4 @@ function subscribe(user, plan) {
   return { period_start: start.toISOString(), period_end: end.toISOString(), price_cents: config.price_cents };
 }
 
-module.exports = { state, capStatus, capUsed, capPending, freeLateCancelAvailable, applyGrants, subscribe, premiumActiveAt, trialEndsAtMs };
+module.exports = { state, capStatus, capUsed, capPending, freeLateCancelAvailable, applyGrants, flagDuplicateDocument, clearDuplicateDocument, subscribe, premiumActiveAt, trialEndsAtMs };

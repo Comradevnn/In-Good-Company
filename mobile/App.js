@@ -567,6 +567,7 @@ function AppContent() {
       return (
         <SettingsScreen
           profile={profile}
+          sessionToken={sessionToken}
           onBack={() => setShowSettings(false)}
           onEditSection={setEditingSection}
           onVerify={() => {

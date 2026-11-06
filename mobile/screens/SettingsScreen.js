@@ -1,6 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
+import { api } from '../api/client';
+import { weekdaysSummary } from './availabilityPrefill';
+import { readableDate } from '../components/DateField';
 import { Headline, LinkButton, ListRow, Screen } from '../components/AppParts';
 
 // Account settings: lets a signed-in user reopen and resubmit any
@@ -15,7 +19,21 @@ function parseJsonArray(json) {
   }
 }
 
-function summarize(profile) {
+// The chosen org's name for the summary row; stays empty if the lookup fails.
+function useOrgName(orgId, sessionToken) {
+  const [name, setName] = useState(null);
+  useEffect(() => {
+    if (!orgId) { setName(null); return undefined; }
+    let live = true;
+    api(sessionToken, `/orgs/${orgId}`)
+      .then((data) => { if (live) setName(data?.org?.name ?? data?.name ?? null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [orgId, sessionToken]);
+  return name;
+}
+
+function summarize(profile, orgName) {
   const interestTags = profile.interest_tags ? parseJsonArray(profile.interest_tags) : [];
   const causeTags = profile.cause_tags ? parseJsonArray(profile.cause_tags) : [];
 
@@ -28,7 +46,8 @@ function summarize(profile) {
   else if (profile.location_lat != null && profile.location_lng != null) location = 'Location saved';
 
   let causeOrOrg = 'Not set';
-  if (profile.prospective_org_name) causeOrOrg = profile.prospective_org_name;
+  if (orgName) causeOrOrg = orgName;
+  else if (profile.prospective_org_name) causeOrOrg = `${profile.prospective_org_name} (not on the app yet)`;
   else if (causeTags.length > 0) causeOrOrg = causeTags.join(', ');
 
   const partnerPrefs = profile.partner_prefs_confirmed
@@ -39,7 +58,13 @@ function summarize(profile) {
 
   let availability = 'Not set';
   if (profile.availability_window_start && profile.availability_window_end) {
-    availability = `${profile.availability_window_start} to ${profile.availability_window_end}, ${profile.travel_radius_miles} mi, ${profile.volunteering_frequency ?? ''}`.trim();
+    const days = weekdaysSummary(profile.availability_weekdays);
+    availability = [
+      `${readableDate(profile.availability_window_start)} to ${readableDate(profile.availability_window_end)}`,
+      days === 'Any day, soonest first' ? 'any day' : days,
+      `${profile.travel_radius_miles} mi`,
+      profile.volunteering_frequency,
+    ].filter(Boolean).join(', ');
   }
 
   return {
@@ -53,8 +78,9 @@ function summarize(profile) {
   };
 }
 
-export default function SettingsScreen({ profile, onBack, onEditSection, onVerify, onLogOut }) {
-  const summary = summarize(profile ?? {});
+export default function SettingsScreen({ sessionToken, profile, onBack, onEditSection, onVerify, onLogOut }) {
+  const orgName = useOrgName(profile?.preferred_org_id, sessionToken);
+  const summary = summarize(profile ?? {}, orgName);
 
   return (
     <Screen title="Account settings" onBack={onBack}>

@@ -75,8 +75,12 @@ function visibleShifts(afterIso) {
     .all(afterIso).map(hydrate);
 }
 
+// The organization's own view: the same shape plus when and why it called a
+// shift off. The reason is for the org (and staff) only; volunteer-facing
+// shifts come from hydrate() without it.
 function orgShifts(orgId) {
-  return db.prepare(`${SHIFT_SELECT} WHERE s.org_id = ? ORDER BY s.starts_at`).all(orgId).map(hydrate);
+  return db.prepare(`${SHIFT_SELECT} WHERE s.org_id = ? ORDER BY s.starts_at`).all(orgId)
+    .map((row) => ({ ...hydrate(row), cancelled_at: row.cancelled_at ?? null, cancel_reason: row.cancel_reason ?? null }));
 }
 
 // Public org profile fields only.
