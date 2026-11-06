@@ -4,6 +4,8 @@ import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
 import { Card, EmptyState, ErrorText, Headline, LinkButton, Loading, PillButton, Screen, SectionTitle, Tag } from '../components/AppParts';
+import { weekdaysSummary } from './availabilityPrefill';
+import { readableDate } from '../components/DateField';
 import DevClockBar from '../components/DevClockBar';
 
 // The waiting period (plotline "waiting"): a visible, honest status that
@@ -116,7 +118,8 @@ export default function WaitingScreen({ sessionToken, navigate, onBack, onProfil
         {!noMatch ? (
           <View style={styles.facts}>
             <Text style={styles.fact}>Searching for {waited}</Text>
-            <Text style={styles.fact}>{request.window_start} to {request.window_end}</Text>
+            <Text style={styles.fact}>{readableDate(request.window_start)} to {readableDate(request.window_end)}</Text>
+            <Text style={styles.fact}>{weekdaysSummary(request.weekdays)}</Text>
             <Text style={styles.fact}>{request.travel_radius_miles} mi</Text>
             {request.buddy_name ? <Text style={styles.fact}>with {request.buddy_name}</Text> : null}
           </View>

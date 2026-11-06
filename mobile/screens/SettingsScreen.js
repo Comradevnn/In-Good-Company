@@ -3,6 +3,8 @@ import { Text } from 'react-native';
 import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
+import { weekdaysSummary } from './availabilityPrefill';
+import { readableDate } from '../components/DateField';
 import { Headline, LinkButton, ListRow, Screen } from '../components/AppParts';
 
 // Account settings: lets a signed-in user reopen and resubmit any
@@ -56,7 +58,13 @@ function summarize(profile, orgName) {
 
   let availability = 'Not set';
   if (profile.availability_window_start && profile.availability_window_end) {
-    availability = `${profile.availability_window_start} to ${profile.availability_window_end}, ${profile.travel_radius_miles} mi, ${profile.volunteering_frequency ?? ''}`.trim();
+    const days = weekdaysSummary(profile.availability_weekdays);
+    availability = [
+      `${readableDate(profile.availability_window_start)} to ${readableDate(profile.availability_window_end)}`,
+      days === 'Any day, soonest first' ? 'any day' : days,
+      `${profile.travel_radius_miles} mi`,
+      profile.volunteering_frequency,
+    ].filter(Boolean).join(', ');
   }
 
   return {

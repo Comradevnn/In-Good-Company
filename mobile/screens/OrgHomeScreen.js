@@ -118,7 +118,7 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
           accessibilityLabel={sh.status === 'cancelled' ? `${sh.title}, ${sh.when_label}, cancelled` : `${sh.title}, ${sh.when_label}, ${sh.capacity_booked} of ${sh.capacity_total} booked. Roster and check-in`}
         >
           {sh.status === 'cancelled' ? <Tag label="Cancelled" tone="ink" /> : <Tag label={`${sh.capacity_booked}/${sh.capacity_total} booked`} />}
-          <Text style={styles.shiftTitle}>{sh.title}</Text>
+          <Text style={[styles.shiftTitle, sh.status === 'cancelled' && { color: colors.ink2 }]}>{sh.title}</Text>
           <Text style={styles.shiftFact}>{sh.when_label}</Text>
           <Text style={styles.shiftFact}>{sh.cause_tags.join(', ')}</Text>
           <View style={styles.shiftLink}>

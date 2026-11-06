@@ -4,10 +4,10 @@ import { colors } from '../theme/colors';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { radii, type } from '../theme/tokens';
 import { api } from '../api/client';
-import PrimaryButton from '../components/PrimaryButton';
 import { weekdaysSummary } from './availabilityPrefill';
+import { readableDate } from '../components/DateField';
 import {
-  Card, Chip, ErrorState, Field, Headline, Icon, InfoCard, Input, LinkButton, Loading, Screen, SectionTitle, Toggle,
+  Button, Card, Chip, ErrorState, Field, Footer, Headline, Icon, InfoCard, Input, LinkButton, Loading, Screen, SectionTitle, Toggle,
 } from '../components/AppParts';
 
 // "Find your next shift": confirms the dates/distance from the user's saved
@@ -106,7 +106,12 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
     <Screen
       title="Find a shift"
       onBack={onBack}
-      footer={<PrimaryButton label="Start looking" onPress={handleStart} disabled={submitting || datesStale} loading={submitting} error={error} />}
+      footer={(
+        <Footer error={error}>
+          {action ? <LinkButton label={action[0]} align="left" onPress={() => navigate(action[1], {}, action[2])} style={{ marginBottom: 8 }} /> : null}
+          <Button label="Start looking" onPress={handleStart} disabled={submitting || datesStale} loading={submitting} />
+        </Footer>
+      )}
     >
       <Headline>When can you go?</Headline>
       <Text style={[s.rationale, { marginTop: 8 }]}>We'll look for a partner and a shift that fits both of you in this window.</Text>
@@ -121,7 +126,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
           <Card style={pressed && { backgroundColor: colors.tintPressed }}>
             <View style={styles.line}>
               <Text style={styles.lineLabel}>Dates</Text>
-              <Text style={styles.lineValue}>{start && end ? `${start} to ${end}` : 'Not set'}</Text>
+              <Text style={styles.lineValue}>{start && end ? `${readableDate(start)} to ${readableDate(end)}` : 'Not set'}</Text>
             </View>
             <View style={styles.line}>
               <Text style={styles.lineLabel}>Days</Text>
@@ -155,7 +160,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
                 onPress={() => setBuddyId(b.user_id)}
                 accessibilityRole="radio"
                 accessibilityLabel={`${title}. ${subtitle}`}
-                accessibilityState={{ selected }}
+                accessibilityState={{ checked: selected, selected }}
               >
                 <View style={styles.optionText}>
                   <Text style={styles.optionTitle}>{title}</Text>
@@ -226,18 +231,17 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
           Nothing is held until you've seen the exact shift and said yes. Show up and they come straight back.
         </Text>
       </Card>
-      {home.deeds.available < home.deeds.shift_price ? (
+      {home.deeds.available < home.deeds.shift_price && error?.code !== 'insufficient_deeds' ? (
         <LinkButton label="Get Deeds" align="left" onPress={() => navigate('deeds')} style={{ marginTop: 8 }} />
       ) : null}
 
-      {action ? <LinkButton label={action[0]} align="left" onPress={() => navigate(action[1], {}, action[2])} style={{ marginTop: 8 }} /> : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingVertical: 6 },
   lineLabel: { ...type.bodyS, color: colors.ink2, flexShrink: 1 },
   lineValue: { ...type.label, color: colors.ink, flexShrink: 1, textAlign: 'right' },

@@ -127,8 +127,9 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         )}
       >
         <DiscPairApart r={apartR} colourA={colors.you} colourB={colors[partnerKey]} youIcon initial={partnerName} style={{ marginTop: 8 }} />
-        <Headline style={{ marginTop: 24, fontSize: 40, lineHeight: 44 }}>The org had to cancel this shift</Headline>
-        <Text style={[type.body, { color: colors.ink, marginTop: 10 }]}>Any Deeds you had on hold are back in your balance.</Text>
+        <Headline style={{ marginTop: 24 }}>The org had to cancel this shift</Headline>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 10 }]}>Any Deeds you had on hold are back in your balance.</Text>
+        <ShiftCard shift={p.shift} />
       </Screen>
     );
   }
@@ -290,8 +291,8 @@ export default function PairingScreen({ sessionToken, pairingId, navigate, onBac
         footer={<PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />}
       >
         <DiscPairApart r={apartR} colourA={colors.you} colourB={colors[partnerKey]} youIcon initial={partnerName} style={{ marginTop: 8 }} />
-        <Headline style={{ marginTop: 24, fontSize: 40, lineHeight: 44 }}>{titles[p.status]}</Headline>
-        <Text style={[type.body, { color: colors.ink, marginTop: 10 }]}>
+        <Headline style={{ marginTop: 24 }}>{titles[p.status]}</Headline>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 10 }]}>
           {p.status === 'cancelled'
             ? `${partnerName} has been told and offered a new partner or their Deeds back.`
             : 'Any Deeds you had on hold for it are back in your balance.'}

@@ -264,6 +264,21 @@ async function main() {
     check('adding a cause counts only shifts on a chosen weekday', alts.find((a) => a.type === 'add_cause')?.cause === 'Elder care', alts);
     await api('/requests/current/cancel', { method: 'POST', token: geo.token });
 
+    // Solo RSVP suggestions inside the window also skip shifts on days the person did not choose.
+    isolate();
+    await h.makeShift(org, { date: wrongDay, title: 'Solo wrong day' });
+    await h.makeShift(org, { date: altDay, title: 'Solo chosen day' });
+    const soloVol = await volunteer('AltSolo', { causes: ['Animal welfare'] });
+    await search(soloVol, { weekdays: [wdAlt] }, { window_start: altDay, window_end: wrongDay, preference: 'anyone' });
+    const soloAlt = (await current(soloVol)).alternatives.find((a) => a.type === 'solo_rsvp');
+    check('solo RSVP lists only shifts on a chosen weekday', soloAlt?.shifts.length === 1 && soloAlt.shifts[0].title === 'Solo chosen day', soloAlt);
+    await api('/requests/current/cancel', { method: 'POST', token: soloVol.token });
+    const soloAny = await volunteer('AltSoloAny', { causes: ['Animal welfare'] });
+    await search(soloAny, {}, { window_start: altDay, window_end: wrongDay, preference: 'anyone' });
+    const soloAnyAlt = (await current(soloAny)).alternatives.find((a) => a.type === 'solo_rsvp');
+    check('with no weekdays chosen, solo RSVP lists shifts on every day in the window', soloAnyAlt?.shifts.length === 2, soloAnyAlt);
+    await api('/requests/current/cancel', { method: 'POST', token: soloAny.token });
+
     // ── The monthly cap still applies with weekdays set ──
     isolate();
     const capped = await volunteer('Capped');

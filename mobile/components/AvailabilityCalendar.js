@@ -134,7 +134,7 @@ export default function AvailabilityCalendar({ start, end, today, weekdays, dots
 
       {loadFailed ? (
         <Text style={styles.note}>We couldn't check how busy each day is just now. You can still pick your dates.</Text>
-      ) : (
+      ) : Object.values(dots ?? {}).some(Boolean) ? (
         <View style={styles.legend}>
           {Object.entries(DOT_KINDS).map(([kind, k]) => (
             <View key={kind} style={styles.legendItem}>
@@ -143,7 +143,7 @@ export default function AvailabilityCalendar({ start, end, today, weekdays, dots
             </View>
           ))}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

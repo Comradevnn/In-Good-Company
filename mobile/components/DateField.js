@@ -14,8 +14,21 @@ import { formatDate, parseDate } from '../screens/dates';
 // calendar for dates years away, like a date of birth) with a Done link.
 // `value` is a YYYY-MM-DD string, or '' when nothing is picked yet; the wheel
 // then starts at `initialDate`. An optional `error` message gives the field its error chrome.
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// "2026-11-14" -> "Sat, Nov 14" (the person's own calendar day, no timezone shift). Anything that
+// is not a real YYYY-MM-DD comes back unchanged.
+export function readableDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = parseDate(value);
+  if (Number.isNaN(d.getTime()) || formatDate(d) !== value) return value;
+  return `${SHORT_DAYS[d.getDay()]}, ${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
 export default function DateField({ label, value, onChange, placeholder = 'Choose a date', initialDate, minimumDate, maximumDate, error }) {
   const [open, setOpen] = useState(false);
+  const shown = value ? readableDate(value) : '';
   const current = value ? parseDate(value) : (initialDate ?? new Date());
 
   return (
@@ -30,7 +43,7 @@ export default function DateField({ label, value, onChange, placeholder = 'Choos
         ]}
         onPress={() => setOpen((wasOpen) => !wasOpen)}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${value || placeholder}`}
+        accessibilityLabel={`${label}: ${shown || placeholder}`}
       >
         <Text
           numberOfLines={1}
@@ -38,7 +51,7 @@ export default function DateField({ label, value, onChange, placeholder = 'Choos
           minimumFontScale={0.85}
           style={[value ? type.fieldValue : { fontFamily: font.textMedium, fontSize: 17 }, { color: value ? colors.ink : colors.ink3, flexShrink: 1 }]}
         >
-          {value || placeholder}
+          {shown || placeholder}
         </Text>
         <Icon name={error ? 'alert' : 'calendar'} size={24} color={error ? colors.danger : value ? colors.ink : colors.ink3} />
       </Pressable>

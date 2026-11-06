@@ -73,7 +73,6 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
   const STATUS = { confirmed: 'Booked', attended: 'Checked in', no_show: 'No-show', unverified: 'Not recorded' };
   return (
     <Screen title="Roster" onBack={onBack}>
-      {cancelled ? <Tag label="Cancelled" tone="ink" style={styles.cancelledTag} /> : null}
       <ShiftCard shift={{ ...shift, org_name: shift.org?.name || shift.title }} eyebrow={cancelled ? 'Cancelled shift' : `${shift.capacity_booked} of ${shift.capacity_total} spots booked`} />
       {notice ? <Text style={[s.rationale, { marginTop: 12 }]}>{notice}</Text> : null}
       {cancelled ? null : (
@@ -126,7 +125,7 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
           </View>
         );
       })}
-      <ErrorText error={error} />
+      {confirming ? null : <ErrorText error={error} />}
       {canCancel && confirming ? (
         <Card tone="field" style={{ marginTop: 24 }}>
           <Text style={styles.confirmTitle}>Cancel this shift?</Text>
@@ -140,6 +139,7 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
             placeholder="Volunteers don't see this."
             wrapperStyle={{ marginTop: 16 }}
           />
+          {error ? <ErrorText error={error} /> : null}
           <Button label="Cancel this shift" onPress={cancelShift} disabled={cancelling} loading={cancelling} style={{ marginTop: 16 }} />
           <Button label="Keep the shift" ghost onPress={() => { setConfirming(false); setReason(''); }} disabled={cancelling} style={{ marginTop: 12 }} />
         </Card>
@@ -151,7 +151,6 @@ export default function OrgRosterScreen({ sessionToken, shiftId, onBack }) {
 }
 
 const styles = StyleSheet.create({
-  cancelledTag: { alignSelf: 'flex-start', marginBottom: 12 },
   confirmTitle: { ...type.subtitleL, color: colors.ink },
   row: { borderRadius: radii.card, padding: 20, marginTop: 8, backgroundColor: colors.tint },
   top: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

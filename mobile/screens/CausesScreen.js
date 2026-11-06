@@ -83,7 +83,7 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
             : `Pick at least ${MIN_CAUSES} — this is what we'll use to find shifts and people you'll click with. Change these anytime.`}
         </Text>
         {orgName ? (
-          <Text style={[s.rationale, { marginTop: 8 }]}>
+          <Text style={[s.rationale, { marginTop: 8 }]} accessibilityLiveRegion="polite">
             {selected.length < MIN_CAUSES
               ? `We added ${orgName}'s causes. Add at least one more.`
               : `Includes ${orgName}'s causes.`}
@@ -104,5 +104,5 @@ export default function CausesScreen({ sessionToken, step, total, onNext, initia
 }
 
 const styles = StyleSheet.create({
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 16 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
 });

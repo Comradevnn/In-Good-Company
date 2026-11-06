@@ -4,7 +4,7 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { colors } from '../theme/colors';
 import { radii, type } from '../theme/tokens';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { Chip, ErrorLine, Headline, Input, KeyboardScroll, LinkButton, ListRow, Loading, Tag } from '../components/AppParts';
+import { Chip, ErrorLine, Headline, Icon, Input, KeyboardScroll, LinkButton, ListRow, Loading, Tag } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
 import { api } from '../api/client';
@@ -104,6 +104,18 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
   function pickOrg(org) {
     setSelectedId((prev) => (prev === org.id ? null : org.id));
     setSelectedName(org.name);
+    // A listed org replaces the "not listed" lead: close the form and drop what was typed.
+    setShowLead(false);
+    setLeadName('');
+    setOkNearest(null);
+    setError(null);
+  }
+
+  // Telling us about an unlisted org replaces any listed pick, so the pick must not look selected.
+  function openLead() {
+    setSelectedId(null);
+    setSelectedName(null);
+    setShowLead(true);
     setError(null);
   }
 
@@ -136,7 +148,10 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
             pressed && { backgroundColor: colors.tintPressed },
           ]}
         >
-          <Text style={[type.subtitle, { color: colors.ink }]}>{org.name}</Text>
+          <View style={styles.orgHead}>
+            <Text style={[type.subtitle, { color: colors.ink, flex: 1 }]}>{org.name}</Text>
+            {picked ? <Icon name="check" size={22} color={colors.ink} /> : null}
+          </View>
           {org.location_label ? <Text style={[type.bodyS, { color: colors.ink2 }]}>{org.location_label}</Text> : null}
           {causes.length > 0 ? (
             <View style={styles.tags}>
@@ -195,14 +210,14 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
             <View style={styles.results} accessibilityRole="radiogroup">{renderResults()}</View>
 
             {!showLead ? (
-              <LinkButton label="Not listed? Tell us who" align="right" onPress={() => setShowLead(true)} style={styles.causeLink} />
+              <LinkButton label="Not listed? Tell us who" align="right" onPress={openLead} style={styles.causeLink} />
             ) : (
               <View style={styles.lead}>
                 <Input
                   label="Organization name"
                   placeholder="Who would you like to volunteer with?"
                   value={leadName}
-                  onChangeText={(v) => { setLeadName(v); if (v.trim()) setSelectedId(null); }}
+                  onChangeText={(v) => { setLeadName(v); if (v.trim()) { setSelectedId(null); setSelectedName(null); } }}
                 />
                 <Text style={[s.label, { marginTop: 16 }]}>
                   Until they join, is it okay to pair you with the nearest organization that matches your interests?
@@ -239,8 +254,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  orgRowSelected: { borderColor: colors.ink, backgroundColor: colors.surface },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  orgRowSelected: { borderColor: colors.ink, backgroundColor: colors.selected },
+  orgHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   lead: { marginTop: 16 },
   chipRow: { flexDirection: 'row', gap: 8 },
 });

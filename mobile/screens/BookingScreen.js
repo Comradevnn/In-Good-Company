@@ -51,7 +51,6 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
           </Footer>
         )}
       >
-        <Tag label="Cancelled by the org" tone="accent" style={{ marginBottom: 12 }} />
         <Headline>The org had to cancel this shift</Headline>
         <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>Any Deeds you had on hold are back in your balance.</Text>
         <ShiftCard shift={booking.shift} />

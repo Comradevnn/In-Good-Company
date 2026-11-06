@@ -938,7 +938,7 @@ function alternatives(user, request) {
   const withinRadius = (s) => distance(s) == null || radius == null || distance(s) <= radius;
 
   const result = [];
-  const solo = shifts.filter((s) => aligned(s) && inWindow(s) && withinRadius(s)).slice(0, 3);
+  const solo = shifts.filter((s) => aligned(s) && inWindow(s) && onChosenDay(s) && withinRadius(s)).slice(0, 3);
   if (solo.length) {
     result.push({
       type: 'solo_rsvp',

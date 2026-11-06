@@ -206,5 +206,5 @@ const styles = StyleSheet.create({
   slider: { height: 48 },
   passedNote: { marginTop: 12, color: colors.ink },
   dateCol: { flex: 1 },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
 });

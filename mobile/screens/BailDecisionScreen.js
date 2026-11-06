@@ -93,7 +93,7 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
         </Footer>
       ) : null}
     >
-      <Tag label="Your match canceled" tone="accent" style={{ marginBottom: 12 }} />
+      <Tag label="Your match cancelled" tone="accent" style={{ marginBottom: 12 }} />
       <Headline style={{ marginBottom: 8 }}>{name} can't make it</Headline>
       <Card tone="person" style={{ marginTop: 16 }}>
         <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>

@@ -327,10 +327,13 @@ export function ListRow({ label, sublabel, icon, onPress, trailing, style, acces
 }
 
 // Title L left, link right (48 tall target). 24 above, 4 below.
+// Without a link the title takes the whole row (flex 1) so Android never measures it against a
+// shrink-to-fit width, which can come out a hair too narrow for the custom font and wrap the last word
+// onto a line the box has no room for. With a link it shrinks (minWidth 0) so the link keeps its place.
 export function SectionHeader({ title, link, onLink, style }) {
   return (
     <View style={[styles.sectionHeader, style]}>
-      <Text style={[type.titleL, { color: colors.ink, flexShrink: 1 }]} accessibilityRole="header">{title}</Text>
+      <Text style={[type.titleL, { color: colors.ink }, link ? { flexShrink: 1, minWidth: 0 } : { flex: 1 }]} accessibilityRole="header">{title}</Text>
       {link ? (
         <Pressable onPress={onLink} disabled={!onLink} accessibilityRole="link" accessibilityLabel={link} style={styles.sectionLink}>
           <Text style={styles.linkText}>{link}</Text>
