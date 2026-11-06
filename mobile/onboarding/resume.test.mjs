@@ -70,3 +70,20 @@ test('an empty profile resumes on location', () => {
 test('partner preferences unconfirmed resume on partnerPrefs even with availability set', () => {
   assert.equal(stepOf({ ...base, partner_prefs_confirmed: 0, cause_tags: '["Animal welfare","Elder care"]' }), 'partnerPrefs');
 });
+
+test('a preferred org with fewer than two causes resumes on causes', () => {
+  assert.equal(stepOf({ ...base, preferred_org_id: 'org-1', cause_tags: '[]' }), 'causes');
+  assert.equal(stepOf({ ...base, preferred_org_id: 'org-1', cause_tags: '["Animal welfare"]' }), 'causes');
+});
+
+test('a preferred org with enough causes moves on', () => {
+  assert.equal(stepOf({ ...base, preferred_org_id: 'org-1', cause_tags: '["Animal welfare","Elder care"]' }), 'done');
+});
+
+test('availability weekdays do not change which step you resume at', () => {
+  const causes = '["Animal welfare","Elder care"]';
+  const weekdays = '[1,3,5]';
+  assert.equal(stepOf({ ...base, cause_tags: causes, availability_weekdays: weekdays, availability_window_end: null }), 'availability');
+  assert.equal(stepOf({ ...base, cause_tags: causes, availability_weekdays: weekdays }), 'done');
+  assert.equal(stepOf({ ...base, cause_tags: causes, availability_weekdays: null }), 'done');
+});

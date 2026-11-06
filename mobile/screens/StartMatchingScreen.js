@@ -5,19 +5,42 @@ import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { radii, type } from '../theme/tokens';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
+import { weekdaysSummary } from './availabilityPrefill';
 import {
-  Card, ErrorText, Field, Headline, Icon, InfoCard, Input, LinkButton, Loading, Screen, SectionTitle, Toggle,
+  Card, Chip, ErrorState, Field, Headline, Icon, InfoCard, Input, LinkButton, Loading, Screen, SectionTitle, Toggle,
 } from '../components/AppParts';
 
 // "Find your next shift": confirms the dates/distance from the user's saved
 // availability (editable via the existing AvailabilityScreen), lets them
 // choose between an existing buddy and someone new, and starts the search.
+// Every code POST /requests can return gets a next step: [button label, view, navigate options].
+const CHANGE_DATES = ['Change dates or days', 'editAvailability'];
 const ERROR_ACTIONS = {
   verification_incomplete: ['Verify your ID', 'verify'],
   insufficient_deeds: ['Get Deeds', 'deeds'],
   monthly_cap_reached: ['See Premium', 'premium'],
+  premium_required: ['See Premium', 'premium'],
   ineligible_data_incomplete: ['Add causes', 'editCauses'],
+  request_open: ['See your search', 'waiting', { replace: true }],
+  account_review: ['Back to home', 'home'],
+  matching_paused: ['Back to home', 'home'],
+  no_weekday_in_window: CHANGE_DATES,
+  invalid_weekdays: CHANGE_DATES,
+  window_in_past: CHANGE_DATES,
+  window_too_soon: CHANGE_DATES,
+  invalid_window: CHANGE_DATES,
 };
+const MAX_HOBBY_FILTER = 3; // the most hobbies the search can ask for
+
+// The person's own hobbies from the profile's JSON text (strings only, short enough to send).
+function parseHobbies(json) {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((h) => typeof h === 'string' && h.trim() && h.length <= 40) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function StartMatchingScreen({ sessionToken, profile, buddy, navigate, onBack }) {
   const [home, setHome] = useState(null);
@@ -26,11 +49,17 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
   const [ageMax, setAgeMax] = useState('');
   const [anyone, setAnyone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [hobbyFilter, setHobbyFilter] = useState([]);
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
-  useEffect(() => {
-    api(sessionToken, '/me/home').then(setHome).catch(setError);
-  }, [sessionToken]);
+  function loadHome() {
+    setLoadError(null);
+    api(sessionToken, '/me/home').then(setHome).catch(setLoadError);
+  }
+  useEffect(loadHome, [sessionToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hobbies = parseHobbies(profile?.interest_tags);
 
   const start = profile?.availability_window_start;
   const end = profile?.availability_window_end;
@@ -51,6 +80,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
           match_preference: anyone && !buddyId ? 'anyone' : 'best',
           ...(ageMin ? { age_min: Number(ageMin) } : {}),
           ...(ageMax ? { age_max: Number(ageMax) } : {}),
+          ...(hobbyFilter.length ? { hobby_filter: hobbyFilter } : {}),
         },
       });
       navigate('waiting', {}, { replace: true });
@@ -61,7 +91,15 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
     }
   }
 
-  if (!home) return <Screen title="Find a shift" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!home) {
+    return (
+      <Screen title="Find a shift" onBack={onBack}>
+        {loadError ? (
+          <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={loadHome} retryLabel="Try again" />
+        ) : <Loading />}
+      </Screen>
+    );
+  }
   const action = error?.code ? ERROR_ACTIONS[error.code] : null;
 
   return (
@@ -76,7 +114,7 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
       <Pressable
         onPress={() => navigate('editAvailability')}
         accessibilityRole="button"
-        accessibilityLabel="Change dates or distance"
+        accessibilityLabel="Change dates, days or distance"
         style={{ marginTop: 24 }}
       >
         {({ pressed }) => (
@@ -86,10 +124,14 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
               <Text style={styles.lineValue}>{start && end ? `${start} to ${end}` : 'Not set'}</Text>
             </View>
             <View style={styles.line}>
+              <Text style={styles.lineLabel}>Days</Text>
+              <Text style={styles.lineValue}>{weekdaysSummary(profile?.availability_weekdays)}</Text>
+            </View>
+            <View style={styles.line}>
               <Text style={styles.lineLabel}>Travel distance</Text>
               <Text style={styles.lineValue}>{profile?.travel_radius_miles ?? '—'} mi</Text>
             </View>
-            <Text style={styles.changeLink}>Change dates or distance</Text>
+            <Text style={styles.changeLink}>Change dates, days or distance</Text>
           </Card>
         )}
       </Pressable>
@@ -150,6 +192,27 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
         </Field>
       ) : null}
 
+      {home.premium.tier === 'premium' && hobbies.length ? (
+        <Field label="Shares one of my hobbies (Premium, optional)" style={{ marginTop: 24 }}>
+          <View style={styles.chipGrid}>
+            {hobbies.map((hobby) => {
+              const selected = hobbyFilter.includes(hobby);
+              return (
+                <Chip
+                  key={hobby}
+                  label={hobby}
+                  role="checkbox"
+                  selected={selected}
+                  disabled={!selected && hobbyFilter.length >= MAX_HOBBY_FILTER}
+                  onPress={() => setHobbyFilter((list) => (selected ? list.filter((h) => h !== hobby) : [...list, hobby]))}
+                />
+              );
+            })}
+          </View>
+          <Text style={[s.rationale, { marginTop: 8 }]}>Only narrows your own matches — it never moves you ahead of anyone.</Text>
+        </Field>
+      ) : null}
+
       <Card tone="ink" style={{ marginTop: 24 }}>
         <View style={styles.line}>
           <Text style={styles.inkLabel}>Deeds available</Text>
@@ -167,13 +230,14 @@ export default function StartMatchingScreen({ sessionToken, profile, buddy, navi
         <LinkButton label="Get Deeds" align="left" onPress={() => navigate('deeds')} style={{ marginTop: 8 }} />
       ) : null}
 
-      {action ? <LinkButton label={action[0]} align="left" onPress={() => navigate(action[1])} style={{ marginTop: 8 }} /> : null}
+      {action ? <LinkButton label={action[0]} align="left" onPress={() => navigate(action[1], {}, action[2])} style={{ marginTop: 8 }} /> : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingVertical: 6 },
   lineLabel: { ...type.bodyS, color: colors.ink2, flexShrink: 1 },
   lineValue: { ...type.label, color: colors.ink, flexShrink: 1, textAlign: 'right' },

@@ -1,37 +1,132 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
+import { colors } from '../theme/colors';
+import { radii, type } from '../theme/tokens';
 import OnboardingTopBar from '../components/OnboardingTopBar';
-import { Headline, Input, KeyboardScroll, LinkButton, ListRow } from '../components/AppParts';
+import { Chip, ErrorLine, Headline, Input, KeyboardScroll, LinkButton, ListRow, Loading, Tag } from '../components/AppParts';
 import PrimaryButton from '../components/PrimaryButton';
 import { patchProfile } from '../auth/api';
+import { api } from '../api/client';
 
-// The org-or-cause choice. Per the lead-
-// capture-stub decision: there's no real org directory/search backend yet
-// (org accounts are a separate deliverable — master prompt section 2), so
-// "I know an org" just captures a free-text name into prospective_org_name
-// (matching plotline's org-not-listed fallback) rather than a real search.
+const SEARCH_DEBOUNCE_MS = 300;
+
+function toAnswer(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  return null;
+}
+
+// The org-or-cause choice. "I know an org" searches the verified org directory
+// (GET /orgs?q=) and saves the pick with POST /users/me/preferred-org. An org that is not listed
+// is captured as a lead (prospective_org_name) plus a yes/no on being paired with the nearest
+// matching organization in the meantime. Either way the causes step follows.
 export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg, onBrowseByCause, initialValues, title, onBack }) {
-  const [showOrgInput, setShowOrgInput] = useState(Boolean(initialValues?.prospective_org_name));
-  const [orgName, setOrgName] = useState(initialValues?.prospective_org_name ?? '');
+  const hasLead = Boolean(initialValues?.prospective_org_name);
+  const [showOrgSearch, setShowOrgSearch] = useState(hasLead || Boolean(initialValues?.preferred_org_id));
+  const [query, setQuery] = useState('');
+  const [orgs, setOrgs] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
+  const [selectedId, setSelectedId] = useState(initialValues?.preferred_org_id ?? null);
+  const [showLead, setShowLead] = useState(hasLead);
+  const [leadName, setLeadName] = useState(initialValues?.prospective_org_name ?? '');
+  const [okNearest, setOkNearest] = useState(toAnswer(initialValues?.prospective_org_ok_nearest));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const requestId = useRef(0);
 
-  async function handleSubmitOrgName() {
-    if (!orgName.trim()) {
-      setError('Enter the organization\'s name.');
-      return;
-    }
+  useEffect(() => {
+    if (!showOrgSearch) return undefined;
+    const mine = ++requestId.current;
+    setSearching(true);
+    setSearchError(false);
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api(sessionToken, `/orgs?q=${encodeURIComponent(query.trim())}`);
+        if (mine !== requestId.current) return;
+        setOrgs(Array.isArray(data?.orgs) ? data.orgs : []);
+      } catch {
+        if (mine !== requestId.current) return;
+        setOrgs([]);
+        setSearchError(true);
+      } finally {
+        if (mine === requestId.current) setSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [showOrgSearch, query, retryTick, sessionToken]);
+
+  const retry = useCallback(() => setRetryTick((n) => n + 1), []);
+
+  const leadReady = showLead && leadName.trim().length > 0;
+  const canContinue = (Boolean(selectedId) || leadReady) && !submitting;
+
+  async function handleContinue() {
     setError(null);
     setSubmitting(true);
     try {
-      const updated = await patchProfile(sessionToken, { prospective_org_name: orgName.trim() });
+      let updated;
+      if (selectedId) {
+        updated = await api(sessionToken, '/users/me/preferred-org', { method: 'POST', body: { org_id: selectedId } });
+      } else {
+        const fields = { prospective_org_name: leadName.trim() };
+        if (okNearest !== null) fields.prospective_org_ok_nearest = okNearest;
+        updated = await patchProfile(sessionToken, fields);
+      }
       onKnowsOrg(updated);
     } catch (err) {
-      setError(err.message);
+      setError(err.code === 'org_not_found' ? 'That organization is no longer listed. Pick another or tell us who.' : err.message);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function pickOrg(id) {
+    setSelectedId((prev) => (prev === id ? null : id));
+    setError(null);
+  }
+
+  function renderResults() {
+    if (searching && orgs.length === 0) return <Loading label="Looking" />;
+    if (searchError) {
+      return (
+        <View style={styles.state}>
+          <ErrorLine message="We couldn't load organizations." />
+          <LinkButton label="Retry" align="right" onPress={retry} style={styles.causeLink} />
+        </View>
+      );
+    }
+    if (orgs.length === 0) {
+      return <Text style={[type.body, styles.state, { color: colors.ink2 }]}>No organization by that name yet</Text>;
+    }
+    return orgs.map((org) => {
+      const picked = org.id === selectedId;
+      const causes = Array.isArray(org.mission_tags) ? org.mission_tags : [];
+      return (
+        <Pressable
+          key={org.id}
+          onPress={() => pickOrg(org.id)}
+          accessibilityRole="radio"
+          accessibilityLabel={[org.name, org.location_label].filter(Boolean).join(', ')}
+          accessibilityState={{ checked: picked }}
+          style={({ pressed }) => [
+            styles.orgRow,
+            picked && styles.orgRowSelected,
+            pressed && { backgroundColor: colors.tintPressed },
+          ]}
+        >
+          <Text style={[type.subtitle, { color: colors.ink }]}>{org.name}</Text>
+          {org.location_label ? <Text style={[type.bodyS, { color: colors.ink2 }]}>{org.location_label}</Text> : null}
+          {causes.length > 0 ? (
+            <View style={styles.tags}>
+              {causes.map((c) => <Tag key={c} label={c} tone="outline" />)}
+            </View>
+          ) : null}
+        </Pressable>
+      );
+    });
   }
 
   return (
@@ -39,14 +134,8 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
       <KeyboardScroll
         header={<OnboardingTopBar step={step} total={total} title={title} onBack={onBack} />}
         footer={
-          showOrgInput ? (
-            <PrimaryButton
-              label="Continue"
-              onPress={handleSubmitOrgName}
-              disabled={!orgName.trim() || submitting}
-              loading={submitting}
-              error={error}
-            />
+          showOrgSearch ? (
+            <PrimaryButton label="Continue" onPress={handleContinue} disabled={!canContinue} loading={submitting} error={error} />
           ) : null
         }
       >
@@ -56,13 +145,13 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
           what's useful for you.
         </Text>
 
-        {!showOrgInput ? (
+        {!showOrgSearch ? (
           <View style={styles.options}>
             <ListRow
               icon="search"
               label="I know an org"
-              sublabel="Tell us the name directly"
-              onPress={() => setShowOrgInput(true)}
+              sublabel="Search for it by name"
+              onPress={() => setShowOrgSearch(true)}
             />
             <ListRow
               icon="heart"
@@ -74,15 +163,39 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
         ) : (
           <View style={s.field}>
             <Input
-              label="Organization name"
-              placeholder="e.g. Second Harvest of Silicon Valley"
-              value={orgName}
-              onChangeText={setOrgName}
+              label="Search organizations"
+              placeholder="Organization name"
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+              returnKeyType="search"
             />
-            <Text style={[s.rationale, { marginTop: 8 }]}>
-              We don't have a searchable directory yet — we'll pass this along to our team and
-              match you with something close in the meantime.
-            </Text>
+            <View style={styles.results} accessibilityRole="radiogroup">{renderResults()}</View>
+
+            {!showLead ? (
+              <LinkButton label="Not listed? Tell us who" align="right" onPress={() => setShowLead(true)} style={styles.causeLink} />
+            ) : (
+              <View style={styles.lead}>
+                <Input
+                  label="Organization name"
+                  placeholder="Who would you like to volunteer with?"
+                  value={leadName}
+                  onChangeText={(v) => { setLeadName(v); if (v.trim()) setSelectedId(null); }}
+                />
+                <Text style={[s.label, { marginTop: 16 }]}>
+                  Until they join, is it okay to pair you with the nearest organization that matches your interests?
+                </Text>
+                <View style={styles.chipRow}>
+                  <Chip label="Yes" role="radio" selected={okNearest === true} onPress={() => setOkNearest(true)} />
+                  <Chip label="No" role="radio" selected={okNearest === false} onPress={() => setOkNearest(false)} />
+                </View>
+                {okNearest === false ? (
+                  <Text style={[s.rationale, { marginTop: 8 }]}>
+                    You'll only be matched when you start a search yourself.
+                  </Text>
+                ) : null}
+              </View>
+            )}
             <LinkButton label="Choose causes instead" align="right" onPress={onBrowseByCause} style={styles.causeLink} />
           </View>
         )}
@@ -94,4 +207,18 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
 const styles = StyleSheet.create({
   options: { marginTop: 16 },
   causeLink: { marginTop: 8, justifyContent: 'flex-start' },
+  results: { marginTop: 8, gap: 8 },
+  state: { marginTop: 8 },
+  orgRow: {
+    borderRadius: radii.notice,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: colors.tint,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  orgRowSelected: { borderColor: colors.ink, backgroundColor: colors.surface },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  lead: { marginTop: 16 },
+  chipRow: { flexDirection: 'row', gap: 8 },
 });

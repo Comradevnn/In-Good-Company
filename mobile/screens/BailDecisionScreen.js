@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { font, type } from '../theme/tokens';
@@ -15,9 +15,10 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
+  const load = useCallback(() => api(sessionToken, `/pairings/${pairingId}`).then(setPairing).catch(setError), [sessionToken, pairingId]);
   useEffect(() => {
-    api(sessionToken, `/pairings/${pairingId}`).then(setPairing).catch(setError);
-  }, [sessionToken, pairingId]);
+    load();
+  }, [load]);
 
   async function choose(choice) {
     setBusy(true);
@@ -26,6 +27,8 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
       setResult(await api(sessionToken, `/pairings/${pairingId}/bail-decision`, { method: 'POST', body: { choice } }));
     } catch (err) {
       setError(err);
+      // A closed decision: reload so the choice buttons give way to what happened.
+      if (err.code === 'decision_expired') await load();
     } finally {
       setBusy(false);
     }
@@ -49,6 +52,36 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
   }
 
   const open = pairing.bail?.open;
+  const toHome = <PrimaryButton label="Back to home" onPress={() => navigate('home', {}, { reset: true })} />;
+
+  // Nothing to decide: the org called the shift off, or the decision is already closed.
+  if (pairing.cancelled_by_org || !pairing.bail) {
+    return (
+      <Screen key="closed" title="Change of plans" onBack={onBack} footer={toHome}>
+        <Headline style={{ marginBottom: 8 }}>{pairing.cancelled_by_org ? 'The org had to cancel this shift' : 'Nothing to decide here'}</Headline>
+        <Text style={[type.body, { color: colors.ink2 }]}>
+          {pairing.cancelled_by_org ? 'Any Deeds you had on hold are back in your balance.' : 'This decision is no longer open.'}
+        </Text>
+        <ShiftCard shift={pairing.shift} />
+      </Screen>
+    );
+  }
+  if (!open) {
+    const choice = pairing.bail.choice;
+    return (
+      <Screen key="decided" title="Change of plans" onBack={onBack} footer={toHome}>
+        <Headline style={{ marginBottom: 8 }}>{choice === 'rematch' ? "We're finding you someone new" : 'Your Deeds are back'}</Headline>
+        <Text style={[type.body, { color: colors.ink2 }]}>
+          {choice === 'rematch'
+            ? "This decision has already been made. We'll propose a new partner for this same shift."
+            : choice
+              ? 'This decision has already been made. Your held Deeds were released in full.'
+              : "The time to decide has passed, so your held Deeds were released in full."}
+        </Text>
+        <ShiftCard shift={pairing.shift} />
+      </Screen>
+    );
+  }
   return (
     <Screen
       title="Change of plans"

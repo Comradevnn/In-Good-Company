@@ -293,6 +293,17 @@ test('derived pressed tokens exist, are valid hex and differ from their base', (
   assert.equal(base.mix('#000000', '#FFFFFF', 0.5), '#808080');
 });
 
+test('derived caution token is the same valid amber in every palette and shows on paper and surface', () => {
+  for (const name of paletteNames) {
+    const derived = base.withDerived(palettes[name]);
+    assert.match(derived.caution, hexRe, `${name}.caution`);
+    assert.equal(derived.caution, base.withDerived(REFERENCE).caution, `${name}.caution matches the others`);
+    assert.ok(contrast(derived.caution, palettes[name].paper) >= UI, `${name}: caution on paper`);
+    assert.ok(contrast(derived.caution, palettes[name].surface) >= UI, `${name}: caution on surface`);
+  }
+  assert.match(base.colors.caution, hexRe);
+});
+
 test('colors.js uses the default palette with no env var, honours a valid override, and falls back on an unknown name', async () => {
   assert.equal(base.DEFAULT_PALETTE, 'calmTonalShade');
   assert.equal(base.paletteName, 'calmTonalShade');

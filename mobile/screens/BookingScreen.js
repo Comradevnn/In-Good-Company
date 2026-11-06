@@ -27,8 +27,27 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
   }, [load]);
 
   if (!booking) return <Screen title="Your spot" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
-  const attended = booking.status === 'attended';
   const toHome = () => navigate('home', {}, { reset: true });
+  if (booking.shift_cancelled) {
+    return (
+      <Screen
+        title="Your spot"
+        onBack={onBack}
+        footer={(
+          <Footer style={{ gap: 12 }}>
+            <Button label="Find another shift" onPress={() => navigate('startMatching')} />
+            <Button label="Back to home" ghost onPress={toHome} />
+          </Footer>
+        )}
+      >
+        <Tag label="Cancelled by the org" tone="accent" style={{ marginBottom: 12 }} />
+        <Headline>The org had to cancel this shift</Headline>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>Any Deeds you had on hold are back in your balance.</Text>
+        <ShiftCard shift={booking.shift} />
+      </Screen>
+    );
+  }
+  const attended = booking.status === 'attended';
   const canRate = attended && booking.ended;
   return (
     <Screen
