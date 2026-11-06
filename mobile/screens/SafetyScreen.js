@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { onboardingStyles as s } from '../theme/onboardingStyles';
 import { api } from '../api/client';
 import PrimaryButton from '../components/PrimaryButton';
-import { Bullet, Card, Chip, ErrorText, Headline, Heading, Input, Loading, Screen, SectionHeader, Toggle } from '../components/AppParts';
+import { Bullet, Card, Chip, ErrorState, Headline, Heading, Input, Loading, Screen, SectionHeader, Toggle } from '../components/AppParts';
 
 // Safety: the pre-shift safety notice and the in-app report flow. Reports
 // are stored for a person to review and permanently stop the two people
@@ -26,9 +26,13 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const loadNotice = useCallback(() => {
+    setError(null);
     api(sessionToken, '/safety/notice').then(setNotice).catch(setError);
   }, [sessionToken]);
+  useEffect(() => {
+    loadNotice();
+  }, [loadNotice]);
 
   async function submit() {
     setBusy(true);
@@ -56,7 +60,7 @@ export default function SafetyScreen({ sessionToken, pairingId, partnerName, nav
       </Screen>
     );
   }
-  if (!notice) return <Screen title="Safety" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!notice) return <Screen title="Safety" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={loadNotice} retryLabel="Try again" /> : <Loading />}</Screen>;
 
   return (
     <Screen

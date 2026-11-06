@@ -7,6 +7,7 @@ const h = require('./test-helpers');
 
 h.useTempDb('search-filters');
 const { check, api } = h;
+const rules = require('./lib/rules');
 
 const weekdayOf = (ymd) => new Date(`${ymd}T00:00:00Z`).getUTCDay();
 
@@ -14,6 +15,7 @@ async function main() {
   const { server } = await h.startServer();
   const db = require('./db');
   const { monthKey, addDays } = require('./lib/time');
+  const { haversineMiles } = require('./matching/engine');
   const causes = ['Animal welfare', 'Environmental cleanups'];
   const shiftOf = (vol) => db.prepare(`
     SELECT shift_id FROM pairings WHERE (user_a_id = ? OR user_b_id = ?) AND status IN ('proposed', 'confirmed') ORDER BY proposed_at DESC LIMIT 1
@@ -185,7 +187,7 @@ async function main() {
     await api('/requests/current/cancel', { method: 'POST', token: freeUser.token });
 
     const prem = await volunteer('Chess', { hobbies: 'chess, cooking' });
-    for (const [label, bad] of [['more than three', ['a', 'b', 'c', 'd']], ['a blank entry', ['chess', '  ']], ['an over-long entry', ['x'.repeat(41)]],
+    for (const [label, bad] of [['more than the allowed number', Array.from({ length: rules.HOBBY_FILTER_MAX + 1 }, (_, i) => `hobby${i}`)], ['a blank entry', ['chess', '  ']], ['an over-long entry', ['x'.repeat(rules.HOBBY_MAX_LENGTH + 1)]],
       ['a non-array', 'chess'], ['a non-string entry', [5]]]) {
       const res = await search(prem, { hobby_filter: bad });
       check(`invalid_hobby_filter: ${label}`, res.status === 400 && res.body.code === 'invalid_hobby_filter', res.body);
@@ -204,6 +206,63 @@ async function main() {
     await search(lateComer);
     check('a partner with one of the hobbies is paired (spaces and case ignored)', pairingsBetween(prem, lateComer) === 1);
     check('the status response does not leak anyone\'s hobbies', !JSON.stringify(await current(prem)).toLowerCase().includes('knitting'));
+
+    // ── The "is anyone about" hint respects the search's own hobby filter ──
+    isolate();
+    const hintBase = { window_start: await h.serverDate(1), window_end: await h.serverDate(10), preference: 'best' };
+    const hinter = await volunteer('HintChess', { hobbies: 'chess' });
+    await search(hinter, { hobby_filter: ['kayaking'] }, hintBase);
+    const other = await volunteer('HintBaker', { hobbies: 'baking' });
+    await search(other, {}, hintBase);
+    check('with a hobby filter, someone without those hobbies does not make a partner "likely"',
+      (await current(hinter)).anyone_available === false);
+    const unfiltered = await volunteer('HintPlain', { hobbies: 'chess' });
+    await search(unfiltered, {}, hintBase);
+    check('the same searcher with no filter does see a partner as likely', (await current(unfiltered)).anyone_available === true);
+    const kayaker = await volunteer('HintKayak', { hobbies: ' Kayaking , knitting' });
+    await search(kayaker, {}, hintBase);
+    check('once someone shares one of the hobbies (spaces and case ignored), the hint turns on',
+      (await current(hinter)).anyone_available === true);
+
+    // ── Waiting-screen alternatives respect the chosen weekdays ──
+    isolate();
+    const altDay = await h.serverDate(3);
+    const wdAlt = weekdayOf(altDay);
+    const wrongDay = await h.serverDate(4);
+    const rightDay = await h.serverDate(3 + 7);
+    await h.makeShift(org, { date: wrongDay, title: 'Next day' });
+    await h.makeShift(org, { date: rightDay, title: 'Next week' });
+    const altWindow = { window_start: altDay, window_end: altDay, preference: 'anyone' };
+    const noDays = await volunteer('AltAny');
+    await search(noDays, {}, altWindow);
+    const nearbyAny = (await current(noDays)).alternatives.find((a) => a.type === 'nearby_date');
+    check('with no weekdays chosen, nearby dates starts at the soonest shift outside the window', nearbyAny?.window_start === wrongDay, nearbyAny);
+    await api('/requests/current/cancel', { method: 'POST', token: noDays.token });
+    const withDays = await volunteer('AltDays');
+    await search(withDays, { weekdays: [wdAlt] }, altWindow);
+    const nearby = (await current(withDays)).alternatives.find((a) => a.type === 'nearby_date');
+    check('with weekdays chosen, nearby dates starts at the first shift on a chosen weekday',
+      nearby?.window_start === rightDay && weekdayOf(nearby.window_start) === wdAlt, nearby);
+    const take = await api('/requests/current/adjust', { method: 'POST', token: withDays.token, body: { window_start: nearby.window_start, window_end: nearby.window_end } });
+    check('tapping that suggestion works (its window holds a chosen weekday)', take.status === 200, take.body);
+    check('…and the search now covers that shift', requestRow(withDays).window_start <= rightDay && requestRow(withDays).window_end >= rightDay);
+    await api('/requests/current/cancel', { method: 'POST', token: withDays.token });
+
+    // Wider distance and added cause also only count shifts on a chosen weekday.
+    isolate();
+    const home = { lat: 37.3382, lng: -121.8863 };
+    const nearOff = { lat: home.lat + 0.15, lng: home.lng };
+    const farOn = { lat: home.lat + 0.3, lng: home.lng };
+    await h.makeShift(org, { date: wrongDay, title: 'Near, wrong day', capacity: 6, cause_tags: ['Animal welfare', 'Youth mentorship'], ...nearOff });
+    await h.makeShift(org, { date: altDay, title: 'Far, chosen day', capacity: 2, cause_tags: ['Animal welfare', 'Elder care'], ...farOn });
+    const geo = await volunteer('AltGeo', { ...home, radius: 5, causes: ['Animal welfare'] });
+    await search(geo, { weekdays: [wdAlt] }, { window_start: altDay, window_end: wrongDay, preference: 'anyone' });
+    const alts = (await current(geo)).alternatives;
+    const wider = alts.find((a) => a.type === 'widen_radius');
+    check('widening the distance is sized for the shift on a chosen weekday, not a nearer one on another day',
+      wider?.travel_radius_miles === Math.ceil(haversineMiles(home, farOn)), wider);
+    check('adding a cause counts only shifts on a chosen weekday', alts.find((a) => a.type === 'add_cause')?.cause === 'Elder care', alts);
+    await api('/requests/current/cancel', { method: 'POST', token: geo.token });
 
     // ── The monthly cap still applies with weekdays set ──
     isolate();

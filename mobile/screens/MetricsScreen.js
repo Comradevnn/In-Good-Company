@@ -1,19 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
-import { Card, ErrorText, Headline, Loading, Screen, SectionTitle, StatRow, TagPill } from '../components/AppParts';
+import { Card, ErrorState, Headline, Loading, Screen, SectionTitle, StatRow, TagPill } from '../components/AppParts';
 
 // Your impact: aggregate numbers about your own volunteering only.
 export default function MetricsScreen({ sessionToken, onBack }) {
   const [m, setM] = useState(null);
   const [error, setError] = useState(null);
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
     api(sessionToken, '/metrics/me').then(setM).catch(setError);
   }, [sessionToken]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  if (!m) return <Screen title="Your impact" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!m) return <Screen title="Your impact" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={load} retryLabel="Try again" /> : <Loading />}</Screen>;
   const pct = (v) => (v == null ? '—' : `${v}%`);
   return (
     <Screen title="Your impact" onBack={onBack}>

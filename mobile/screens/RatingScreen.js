@@ -26,6 +26,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [visibilityError, setVisibilityError] = useState(null);
 
   useEffect(() => {
     api(sessionToken, `/bookings/${bookingId}/rating-form`).then(setForm).catch(setError);
@@ -47,8 +48,15 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
   }
 
   async function togglePublic() {
-    await api(sessionToken, `/bookings/${bookingId}/org-rating-visibility`, { method: 'POST', body: { public: !form.org_rating_public } });
-    setForm((f) => ({ ...f, org_rating_public: !f.org_rating_public }));
+    setVisibilityError(null);
+    const next = !form.org_rating_public;
+    setForm((f) => ({ ...f, org_rating_public: next }));
+    try {
+      await api(sessionToken, `/bookings/${bookingId}/org-rating-visibility`, { method: 'POST', body: { public: next } });
+    } catch (err) {
+      setForm((f) => ({ ...f, org_rating_public: !next }));
+      setVisibilityError(err);
+    }
   }
 
   if (!form) return <Screen title="Rate your shift" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
@@ -117,6 +125,7 @@ export default function RatingScreen({ sessionToken, bookingId, navigate, onBack
             onPress={togglePublic}
             style={{ marginTop: 12 }}
           />
+          <ErrorText error={visibilityError} />
         </InfoCard>
       ) : null}
     </Screen>

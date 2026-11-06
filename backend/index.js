@@ -479,7 +479,10 @@ app.post('/verification/document-check', requireAuth, requireProfile, async (req
     // The other account's identity (result.existing_subject_id) is
     // deliberately not returned to the client. The account is flagged so it
     // is credited no trial or Premium Deeds it could not spend.
-    premium.flagDuplicateDocument(user.id);
+    // Only an account that is not already verified: someone already verified
+    // keeps their grants and free Deeds when a re-check hits another document.
+    const { verified } = db.prepare('SELECT verified FROM users WHERE id = ?').get(user.id);
+    if (!verified) premium.flagDuplicateDocument(user.id);
     return res.status(200).json({ duplicate: true });
   }
 

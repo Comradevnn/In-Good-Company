@@ -229,7 +229,10 @@ function poolStats(userIds) {
   `).all(ids)) orgRatings.get(row.user_id).push({ attendance: row.attendance, contribution: row.contribution });
   const pairSet = (sql) => new Set(db.prepare(sql).all(ids, ids).map((r) => pairKey(r.u1, r.u2)));
   const pairFacts = {
-    prior: pairSet(`SELECT user_a_id AS u1, user_b_id AS u2 FROM pairings WHERE status IN ('confirmed', 'completed', 'cancelled')
+    // A pairing the organization called off (cancelled with nobody backing
+    // out) doesn't count: the two never volunteered together because of it.
+    prior: pairSet(`SELECT user_a_id AS u1, user_b_id AS u2 FROM pairings
+      WHERE (status IN ('confirmed', 'completed') OR (status = 'cancelled' AND backed_out_by IS NOT NULL))
       AND user_a_id IN (SELECT value FROM json_each(?)) AND user_b_id IN (SELECT value FROM json_each(?))`),
     active: pairSet(`SELECT user_a_id AS u1, user_b_id AS u2 FROM pairings WHERE status IN ('proposed', 'confirmed')
       AND user_a_id IN (SELECT value FROM json_each(?)) AND user_b_id IN (SELECT value FROM json_each(?))`),

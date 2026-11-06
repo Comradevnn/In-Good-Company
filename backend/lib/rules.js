@@ -56,6 +56,10 @@ module.exports = {
   REFERRAL_DEEDS: 1,
   REFERRAL_COOLDOWN_MS: 7 * DAY,
 
+  // Premium hobby filter on a search: how many hobbies, and how long each.
+  HOBBY_FILTER_MAX: 3,
+  HOBBY_MAX_LENGTH: 40,
+
   // Shift day
   STARTERS_PER_SHIFT: 3,
   // A shift counts as "daytime" when it starts and ends within these local

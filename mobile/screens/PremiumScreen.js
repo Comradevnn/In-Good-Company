@@ -3,7 +3,7 @@ import { Share, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
-import { Card, ErrorText, Headline, Loading, PillButton, Screen, SectionTitle, Tag } from '../components/AppParts';
+import { Card, ErrorState, ErrorText, Headline, Loading, PillButton, Screen, SectionTitle, Tag } from '../components/AppParts';
 
 // Premium (mock subscription — no payment processor, no card details) and
 // referrals. Premium only expands what your own account can do; it never
@@ -13,8 +13,10 @@ export default function PremiumScreen({ sessionToken, onBack }) {
   const [referral, setReferral] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const [p, r] = await Promise.all([api(sessionToken, '/premium'), api(sessionToken, '/referral')]);
       setPremium(p);
@@ -30,17 +32,23 @@ export default function PremiumScreen({ sessionToken, onBack }) {
   async function subscribe(plan) {
     setBusy(true);
     setError(null);
+    setAlreadySubscribed(false);
     try {
       await api(sessionToken, '/premium/subscribe', { method: 'POST', body: { plan } });
       await load();
     } catch (err) {
-      setError(err);
+      if (err.code === 'already_subscribed') {
+        setAlreadySubscribed(true);
+        await load();
+      } else {
+        setError(err);
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  if (!premium) return <Screen title="Premium" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!premium) return <Screen title="Premium" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={load} retryLabel="Try again" /> : <Loading />}</Screen>;
   const isPremium = premium.tier === 'premium';
   return (
     <Screen title="Premium" onBack={onBack}>
@@ -102,6 +110,11 @@ export default function PremiumScreen({ sessionToken, onBack }) {
             onPress={() => Share.share({ message: `Volunteer with me on In Good Company — use my code ${referral.code} when you sign up.` })}
           />
         </>
+      ) : null}
+      {alreadySubscribed ? (
+        <Text style={styles.lede}>
+          {premium.premium_until ? `You're already subscribed until ${new Date(premium.premium_until).toLocaleDateString()}.` : "You're already subscribed."}
+        </Text>
       ) : null}
       <ErrorText error={error} />
     </Screen>

@@ -312,6 +312,21 @@ async function main() {
     check('verifying clears the flag', db.prepare('SELECT duplicate_document AS d FROM users WHERE id = ?').get(dupAcct.id).d === 0);
     check('clearing the flag does not back-credit the skipped grants', (await balances(dupAcct)).available_free === 0);
 
+    // An account that is already verified is not flagged by a later re-check.
+    const verifiedAcct = await vol({ deeds: 5 });
+    const verifiedBefore = await balances(verifiedAcct);
+    const reHit = await api('/verification/document-check', { method: 'POST', token: verifiedAcct.token, body: { document_type: 'passport', issuing_country: 'US', document_number: dupDoc } });
+    check('a verified account\'s re-check can still report the duplicate', reHit.status === 200 && reHit.body.duplicate === true, reHit.body);
+    const verifiedAfter = await balances(verifiedAcct);
+    check('…but it keeps its grant Deeds and purchased Deeds',
+      verifiedAfter.available_free === verifiedBefore.available_free && verifiedAfter.available_purchased === verifiedBefore.available_purchased
+      && verifiedAfter.available_free > 0, verifiedAfter);
+    check('…and it is not flagged or debited',
+      db.prepare('SELECT duplicate_document AS d FROM users WHERE id = ?').get(verifiedAcct.id).d === 0
+      && db.prepare("SELECT COUNT(*) AS n FROM deeds_ledger WHERE user_id = ? AND entry_type = 'duplicate_document'").get(verifiedAcct.id).n === 0);
+    await h.advance({ days: 7 });
+    check('…and still gets the weekly grant', (await balances(verifiedAcct)).available_free > verifiedAfter.available_free);
+
     // ── Ledger consistency for every user touched ──
     const bad2 = allUsers.map((u) => ({ email: u.email, audit: deedsLib.auditUser(u.id) })).filter((r) => !r.audit.ok);
     check(`ledger sums equal the balance columns for all ${allUsers.length} users`, bad2.length === 0, bad2);

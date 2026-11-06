@@ -4,7 +4,7 @@ import { colors } from '../theme/colors';
 import { type } from '../theme/tokens';
 import { api } from '../api/client';
 import {
-  Card, DiscPair, EmptyState, ErrorText, Headline, LinkButton, Loading, PillButton, Screen,
+  Card, DiscPair, EmptyState, ErrorState, ErrorText, Headline, LinkButton, Loading, PillButton, Screen,
 } from '../components/AppParts';
 import { lensFor, personKeyFor } from '../theme/people';
 
@@ -18,7 +18,10 @@ export default function BuddiesScreen({ sessionToken, navigate, onBack }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
-  const load = useCallback(() => api(sessionToken, '/buddies').then(setData).catch(setError), [sessionToken]);
+  const load = useCallback(() => {
+    setError(null);
+    return api(sessionToken, '/buddies').then(setData).catch(setError);
+  }, [sessionToken]);
   useEffect(() => {
     load();
   }, [load]);
@@ -30,7 +33,7 @@ export default function BuddiesScreen({ sessionToken, navigate, onBack }) {
     ]);
   }
 
-  if (!data) return <Screen title="Buddies" onBack={onBack}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!data) return <Screen title="Buddies" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={load} retryLabel="Try again" /> : <Loading />}</Screen>;
   return (
     <Screen title="Buddies" onBack={onBack}>
       <Headline>Your volunteer buddies</Headline>

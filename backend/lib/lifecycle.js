@@ -18,7 +18,7 @@ const chat = require('./chat');
 const { notify } = require('./notify');
 const { runResurfacing } = require('./resurface');
 const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shifts');
-const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch, parseWeekdays, windowHasWeekday } = require('./matchingRunner');
+const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch, parseWeekdays, windowHasWeekday, weekdayOf } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
 const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray, tagMatchLevel, hardFiltersPass } = require('../matching/engine');
@@ -112,8 +112,7 @@ function requireWeekdayInWindow(windowStart, windowEnd, weekdays) {
 
 // Premium: up to three hobbies a partner must share one of. Absent, null or
 // [] means no filter. Returns the normalised list, or null.
-const HOBBY_FILTER_MAX = 3;
-const HOBBY_MAX_LENGTH = 40;
+const { HOBBY_FILTER_MAX, HOBBY_MAX_LENGTH } = rules;
 function parseHobbyFilter(value) {
   if (value == null || (Array.isArray(value) && value.length === 0)) return null;
   const ok = Array.isArray(value) && value.length <= HOBBY_FILTER_MAX
@@ -159,6 +158,8 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   const inBand = (min, max, age) => (min == null || (age != null && age >= min)) && (max == null || (age != null && age <= max));
   const myWeekdays = parseWeekdays(request ? request.weekdays : user.availability_weekdays);
   const myRadius = request?.travel_radius_miles ?? user.travel_radius_miles ?? null;
+  // A search with a hobby filter only ever pairs with someone sharing one of them.
+  const myHobbies = new Set(safeParseArray(request?.hobby_filter).map(normaliseInterest).filter(Boolean));
   const unfit = db.prepare(`
     SELECT 1 FROM pairings WHERE status IN ('proposed', 'confirmed')
       AND ((user_a_id = @me AND user_b_id = @other) OR (user_a_id = @other AND user_b_id = @me))
@@ -169,6 +170,7 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   return others.some((o) => {
     if (tagMatchLevel(mine, safeParseArray(o.cause_tags)) === 'none') return false;
     if (isBlockedPair(user.id, o.id)) return false;
+    if (myHobbies.size > 0 && !safeParseArray(o.interest_tags).some((h) => myHobbies.has(normaliseInterest(h)))) return false;
     // Cheap day check: some day in both windows is free for both people.
     if (!windowHasWeekday(windowStart > o.req_start ? windowStart : o.req_start, windowEnd < o.req_end ? windowEnd : o.req_end,
       myWeekdays, parseWeekdays(o.req_weekdays))) return false;
@@ -927,6 +929,9 @@ function alternatives(user, request) {
     const day = localDate(new Date(s.starts_at), s.timezone);
     return day >= request.window_start && day <= request.window_end;
   };
+  // The search's chosen weekdays (none = any day): suggestions must land on one.
+  const weekdays = parseWeekdays(request.weekdays);
+  const onChosenDay = (s) => weekdays.length === 0 || weekdays.includes(weekdayOf(localDate(new Date(s.starts_at), s.timezone)));
   const radius = request.travel_radius_miles ?? user.travel_radius_miles;
   const distance = (s) => (user.location_lat != null && s.location
     ? haversineMiles({ lat: user.location_lat, lng: user.location_lng }, s.location) : null);
@@ -942,12 +947,12 @@ function alternatives(user, request) {
       shifts: solo.map(shiftSummary),
     });
   }
-  const farther = shifts.filter((s) => aligned(s) && inWindow(s) && !withinRadius(s)).map(distance).filter((d) => d != null).sort((a, b) => a - b);
+  const farther = shifts.filter((s) => aligned(s) && inWindow(s) && onChosenDay(s) && !withinRadius(s)).map(distance).filter((d) => d != null).sort((a, b) => a - b);
   if (farther.length) {
     const miles = Math.ceil(farther[0]);
     result.push({ type: 'widen_radius', title: `Travel up to ${miles} miles`, body: 'There are matching shifts just outside your current distance.', travel_radius_miles: miles });
   }
-  const outside = shifts.filter((s) => aligned(s) && withinRadius(s) && !inWindow(s)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const outside = shifts.filter((s) => aligned(s) && withinRadius(s) && !inWindow(s) && onChosenDay(s)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   if (outside.length) {
     const day = localDate(new Date(outside[0].starts_at), outside[0].timezone);
     result.push({ type: 'nearby_date', title: 'Try nearby dates', body: `There are shifts that fit you around ${day}.`, window_start: day, window_end: addDays(day, 3) });
@@ -955,7 +960,7 @@ function alternatives(user, request) {
   // The cause area with the most open spots in the user's window that they
   // haven't picked — density makes matching faster.
   const density = {};
-  for (const s of shifts.filter(inWindow)) {
+  for (const s of shifts.filter((x) => inWindow(x) && onChosenDay(x))) {
     for (const tag of s.cause_tags) if (!causes.includes(tag)) density[tag] = (density[tag] ?? 0) + s.capacity_remaining;
   }
   const busiest = Object.entries(density).sort((a, b) => b[1] - a[1])[0];

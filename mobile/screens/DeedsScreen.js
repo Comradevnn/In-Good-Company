@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
 import { HEAD_TEXT, type } from '../theme/tokens';
-import { Card, Display, ErrorText, Headline, Icon, ListRow, Screen, SectionHeader, Tag } from '../components/AppParts';
+import { Card, Display, ErrorText, Headline, Icon, LinkButton, ListRow, Loading, Screen, SectionHeader, Tag } from '../components/AppParts';
 import { BACKEND_URL } from '../config/api';
 import { api } from '../api/client';
 
@@ -35,11 +35,14 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
   const [error, setError] = useState(null);
   const [ledger, setLedger] = useState(null);
 
+  const [loadError, setLoadError] = useState(false);
+
   function loadLedger() {
+    setLoadError(false);
     api(sessionToken, '/deeds').then((data) => {
       setLedger(data);
       onBalanceChange?.(data.available);
-    }).catch(() => {});
+    }).catch(() => setLoadError(true));
   }
   useEffect(loadLedger, [sessionToken]);
 
@@ -79,14 +82,25 @@ export default function DeedsScreen({ sessionToken, balance, onBalanceChange, on
 
       <Card tone="ink" style={{ marginTop: 20 }}>
         <Tag label="Demo only — no real payment" tone="accent" />
-        <Text
-          {...HEAD_TEXT}
-          style={[type.display, { color: colors.accent, marginTop: 16 }]}
-          accessibilityLabel={`${balance ?? 0} Deeds`}
-        >
-          {balance ?? 0}
-        </Text>
-        <Text style={[type.subtitle, { color: colors.onInk }]}>Deeds</Text>
+        {ledger ? (
+          <>
+            <Text
+              {...HEAD_TEXT}
+              style={[type.display, { color: colors.accent, marginTop: 16 }]}
+              accessibilityLabel={`${balance ?? ledger.available ?? 0} Deeds`}
+            >
+              {balance ?? ledger.available ?? 0}
+            </Text>
+            <Text style={[type.subtitle, { color: colors.onInk }]}>Deeds</Text>
+          </>
+        ) : loadError ? (
+          <View style={{ marginTop: 16 }}>
+            <Text style={[type.bodyS, { color: colors.onInk }]}>We couldn't load your balance.</Text>
+            <LinkButton label="Try again" onPress={loadLedger} style={{ alignSelf: 'flex-start', marginTop: 8 }} />
+          </View>
+        ) : (
+          <View style={{ marginTop: 16 }}><Loading /></View>
+        )}
         {justPurchased || ledger?.held ? <View style={styles.divider} /> : null}
         {justPurchased ? (
           <View style={styles.noteLine}>

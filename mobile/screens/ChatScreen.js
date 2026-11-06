@@ -18,6 +18,7 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState(null);
+  const [polled, setPolled] = useState(false);
   const lastId = useRef(0);
   const scrollRef = useRef(null);
 
@@ -30,6 +31,8 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
       }
     } catch (err) {
       setError(err);
+    } finally {
+      setPolled(true);
     }
   }, [sessionToken, pairingId]);
 
@@ -98,6 +101,9 @@ export default function ChatScreen({ sessionToken, pairingId, navigate, onBack }
           </Pressable>
         ) : null}
 
+        {polled && messages.length === 0 ? (
+          <Text style={styles.system}>No messages yet. Say hello when you're ready.</Text>
+        ) : null}
         <View style={{ gap: 12, paddingTop: 16 }}>
           {messages.map((m) => {
             if (m.kind === 'starter') {

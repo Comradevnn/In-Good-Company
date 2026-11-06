@@ -107,8 +107,22 @@ async function main() {
     check('cancelling twice is refused (409 already_cancelled)', again.status === 409 && again.body.code === 'already_cancelled', again.body);
     const listed = (await api('/orgs/mine/shifts', { token: org.token })).body.shifts.find((s) => s.id === s1.id);
     check('the org listing shows the cancelled status', listed.status === 'cancelled');
+    check('the org listing shows when it was cancelled and the reason it gave',
+      listed.cancel_reason === 'Venue closed for repairs' && Boolean(listed.cancelled_at), listed);
     const roster = (await api(`/orgs/mine/shifts/${s1.id}/roster`, { token: org.token })).body;
     check('the roster shows the cancelled status and nobody on it', roster.shift.status === 'cancelled' && roster.roster.length === 0);
+    check('the roster\'s shift object carries the reason for the org', roster.shift.cancel_reason === 'Venue closed for repairs' && Boolean(roster.shift.cancelled_at), roster.shift);
+    const freeBooking = bookingRows.find((b) => b.user_id === free1.id);
+    const volunteerViews = JSON.stringify([
+      (await api(`/pairings/${pid}`, { token: free1.token })).body,
+      (await api(`/bookings/${freeBooking.id}`, { token: free1.token })).body,
+      (await api('/shifts', { token: free1.token })).body,
+      (await h.home(free1)),
+    ]);
+    check('a volunteer never sees the cancel reason in their pairing, booking, shift list or home',
+      !volunteerViews.includes('repairs') && !volunteerViews.includes('cancel_reason'), volunteerViews.slice(0, 200));
+    check('an org that was not given a reason sees null, not a made-up one',
+      (await api('/orgs/mine/shifts', { token: otherOrg.token })).body.shifts.every((x) => x.cancel_reason === null));
     check('the shift is no longer offered to volunteers', !(await api('/shifts', { token: free1.token })).body.shifts.some((s) => s.id === s1.id));
     check('a late search never matches onto the cancelled shift', (await h.tick(), db.prepare("SELECT COUNT(*) AS n FROM pairings WHERE shift_id = ? AND status = 'proposed'").get(s1.id).n === 0));
 
@@ -205,6 +219,21 @@ async function main() {
     const soloNote = (await notificationsFor(solo)).find((x) => x.kind === 'shift_cancelled');
     check('the solo volunteer is offered a new search', soloNote && soloNote.ref_type === 'matching');
     check('the solo volunteer can search again right away', (await h.startLooking(solo)).status < 300);
+
+    // ── An org-cancelled pairing is not a prior pairing ──
+    const rA = await h.makeVolunteer({ name: 'AgainA', deeds: 25 });
+    const rB = await h.makeVolunteer({ name: 'AgainB', deeds: 25 });
+    const { shift: s7 } = await pairOn(rA, rB, 10);
+    check('setup: the pair was confirmed and then the org called the shift off', (await cancelAs(org, s7, {})).status === 200);
+    isolate();
+    await h.makeShift(org, { daysAhead: 9, title: 'Another go' });
+    await h.startLooking(rA);
+    await h.startLooking(rB);
+    const againPid = await h.proposalFor(rA);
+    check('the same two can be proposed again', againPid !== null && againPid === (await h.proposalFor(rB)));
+    const againBreakdown = JSON.parse(db.prepare('SELECT score_breakdown FROM pairings WHERE id = ?').get(againPid).score_breakdown);
+    check('…with no repeat-pairing flag or penalty',
+      !againBreakdown.flags.includes('repeat_pair') && againBreakdown.multipliers.repeat === 1, againBreakdown);
 
     // ── Started shift ──
     isolate();
