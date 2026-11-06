@@ -173,6 +173,38 @@ async function main() {
     check('…and the partner still gets their choice', (await h.home(b6)).actions.some((a) => a.type === 'bail_decision'));
     check('…capacity unchanged (the solo spot is still used)', capacity(p6.shift.id) === 2);
 
+    // ── Late back-out keeping the spot solo: Deeds forfeited, check-in must not claim them back ──
+    const checkInMessage = async (v, bookingId) => {
+      await api(`/orgs/mine/bookings/${bookingId}/check-in`, { method: 'POST', token: org.token });
+      return (await api('/notifications', { token: v.token })).body.notifications.find((n) => n.kind === 'checked_in')?.body ?? '';
+    };
+    const a8 = await h.makeVolunteer({ deeds: 5 });
+    const b8 = await h.makeVolunteer({ deeds: 5 });
+    db.prepare("UPDATE accounts SET created_at = datetime(?, '-30 days') WHERE id = (SELECT account_id FROM users WHERE id = ?)")
+      .run(new Date(await h.serverNow()).toISOString().replace('T', ' ').slice(0, 19), a8.id);
+    const p8 = await pairOn(a8, b8);
+    await h.advance({ hours: 2 });
+    const prev8 = await api(`/bookings/${bookingOf(p8.pid, a8.id).id}/cancel-preview`, { token: a8.token });
+    check('a late back-out (past grace, no free cancel) is previewed as forfeited', prev8.body.type === 'late' && prev8.body.deeds_outcome === 'forfeited', prev8.body);
+    const before8 = await balances(a8);
+    await api(`/bookings/${bookingOf(p8.pid, a8.id).id}/cancel`, { method: 'POST', token: a8.token, body: { keep_spot_solo: true } });
+    const after8 = await balances(a8);
+    const a8Booking = bookingOf(p8.pid, a8.id);
+    check('late back-out keeping the spot: the spot stays, the held Deeds are forfeited', a8Booking.status === 'confirmed' && a8Booking.kind === 'solo' && after8.held === 0 && after8.available === before8.available, after8);
+    await h.advance({ to: new Date(Date.parse(p8.shift.starts_at) - 3600000).toISOString() });
+    const msg8 = await checkInMessage(a8, a8Booking.id);
+    check('check-in after a forfeited hold does not say the Deeds are back', msg8.includes('checked you in') && !msg8.includes('Deeds are back'), msg8);
+    check('…and check-in leaves the balance as it was', (await balances(a8)).available === after8.available && (await balances(a8)).held === 0);
+
+    const a9 = await h.makeVolunteer({ deeds: 5 });
+    const b9 = await h.makeVolunteer({ deeds: 5 });
+    const p9 = await pairOn(a9, b9);
+    await h.advance({ to: new Date(Date.parse(p9.shift.starts_at) - 3600000).toISOString() });
+    const a9Booking = bookingOf(p9.pid, a9.id);
+    const msg9 = await checkInMessage(a9, a9Booking.id);
+    check('a normal held booking still gets the "Deeds are back" check-in message', msg9.includes('Deeds are back'), msg9);
+    check('…and its Deeds really are back', (await balances(a9)).held === 0 && (await balances(a9)).available >= 5);
+
     // ── The backed-out-on person cancelling through the API never pays ──
     for (const afterRematch of [false, true]) {
       const a7 = await h.makeVolunteer({ deeds: 5 });
@@ -200,6 +232,11 @@ async function main() {
     const s1 = await h.makeVolunteer({ deeds: 5 });
     const rsvp = await api(`/shifts/${soloShift.id}/rsvp-solo`, { method: 'POST', token: s1.token });
     check('solo RSVP books a spot with no Deeds held', rsvp.status === 201 && rsvp.body.kind === 'solo' && (await balances(s1)).held === 0);
+    const s1Spot = db.prepare('SELECT id FROM bookings WHERE user_id = ?').get(s1.id).id;
+    const s1Search = await requestOf(s1);
+    check('the running search for a solo spot says which spot it is for', s1Search?.kind === 'solo_rsvp' && s1Search.status === 'searching' && s1Search.anchor_booking_id === s1Spot, s1Search);
+    check('a kept spot after a back-out has no search running for it',
+      (await requestOf(a6)) === null || (await requestOf(a6)).anchor_booking_id !== a6Booking.id);
     const s2 = await h.makeVolunteer({ deeds: 5 });
     await h.startLooking(s2);
     const soloPid = await h.proposalFor(s1);

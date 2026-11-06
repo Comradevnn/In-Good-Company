@@ -13,10 +13,24 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState(null);
 
+  // True only while a search for a partner is running for this very spot.
+  const [pairingSearch, setPairingSearch] = useState(false);
+
   const load = useCallback(() => {
     api(sessionToken, `/bookings/${bookingId}`).then((b) => {
-      if (b.pairing && b.pairing.status !== 'cancelled') navigate('pairing', { pairingId: b.pairing.id }, { replace: true });
-      else setBooking(b);
+      if (b.pairing && b.pairing.status !== 'cancelled') {
+        navigate('pairing', { pairingId: b.pairing.id }, { replace: true });
+        return;
+      }
+      setBooking(b);
+      if (b.status !== 'confirmed' || b.started || b.shift_cancelled) {
+        setPairingSearch(false);
+        return;
+      }
+      api(sessionToken, '/requests/current').then((r) => {
+        const req = r?.request ?? r;
+        setPairingSearch(Boolean(req) && req.status === 'searching' && req.kind === 'solo_rsvp' && req.anchor_booking_id === bookingId);
+      }).catch(() => setPairingSearch(false));
     }).catch(setError);
   }, [sessionToken, bookingId, navigate]);
 
@@ -73,7 +87,7 @@ export default function BookingScreen({ sessionToken, bookingId, navigate, onBac
       <Tag label={booking.kind === 'solo' ? 'Solo spot' : 'Your shift'} tone="accent" style={{ marginBottom: 12 }} />
       <Headline>{factLines(booking.shift.when_label)}</Headline>
       {booking.status === 'confirmed' && !booking.started ? (
-        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>You're booked. We'll still try to pair you with someone before it starts — if we do, you'll get a proposal to confirm.</Text>
+        <Text style={[type.body, { color: colors.ink2, marginTop: 8 }]}>You're booked.{pairingSearch ? " We'll still try to pair you with someone before it starts — if we do, you'll get a proposal to confirm." : ''}</Text>
       ) : null}
       <ShiftCard shift={booking.shift} />
       {booking.started && booking.status === 'confirmed' ? (

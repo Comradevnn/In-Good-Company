@@ -783,12 +783,14 @@ const checkIn = db.transaction((org, bookingId) => {
     throw new LifecycleError('too_early', 'Check-in opens two hours before the shift starts.');
   }
   const now = nowIso();
-  if (booking.hold_id) deeds.resolveHold(booking.hold_id, 'returned', 'attended', shift.org_id);
+  // Only a hold that was still held is returned now; a spot kept solo after a
+  // back-out has its hold resolved already (and maybe forfeited), so say nothing.
+  const deedsReturned = booking.hold_id ? deeds.resolveHold(booking.hold_id, 'returned', 'attended', shift.org_id) === 'returned' : false;
   db.prepare("UPDATE bookings SET status = 'attended', checked_in_at = ?, resolved_at = ? WHERE id = ?").run(now, now, booking.id);
   reliability.record(booking.user_id, 'attended', booking.id);
   updateVolunteerHistory(booking.user_id, shift);
   notify(booking.user_id, 'checked_in', "You're checked in",
-    `${shift.org.name} checked you in.${booking.hold_id ? ' Your Deeds are back in your balance.' : ''} Have a great shift!`, { type: 'booking', id: booking.id });
+    `${shift.org.name} checked you in.${deedsReturned ? ' Your Deeds are back in your balance.' : ''} Have a great shift!`, { type: 'booking', id: booking.id });
   completePairingIfResolved(booking.pairing_id);
   return getBooking(booking.id);
 });
@@ -1029,6 +1031,7 @@ function requestStatus(user) {
     id: request.id,
     kind: request.kind,
     status: request.status,
+    anchor_booking_id: request.anchor_booking_id ?? null,
     window_start: request.window_start,
     window_end: request.window_end,
     travel_radius_miles: request.travel_radius_miles,

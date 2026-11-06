@@ -77,7 +77,7 @@ export default function PremiumScreen({ sessionToken, onBack }) {
       {premium.source !== 'subscription' ? (
         <>
           <SectionTitle title="Go Premium" />
-          <Text style={styles.lede}>More matched shifts each month, weekly free Deeds, more buddy slots, a partner age filter, and a penalty-free late cancel each month.</Text>
+          <Text style={styles.lede}>More matched shifts each month, weekly free Deeds, more buddy slots, a partner age filter, a partner hobby filter, and a penalty-free late cancel each month.</Text>
           {premium.plans.map((plan) => (
             <Card key={plan.plan} style={{ marginTop: 8 }}>
               <Text style={styles.planTitle}>{plan.plan === 'monthly' ? 'Monthly' : 'Annual'}</Text>

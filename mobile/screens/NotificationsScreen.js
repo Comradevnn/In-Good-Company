@@ -26,7 +26,7 @@ export default function NotificationsScreen({ sessionToken, navigate, onBack }) 
 
   function open(n) {
     if (n.ref_type === 'pairing') navigate(n.kind === 'bail_decision' ? 'bail' : 'pairing', { pairingId: n.ref_id });
-    else if (n.ref_type === 'booking') navigate(n.kind === 'rate_shift' ? 'rating' : 'booking', { bookingId: n.ref_id });
+    else if (n.ref_type === 'booking') navigate((n.kind === 'rate_shift' || n.kind === 'org_rated_you') ? 'rating' : 'booking', { bookingId: n.ref_id });
     else if (n.ref_type === 'matching') navigate('startMatching');
   }
 
