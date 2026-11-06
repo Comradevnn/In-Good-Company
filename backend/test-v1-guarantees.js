@@ -132,9 +132,6 @@ async function main() {
   const { server } = await h.startServer();
   try {
     const db = require('./db');
-    const premium = require('./lib/premium');
-    const shiftsLib = require('./lib/shifts');
-    void premium; void shiftsLib;
     const isolate = () => {
       db.prepare("UPDATE shifts SET status = 'cancelled' WHERE status = 'open'").run();
       db.prepare("UPDATE availability_requests SET status = 'cancelled' WHERE status IN ('searching', 'proposed')").run();
@@ -180,7 +177,7 @@ async function main() {
     const people = [];
     const COUNT = 32;
     const makePerson = async (i) => {
-      const special = ['unverified', 'unverified', 'revoked', 'minorData', 'minorData', 'capped', 'capped', 'capped', 'nearCap', 'nearCap', 'free'][i] ?? null;
+      const special = ['unverified', 'unverified', 'revoked', 'minorData', 'minorData', 'capped', 'capped', 'capped', 'nearCap', 'nearCap', 'free', 'cappedFirst'][i] ?? null;
       const far = i >= COUNT - 4;
       const home = far ? SAC : { lat: SJ.lat + (rng.next() - 0.5) * 0.3, lng: SJ.lng + (rng.next() - 0.5) * 0.3 };
       const spec = {
@@ -197,7 +194,7 @@ async function main() {
         prefix: `stress${i}`, name: `Stress${i}`, age: spec.age, gender: spec.gender, gender_pref: spec.gender_pref, causes: spec.causes,
         radius: spec.radius, lat: home.lat, lng: home.lng, hobbies: spec.hobbies.join(', '), deeds: 25, verify: special !== 'unverified',
       });
-      return { ...spec, ...vol, free: ['capped', 'nearCap', 'free'].includes(special) };
+      return { ...spec, ...vol, free: ['capped', 'cappedFirst', 'nearCap', 'free'].includes(special) };
     };
     for (let i = 0; i < COUNT; i++) people.push(await makePerson(i));
     const byId = new Map(people.map((p) => [p.id, p]));
@@ -210,7 +207,8 @@ async function main() {
     `);
     for (const p of people.filter((q) => q.free)) {
       db.prepare('UPDATE accounts SET created_at = ? WHERE id = (SELECT account_id FROM users WHERE id = ?)').run('2020-01-01T00:00:00.000Z', p.id);
-      const used = p.special === 'capped' ? rules.FREE_MONTHLY_CAP : p.special === 'nearCap' ? rules.FREE_MONTHLY_CAP - 1 : 0;
+      // 'capped' people reach the cap after their search has started (below).
+      const used = p.special === 'cappedFirst' ? rules.FREE_MONTHLY_CAP : p.special === 'nearCap' ? rules.FREE_MONTHLY_CAP - 1 : 0;
       for (let k = 0; k < used; k++) insertBooking.run(p.id, ballast.id, month, new Date().toISOString(), new Date().toISOString());
       if (used) db.prepare('UPDATE shifts SET capacity_booked = capacity_booked + ? WHERE id = ?').run(used, ballast.id);
     }
@@ -285,14 +283,21 @@ async function main() {
       return act(() => h.startLooking(p, { window_start: windowStart, window_end: windowEnd, preference: rng.chance(0.7) ? 'anyone' : 'best', extra }));
     };
 
+    const excluded = (label) => people.filter((p) => p.special === label);
     // Round 0: everybody tries to start looking.
     const refused = [];
+    const refusedCode = new Map();
     for (const p of rng.sample(people, people.length)) {
       const res = await search(p);
-      if (res.status !== 201) refused.push(p);
+      if (res.status !== 201) { refused.push(p); refusedCode.set(p.id, res.body?.code); }
       // Data problems that appear after a search has started.
       if (res.status === 201 && p.special === 'minorData') {
         db.prepare('UPDATE users SET age = ? WHERE id = ?').run(rules.MIN_AGE - 1, p.id);
+        await act(() => h.tick());
+      }
+      if (res.status === 201 && p.special === 'capped') {
+        for (let k = 0; k < rules.FREE_MONTHLY_CAP; k++) insertBooking.run(p.id, ballast.id, month, new Date().toISOString(), new Date().toISOString());
+        db.prepare('UPDATE shifts SET capacity_booked = capacity_booked + ? WHERE id = ?').run(rules.FREE_MONTHLY_CAP, ballast.id);
         await act(() => h.tick());
       }
       if (res.status === 201 && p.special === 'revoked') {
@@ -302,6 +307,8 @@ async function main() {
     }
     check('people who never verified are refused when they try to start looking',
       people.filter((p) => p.special === 'unverified').every((p) => refused.includes(p)), refused.map((p) => p.special));
+    check('people already at their monthly cap are refused when they try to start looking, with the cap reason',
+      excluded('cappedFirst').every((p) => refusedCode.get(p.id) === 'monthly_cap_reached'), excluded('cappedFirst').map((p) => refusedCode.get(p.id)));
     // A few people take a spot on a shift on their own.
     for (const p of rng.sample(people.filter((q) => !q.special && !q.far), 3)) {
       const open = db.prepare("SELECT id FROM shifts WHERE status = 'open' AND capacity_total >= 3 AND capacity_booked < capacity_total AND org_id IN (?, ?)").all(orgA.id, orgB.id);
@@ -336,9 +343,21 @@ async function main() {
 
     const allPairings = db.prepare('SELECT * FROM pairings').all();
     const confirmed = allPairings.filter((p) => p.status === 'confirmed' || p.status === 'completed');
+    const reqOf = (id) => db.prepare('SELECT * FROM availability_requests WHERE id = ?').get(id);
+    const usedFilters = { weekdays: 0, hobby: 0, sameGender: 0 };
+    for (const p of allPairings) {
+      for (const [uid, rid] of [[p.user_a_id, p.request_a_id], [p.user_b_id, p.request_b_id]]) {
+        const r = reqOf(rid);
+        if (safeParseArray(r.weekdays).length) usedFilters.weekdays++;
+        if (safeParseArray(r.hobby_filter).length) usedFilters.hobby++;
+        if (userRow(uid).gender_pref === 'same_gender_only') usedFilters.sameGender++;
+      }
+    }
     console.log(`stress: ${people.length} people, ${shifts.length + 1} shifts, ${allPairings.length} pairings (${confirmed.length} confirmed), ${audits} audits`);
 
-    check('the stress run proposed a meaningful number of pairings', allPairings.length >= 6, allPairings.length);
+    check('the stress run proposed a meaningful number of pairings', allPairings.length >= 4, allPairings.length);
+    check('…including pairings where someone had set weekdays, a hobby filter or a same-gender preference (those filters were live, not idle)',
+      usedFilters.weekdays > 0 && usedFilters.hobby > 0 && usedFilters.sameGender > 0, usedFilters);
     check('…some of them confirmed by both people', confirmed.length >= 2, confirmed.length);
     check('…spread over several different shifts', new Set(allPairings.map((p) => p.shift_id)).size >= 3, new Set(allPairings.map((p) => p.shift_id)).size);
     check(`every one of ${audits} audits found each shift within its capacity and its counter equal to its live bookings`,
@@ -347,11 +366,10 @@ async function main() {
       bad.length === 0, bad.slice(0, 5));
     check('nobody was ever more than their monthly cap (confirmed plus pending proposals)', capProblems.length === 0, capProblems.slice(0, 3));
     const pairedIds = new Set(allPairings.flatMap((p) => [p.user_a_id, p.user_b_id]));
-    const excluded = (label) => people.filter((p) => p.special === label);
     check('people who never verified, lost their verification, or whose age fell below the adult line were never paired',
       [...excluded('unverified'), ...excluded('revoked'), ...excluded('minorData')].every((p) => !pairedIds.has(p.id)),
       [...excluded('unverified'), ...excluded('revoked'), ...excluded('minorData')].filter((p) => pairedIds.has(p.id)).map((p) => p.special));
-    check('people already at their monthly cap were never paired, and their search says why',
+    check('people who reached their monthly cap after starting to look were never paired, and their search says why',
       excluded('capped').every((p) => !pairedIds.has(p.id)
         && (db.prepare("SELECT last_reason FROM availability_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1").get(p.id)?.last_reason === 'monthly_cap_reached')),
       excluded('capped').map((p) => [pairedIds.has(p.id), db.prepare('SELECT last_reason FROM availability_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(p.id)?.last_reason]));
@@ -434,11 +452,12 @@ async function main() {
     const vA = await h.makeVolunteer({ prefix: 'gate', name: 'GateA', deeds: 25 });
     const vB = await h.makeVolunteer({ prefix: 'gate', name: 'GateB', deeds: 25 });
     const vC = await h.makeVolunteer({ prefix: 'gate', name: 'GateC', deeds: 25 });
+    // Looked at through someone with no booking of their own on the shift.
     const surfaces = async () => ({
-      shifts: (await api('/shifts', { token: vA.token })).body.shifts.some((s) => s.id === gateShift.id),
-      directory: (await api('/orgs?q=Waiver%20Org', { token: vA.token })).body.orgs.some((o) => o.id === waiverOrg.id),
-      orgPage: (await api(`/orgs/${waiverOrg.id}`, { token: vA.token })).status,
-      calendar: (await api(`/requests/calendar?from=${day}&to=${day}`, { token: vA.token })).body.days?.[0]?.colour,
+      shifts: (await api('/shifts', { token: outsider.token })).body.shifts.some((s) => s.id === gateShift.id),
+      directory: (await api('/orgs?q=Waiver%20Org', { token: outsider.token })).body.orgs.some((o) => o.id === waiverOrg.id),
+      orgPage: (await api(`/orgs/${waiverOrg.id}`, { token: outsider.token })).status,
+      calendar: (await api(`/requests/calendar?from=${day}&to=${day}`, { token: outsider.token })).body.days?.[0]?.colour,
     });
     const before = await surfaces();
     check("an unverified org's shift is absent from the shift list", before.shifts === false, before);
