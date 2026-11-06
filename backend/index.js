@@ -10,6 +10,7 @@ const { requireAuth, requireProfile } = require('./lib/auth');
 const rateLimit = require('./lib/rateLimit');
 const services = require('./lib/services');
 const clock = require('./lib/clock');
+const rules = require('./lib/rules');
 const { ownProfile } = require('./lib/serialize');
 const { CAUSES } = require('./lib/causes');
 const { isRealDate } = require('./lib/time');
@@ -455,6 +456,10 @@ app.post('/verification/document-check', requireAuth, requireProfile, async (req
     error: 'document_type, issuing_country, and document_number are required; the number must contain letters or digits, and ":" is not allowed in type or country.',
   };
   if (fieldsInvalid) {
+    return res.status(400).json(staticFieldError);
+  }
+  // Only government ID types are accepted; compared after trim + lowercase.
+  if (!rules.ACCEPTED_DOCUMENT_TYPES.includes(document_type.trim().toLowerCase())) {
     return res.status(400).json(staticFieldError);
   }
 

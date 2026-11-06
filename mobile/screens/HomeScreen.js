@@ -42,7 +42,15 @@ function primaryCard(home, navigate) {
       onPress: () => navigate('pairing', { pairingId: proposal.pairing_id }),
     };
   }
-  const today = home.bookings.find((b) => b.is_today && !b.ended && b.status === 'confirmed');
+  const today = home.bookings.find((b) => b.is_today && !b.ended && (b.status === 'confirmed' || b.status === 'attended'));
+  if (today?.status === 'attended') {
+    return {
+      eyebrow: 'Happening now',
+      title: `${today.shift.when_label.split(' · ')[1] ?? ''} · ${today.shift.org_name}`,
+      body: "You're checked in.",
+      onPress: () => navigate(today.pairing ? 'pairing' : 'booking', { pairingId: today.pairing?.id, bookingId: today.booking_id }),
+    };
+  }
   if (today) {
     return {
       eyebrow: today.started ? 'Happening now' : 'Today',
@@ -205,7 +213,9 @@ export default function HomeScreen({ sessionToken, navigate, onHomeLoaded }) {
                   ? b.pairing.partner_confirmed ? `${b.pairing.partner_name} confirmed — your turn` : `Proposed with ${b.pairing.partner_name}`
                   : b.pairing.status === 'cancelled'
                     ? mineToDecide ? `${b.pairing.partner_name} can't make it — tap to choose what's next` : 'This match ended — tap to see what happened'
-                    : `With ${b.pairing.partner_name}`
+                    : b.ended && b.status === 'confirmed'
+                      ? `Waiting for ${b.shift.org_name} to confirm you were there`
+                      : `With ${b.pairing.partner_name}`
                 : b.status === 'attended' ? 'Checked in' : 'Solo spot';
             return (
             <Pressable

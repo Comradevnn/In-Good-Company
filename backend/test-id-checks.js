@@ -4,6 +4,7 @@
 // rejected attempt leaves the account unverified and does not block a later
 // correct attempt by the same account.
 const h = require('./test-helpers');
+const rules = require('./lib/rules');
 
 h.useTempDb('id-checks');
 const { check, api } = h;
@@ -111,6 +112,24 @@ async function main() {
       method: 'POST', token: vol.token, body: { document_type: 'pass:port', issuing_country: 'US', document_number: 'X123456' },
     });
     check('document-check rejecting a bad document type is 400 with a code', badType.status === 400 && badType.body?.code === 'invalid_document_fields', badType.body);
+
+    // ── Only ID document types are accepted ──
+    let refusedBody = null;
+    for (const t of ['transit_card', 'student_id', 'Library Card']) {
+      const r = await api('/verification/document-check', {
+        method: 'POST', token: vol.token, body: { document_type: t, issuing_country: 'US', document_number: 'X123456' },
+      });
+      check(`a ${t} document type is refused with the static error`,
+        r.status === 400 && r.body?.code === 'invalid_document_fields' && !JSON.stringify(r.body).includes(t), r.body);
+      refusedBody = refusedBody ?? r.body;
+    }
+    for (const t of [...rules.ACCEPTED_DOCUMENT_TYPES, '  Drivers_License ']) {
+      const acc = await h.makeVolunteer({ prefix: 'dtype', verify: false });
+      const r = await api('/verification/document-check', {
+        method: 'POST', token: acc.token, body: { document_type: t, issuing_country: 'US', document_number: `DT${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}` },
+      });
+      check(`document type "${t}" passes document-check`, r.status === 200 && r.body?.duplicate === false, r.body);
+    }
 
     // ── A non-US document-number shape is accepted as typed ──
     const foreign = await h.makeVolunteer({ prefix: 'foreign', verify: false });

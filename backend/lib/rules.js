@@ -7,6 +7,9 @@ const { HOUR, DAY } = require('./clock');
 module.exports = {
   PLATFORM_TIMEZONE: 'America/Los_Angeles',
 
+  // Identity documents accepted for the duplicate-account check
+  ACCEPTED_DOCUMENT_TYPES: ['passport', 'drivers_license', 'state_id'],
+
   // Deeds
   DEFAULT_SHIFT_PRICE_DEEDS: 5,
   PURCHASE_PACKS: [5, 25, 50],
