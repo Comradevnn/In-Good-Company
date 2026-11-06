@@ -74,9 +74,11 @@ export default function BailDecisionScreen({ sessionToken, pairingId, navigate, 
         <Text style={[type.body, { color: colors.ink2 }]}>
           {choice === 'rematch'
             ? "This decision has already been made. We'll propose a new partner for this same shift."
-            : choice
-              ? 'This decision has already been made. Your held Deeds were released in full.'
-              : "The time to decide has passed, so your held Deeds were released in full."}
+            : choice === 'auto_release'
+              ? "It was too close to the shift to find someone new, so your held Deeds were released in full."
+              : choice && choice !== 'no_response_release'
+                ? 'This decision has already been made. Your held Deeds were released in full.'
+                : "The time to decide has passed, so your held Deeds were released in full."}
         </Text>
         <ShiftCard shift={pairing.shift} />
       </Screen>

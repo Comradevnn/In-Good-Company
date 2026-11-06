@@ -50,6 +50,9 @@ export default function PremiumScreen({ sessionToken, onBack }) {
 
   if (!premium) return <Screen title="Premium" onBack={onBack}>{error ? <ErrorState title="We couldn't load this" body="Check your connection and try again." onRetry={load} retryLabel="Try again" /> : <Loading />}</Screen>;
   const isPremium = premium.tier === 'premium';
+  // A subscription taken out during the trial is booked to start when the trial ends,
+  // so `source` stays 'trial' until then; premium_until says it is booked.
+  const booked = premium.source === 'trial' && premium.premium_until && Date.parse(premium.premium_until) > Date.parse(premium.trial_ends_at);
   return (
     <Screen title="Premium" onBack={onBack}>
       <Headline>{isPremium ? (premium.source === 'trial' ? "You're on the Premium trial" : "You're Premium") : "You're on the free plan"}</Headline>
@@ -74,7 +77,14 @@ export default function PremiumScreen({ sessionToken, onBack }) {
         ))}
       </Card>
 
-      {premium.source !== 'subscription' ? (
+      {booked ? (
+        <Card tone="field" style={{ marginTop: 12 }}>
+          <Text style={styles.planTitle}>You're subscribed</Text>
+          <Text style={[styles.label, { marginTop: 4 }]}>
+            Your {premium.plan === 'annual' ? 'annual' : 'monthly'} plan starts when your trial ends on {new Date(premium.trial_ends_at).toLocaleDateString()} and runs through {new Date(premium.premium_until).toLocaleDateString()}. Demo only: nothing is charged.
+          </Text>
+        </Card>
+      ) : premium.source !== 'subscription' ? (
         <>
           <SectionTitle title="Go Premium" />
           <Text style={styles.lede}>More matched shifts each month, weekly free Deeds, more buddy slots, a partner age filter, a partner hobby filter, and a penalty-free late cancel each month.</Text>

@@ -58,11 +58,13 @@ export default function OrgHomeScreen({ sessionToken, navigate, onLogOut }) {
 
   if (!org) {
     if (!error) return <Screen title="Your organization"><Loading /></Screen>;
+    // Only the server's own messages are written for people; a failed connection's is not.
+    const errorBody = error.status && error.message ? error.message : 'Check your connection and try again.';
     return (
       <Screen title="Your organization">
         <ErrorState
           title="We couldn't load your page"
-          body={error.message || 'Check your connection and try again.'}
+          body={errorBody}
           retryLabel="Try again"
           onRetry={() => { setError(null); load(); }}
         />

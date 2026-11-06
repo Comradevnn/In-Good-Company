@@ -17,18 +17,20 @@ import { formatDate, parseDate } from '../screens/dates';
 const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// "2026-11-14" -> "Sat, Nov 14" (the person's own calendar day, no timezone shift). Anything that
-// is not a real YYYY-MM-DD comes back unchanged.
-export function readableDate(value) {
+// "2026-11-14" -> "Sat, Nov 14" (the person's own calendar day, no timezone shift), or with
+// `withYear` -> "Nov 14, 2026" for dates where the year is the point (a date of birth, an
+// ID's expiry). Anything that is not a real YYYY-MM-DD comes back unchanged.
+export function readableDate(value, { withYear = false } = {}) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const d = parseDate(value);
   if (Number.isNaN(d.getTime()) || formatDate(d) !== value) return value;
+  if (withYear) return `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   return `${SHORT_DAYS[d.getDay()]}, ${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
-export default function DateField({ label, value, onChange, placeholder = 'Choose a date', initialDate, minimumDate, maximumDate, error }) {
+export default function DateField({ label, value, onChange, placeholder = 'Choose a date', initialDate, minimumDate, maximumDate, error, showYear = false }) {
   const [open, setOpen] = useState(false);
-  const shown = value ? readableDate(value) : '';
+  const shown = value ? readableDate(value, { withYear: showYear }) : '';
   const current = value ? parseDate(value) : (initialDate ?? new Date());
 
   return (
