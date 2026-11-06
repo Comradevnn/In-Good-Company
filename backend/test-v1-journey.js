@@ -13,7 +13,7 @@
 // Own server on :3050, own throwaway database. Product numbers come from lib/rules.js.
 const h = require('./test-helpers');
 const rules = require('./lib/rules');
-const { localDate, addDays } = require('./lib/time');
+const { localDate } = require('./lib/time');
 
 h.useTempDb('v1-journey');
 const { check, api } = h;
@@ -207,10 +207,9 @@ async function main() {
           unresolved.bookings.some((b) => b.booking_id === idB && b.ended) && !unresolved.actions.some((a) => a.type === 'rate'), unresolved.actions);
         await h.advance({ hours: rules.ATTENDANCE_AUTO_RESOLVE_MS / (60 * 60 * 1000), minutes: 1 });
       }
-      const homeB = await atStep(J, 'partner: shift over', B, 'rate');
+      await atStep(J, 'partner: shift over', B, 'rate');
       const rateNote = await noteKind(B, 'rate_shift');
       check(`[${J}] "how did it go?" points at the booking`, rateNote?.ref_type === 'booking' && rateNote.ref_id === idB, rateNote);
-      void homeB;
       const rB = await api(`/bookings/${idB}/ratings`, { method: 'POST', token: B.token, body: { org_operational: 4, personal_fit: 5, partner_showed_up: true, volunteer_again: true } });
       check(`[${J}] both said yes: they become buddies`, rB.status === 200 && rB.body.became_buddies === true, rB.body);
       const buddyNote = await noteKind(A, 'buddy_formed');
@@ -291,7 +290,7 @@ async function main() {
       check(`[${J}] buying a pack credits the balance`, buy.status === 200 && buy.body.balances.available === rules.PURCHASE_PACKS[1], buy.body);
 
       const Pat = await vol('Pat', { lat: 37.35, lng: -121.9 });
-      const first = await runShift(J, F, Pat, { checkIn: ['A'] });
+      await runShift(J, F, Pat, { checkIn: ['A'] });
 
       // Next search, with the buddy. Re-pick dates and weekdays as the edit screen does.
       isolate();
@@ -324,7 +323,6 @@ async function main() {
       const patSearch = await h.startLooking(Pat);
       check('[premium] and can keep searching', patSearch.status === 201 && patSearch.body.status === 'searching', patSearch.body);
       await api('/requests/current/cancel', { method: 'POST', token: Pat.token });
-      void first;
     }
 
     // ═══ Premium (signup trial) volunteer ═══
@@ -543,7 +541,6 @@ async function main() {
     // The journey table: step -> what /me/home offered -> which screen draws it.
     console.log('\nJOURNEY TABLE (journey | step | /me/home offered | mobile screen)');
     for (const r of rows) console.log(`  ${r.join(' | ')}`);
-    void addDays;
   } finally {
     h.cleanup(server);
   }
