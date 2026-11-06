@@ -88,13 +88,33 @@ Questions for the owner:
   next shift" button?
 - The safety-hold withdrawal leaves a proposal alone when the held person
   is on a rematch spot (their Deeds are already held). Withdraw it too?
-- The test plan's numeric cases assume an additive score formula, but the
-  engine multiplies factors. Confirm which applies.
-- The test plan hints that a missing cause list and an empty one should be
-  treated differently. Both currently give the same incomplete-profile
-  reason.
+- Some numeric expectations in the private test plan may not match how
+  the engine combines its scoring factors; to confirm against the private
+  repo.
+- A profile with no cause list and one with an empty list both get the
+  same incomplete-profile reason today; whether they should differ is for
+  the private test plan.
 - Calendar: should days inside the minimum lead time be greyed out? And
   should "nothing fits yet" use a neutral mark instead of the error red?
+- The back-out cutoff before a shift is only a label today: a confirmed
+  booking can still be cancelled (and forfeited) up to the start. Should
+  it be a hard block?
+- Orgs can rate a volunteer only from the recent-shifts list, and
+  attendance resolves itself a day after the shift. Should orgs get a
+  longer window or a past-shifts list?
+- The waiver is required by the org onboarding screen but not enforced by
+  the server, and volunteers never see it. Where should a volunteer see or
+  acknowledge it?
+- Terms of service and the "verification confirms identity, not
+  suitability" wording for orgs need counsel's text.
+- Partner preferences collect the same-gender option only (no orientation
+  preference). Referral credit is earned at verification, not signup.
+  "New to this org" in org metrics has no time period. Confirm each.
+
+Also built after the final audit: when an org rates a volunteer, the
+volunteer gets a neutral notice that opens the rating, where they choose
+whether it shows on their history; and keeping a spot solo after a late
+back-out no longer says the Deeds came back.
 
 ## 2026-10-23 — App redesign to direction B ("Overprint"), Calm tonal shade palette
 

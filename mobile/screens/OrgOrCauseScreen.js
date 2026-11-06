@@ -63,7 +63,10 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
   useEffect(() => {
     const id = initialValues?.preferred_org_id;
     if (!id) return;
-    api(sessionToken, `/orgs/${id}`).then((o) => { if (o?.name) setSelectedName((n) => n ?? o.name); }).catch(() => {});
+    api(sessionToken, `/orgs/${id}`).then((data) => {
+      const name = data?.org?.name ?? data?.name;
+      if (name) setSelectedName((n) => n ?? name);
+    }).catch(() => {});
   }, [initialValues?.preferred_org_id, sessionToken]);
 
   const retry = useCallback(() => setRetryTick((n) => n + 1), []);
@@ -220,7 +223,7 @@ export default function OrgOrCauseScreen({ sessionToken, step, total, onKnowsOrg
                   onChangeText={(v) => { setLeadName(v); if (v.trim()) { setSelectedId(null); setSelectedName(null); } }}
                 />
                 <Text style={[s.label, { marginTop: 16 }]}>
-                  Until they join, is it okay to pair you with the nearest organization that matches your interests?
+                  Until they join, are you happy to be matched with a similar organization nearby?
                 </Text>
                 <View style={styles.chipRow}>
                   <Chip label="Yes" role="radio" selected={okNearest === true} onPress={() => setOkNearest(true)} />
