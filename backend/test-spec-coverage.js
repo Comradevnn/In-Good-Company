@@ -236,7 +236,7 @@ async function main() {
     await api('/users', { method: 'POST', token: dupToken, body: { first_name: 'Dup', age: 30, gender: 'Female' } });
     await api('/users/me', { method: 'PATCH', token: dupToken, body: { location_city: 'San Jose, CA', cause_tags: ['Animal welfare'], gender_pref: 'any', availability_window_start: await h.serverDate(1), availability_window_end: await h.serverDate(10) } });
     const dupCheck = await api('/verification/document-check', { method: 'POST', token: dupToken, body: { document_type: 'passport', issuing_country: 'US', document_number: docNumber } });
-    const dupAttest = await api('/verification/attest', { method: 'POST', token: dupToken, body: { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2035-01-01' } });
+    const dupAttest = await api('/verification/attest', { method: 'POST', token: dupToken, body: { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2035-01-01' } });
     check('the document is recognised as already used and the second account cannot verify', dupCheck.body.duplicate === true && dupAttest.status === 400 && dupAttest.body?.code === 'no_recent_document_check', { dup: dupCheck.body, attest: dupAttest.status });
     const dupMe = await api('/users/me', { token: dupToken });
     check('the second account stays unverified', dupMe.body.verified === false || dupMe.body.verified === 0, dupMe.body.verified);

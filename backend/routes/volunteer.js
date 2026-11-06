@@ -19,6 +19,9 @@ const services = require('../lib/services');
 const { isBlockedPair } = require('../lib/blocks');
 const { requireAuth, requireProfile } = require('../lib/auth');
 const { getShift, visibleShifts, publicOrg } = require('../lib/shifts');
+const calendar = require('../lib/calendar');
+const orgDirectory = require('../lib/orgDirectory');
+const { ownProfile } = require('../lib/serialize');
 const { localDate } = require('../lib/time');
 
 const router = express.Router();
@@ -30,6 +33,7 @@ function wrap(fn) {
     try {
       await fn(req, res, next);
     } catch (err) {
+      if (err instanceof calendar.CalendarError) return res.status(err.status).json({ error: err.message, code: err.code });
       if (err instanceof LifecycleError) return res.status(err.status).json({ error: err.message, code: err.code, ...err.extra });
       if (err instanceof deeds.DeedsError) return res.status(400).json({ error: err.message, code: err.code, ...err.extra });
       next(err);
@@ -50,6 +54,11 @@ function volunteer(req, res, next) {
 
 // ── Views ──
 
+// An org cancelled the shift itself: the pairing ends with nobody backing out.
+function cancelledByOrg(pairing, shift) {
+  return pairing.status === 'cancelled' && shift.status === 'cancelled' && !pairing.backed_out_by;
+}
+
 function bookingView(user, booking) {
   const shift = getShift(booking.shift_id);
   const nowMs = clock.nowMs();
@@ -66,6 +75,8 @@ function bookingView(user, booking) {
       status: pairing.status,
       partner_name: lifecycle.getUser(pairing[`user_${side.other}_id`]).display_name,
       partner_confirmed: partnerBooking.status !== 'proposed' && Boolean(partnerBooking.hold_id),
+      shift_cancelled: shift.status === 'cancelled',
+      cancelled_by_org: cancelledByOrg(pairing, shift),
     };
   }
   return {
@@ -75,6 +86,7 @@ function bookingView(user, booking) {
     confirmed_at: booking.confirmed_at,
     checked_in_at: booking.checked_in_at,
     shift: lifecycle.shiftSummary(shift),
+    shift_cancelled: shift.status === 'cancelled',
     is_today: localDate(new Date(shift.starts_at), shift.timezone) === localDate(clock.now(), shift.timezone),
     started: Date.parse(shift.starts_at) <= nowMs,
     ended: Date.parse(shift.ends_at) <= nowMs,
@@ -99,7 +111,9 @@ function homeActions(user) {
     });
   }
   for (const p of db.prepare(`
-    SELECT * FROM pairings WHERE status = 'cancelled' AND bail_user_id = ? AND bail_choice IS NULL AND bail_deadline > ?
+    SELECT p.* FROM pairings p JOIN shifts s ON s.id = p.shift_id
+    WHERE p.status = 'cancelled' AND p.bail_user_id = ? AND p.bail_choice IS NULL AND p.bail_deadline > ?
+      AND p.backed_out_by IS NOT NULL AND s.status != 'cancelled'
   `).all(user.id, clock.isoNow())) {
     actions.push({
       type: 'bail_decision',
@@ -167,6 +181,11 @@ router.get('/requests/current', volunteer, wrap((req, res) => {
   res.json({ request: lifecycle.requestStatus(lifecycle.getUser(req.user.id)) });
 }));
 
+// Colour for each day of the search date picker. Dates and colours only.
+router.get('/requests/calendar', volunteer, wrap((req, res) => {
+  res.json(calendar.calendarFor(lifecycle.getUser(req.user.id), req.query));
+}));
+
 router.post('/requests/current/cancel', volunteer, wrap((req, res) => {
   lifecycle.cancelRequest(req.user);
   res.json({ ok: true });
@@ -207,6 +226,21 @@ router.post('/shifts/:id/rsvp-solo', volunteer, wrap((req, res) => {
   res.status(201).json(bookingView(req.user, lifecycle.getBooking(bookingId)));
 }));
 
+// Verified orgs by name, for "I already know an organization". Registered
+// before /orgs/:id; the org router's /orgs routes are POST-only or /orgs/mine*.
+router.get('/orgs', requireAuth, wrap((req, res) => {
+  res.json({ orgs: orgDirectory.searchOrgs(req.query.q) });
+}));
+
+router.post('/users/me/preferred-org', volunteer, wrap((req, res) => {
+  const orgId = req.body?.org_id;
+  if (orgId !== null && typeof orgId !== 'string') return res.status(400).json({ error: 'org_id must be an organization id or null.', code: 'invalid_org' });
+  if (!orgDirectory.setPreferredOrg(lifecycle.getUser(req.user.id), orgId)) {
+    return res.status(404).json({ error: 'Organization not found.', code: 'org_not_found' });
+  }
+  res.json(ownProfile(lifecycle.getUser(req.user.id)));
+}));
+
 router.get('/orgs/:id', requireAuth, wrap((req, res) => {
   const org = db.prepare('SELECT * FROM orgs WHERE id = ? AND verified = 1').get(req.params.id);
   if (!org) return res.status(404).json({ error: 'Organization not found.' });
@@ -228,11 +262,14 @@ function pairingDetail(user, pairingId) {
   const theirs = lifecycle.getBooking(pairing[`booking_${side.other}_id`]);
   const partnerId = pairing[`user_${side.other}_id`];
   const hold = mine.hold_id ? db.prepare('SELECT * FROM deeds_holds WHERE id = ?').get(mine.hold_id) : null;
+  const orgCancelled = cancelledByOrg(pairing, shift);
   const confirmedMine = mine.status === 'confirmed' && mine.kind === 'paired' && Boolean(mine.hold_id) && hold?.status === 'held';
   return {
     now: clock.isoNow(),
     id: pairing.id,
     status: pairing.status,
+    shift_cancelled: shift.status === 'cancelled',
+    cancelled_by_org: orgCancelled,
     origin: pairing.origin,
     proposal_expires_at: pairing.proposal_expires_at,
     confirmed_at: pairing.confirmed_at,
@@ -253,7 +290,7 @@ function pairingDetail(user, pairingId) {
     deeds: { price: deeds.shiftPriceDeeds(), available: deeds.balances(user.id).available },
     safety_notice_required: !user.safety_notice_ack_at,
     safety_notice: social.SAFETY_NOTICE,
-    bail: pairing.status === 'cancelled' && pairing.bail_user_id === user.id
+    bail: pairing.status === 'cancelled' && pairing.bail_user_id === user.id && !orgCancelled
       ? {
         deadline: pairing.bail_deadline,
         choice: pairing.bail_choice,

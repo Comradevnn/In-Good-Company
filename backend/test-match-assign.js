@@ -3,7 +3,7 @@
 // protection, buddy handling, determinism, and the inputs matching must
 // ignore. No server, no database. Checks are named by behaviour.
 const { MATCHING_CONFIG: cfg, withOverrides } = require('./matching/config');
-const { planAssignments, pairEligible, buildEdges, compareEdges, pairKey, pressure } = require('./matching/assign');
+const { planAssignments, pairEligible, buildEdges, compareEdges, pairKey, pressure, matchBar } = require('./matching/assign');
 const { scoreTriple } = require('./matching/score');
 const { toMatchPerson } = require('./matching/person');
 
@@ -349,6 +349,60 @@ check('shuffling the input order does not change the plan', shuffleOk);
   // An unreadable shift start must not turn the bar into NaN.
   const noStart = personalBar(person('b1', { waitedHours: 0.1 }), { ...far, starts_at: 'not a date' }, NOW, cfg);
   check('an unparseable shift start gives a bar of zero, not NaN', noStart === 0, noStart);
+}
+
+// ── Search filters: soonest first, preferred org tie-break, hobby filter ──
+{
+  const soon = shift('s-soon', { starts_at: new Date(NOW + 3 * DAY).toISOString() });
+  const later = shift('s-later', { starts_at: new Date(NOW + 5 * DAY).toISOString() });
+  const both = (extra = {}) => ({ eligibleShiftIds: ['s-soon', 's-later'], matchPreference: 'anyone', ...extra });
+  const equalFit = scoreTriple(person('t1', both()), person('t2', both()), soon, { repeat: false, mutualBuddy: false }, cfg).pairShiftFit
+    === scoreTriple(person('t1', both()), person('t2', both()), later, { repeat: false, mutualBuddy: false }, cfg).pairShiftFit;
+  const soonestFirst = plan([person('t1', both()), person('t2', both())], [later, soon]);
+  check('two otherwise equal shifts: the sooner one is proposed', equalFit && soonestFirst.matches.length === 1 && soonestFirst.matches[0].shiftId === 's-soon', soonestFirst.matches[0]?.shiftId);
+  const unchangedBar = soonestFirst.matches[0].breakdown.match_bar;
+  check('soonest-first does not touch the match bar', unchangedBar === 0);
+
+  // A preferred org wins ties only: after fit, before date.
+  const orgA = shift('s-orgA', { org_id: 'orgA', starts_at: new Date(NOW + 3 * DAY).toISOString() });
+  const orgB = shift('s-orgB', { org_id: 'orgB', starts_at: new Date(NOW + 5 * DAY).toISOString() });
+  const ids = ['s-orgA', 's-orgB'];
+  const withPref = (pa, pb, extra = {}) => plan([
+    person('t1', { eligibleShiftIds: ids, matchPreference: 'anyone', preferredOrgId: pa, ...extra }),
+    person('t2', { eligibleShiftIds: ids, matchPreference: 'anyone', preferredOrgId: pb }),
+  ], [orgA, orgB]);
+  check('without a preference the sooner shift wins the tie', withPref(null, null).matches[0].shiftId === 's-orgA');
+  check('a preferred org wins a tie against a sooner shift', withPref('orgB', null).matches[0].shiftId === 's-orgB');
+  check('either person of the pair can supply the preference', withPref(null, 'orgB').matches[0].shiftId === 's-orgB');
+  check('two people preferring different orgs: it is a tie again, so the sooner shift wins', withPref('orgB', 'orgA').matches[0].shiftId === 's-orgA');
+  const scoreOn = (pref) => scoreTriple(person('t1', { preferredOrgId: pref }), person('t2'), orgB, { repeat: false, mutualBuddy: false }, cfg).quality;
+  const barOn = (pref) => matchBar(person('t1', { preferredOrgId: pref }), person('t2'), orgB, NOW, cfg);
+  check('a preferred org does not change the score or the bar', scoreOn('orgB') === scoreOn(null) && barOn('orgB') === barOn(null));
+  check('a demoted org is still last, whatever is preferred', withPref('orgB', null, { poorFitOrgIds: ['orgB'] }).matches[0].shiftId === 's-orgA');
+  const farther = shift('s-far', { org_id: 'orgF', starts_at: orgA.starts_at, location: { lat: SJ.lat + 0.2, lng: SJ.lng } });
+  const fitPlan = plan([person('t1', { eligibleShiftIds: ['s-orgA', 's-far'], matchPreference: 'anyone', preferredOrgId: 'orgF' }),
+    person('t2', { eligibleShiftIds: ['s-orgA', 's-far'], matchPreference: 'anyone' })], [orgA, farther]);
+  check('a preferred org never beats a clearly better-fitting shift', fitPlan.matches[0].shiftId === 's-orgA', fitPlan.matches[0]?.shiftId);
+
+  // Premium hobby filter: one-sided, at least one shared hobby.
+  const filterHolder = person('h1', { hobbyFilter: ['chess', 'kayaking'], interests: ['cooking'] });
+  const noHobby = person('h2', { interests: ['hiking'] });
+  const hasHobby = person('h3', { interests: ['music', 'chess'] });
+  check('a partner without any of the wanted hobbies is never paired', pairEligible(filterHolder, noHobby, noFacts()).reason === 'hobby_filter');
+  check('…in either argument order', pairEligible(noHobby, filterHolder, noFacts()).reason === 'hobby_filter');
+  check('a partner with one of the wanted hobbies is eligible', pairEligible(filterHolder, hasHobby, noFacts()).ok);
+  check('the filter binds only the person who set it (others are unaffected)', pairEligible(noHobby, hasHobby, noFacts()).ok);
+  check('an empty hobby filter filters nothing', pairEligible(person('h4', { hobbyFilter: [] }), noHobby, noFacts()).ok);
+  const hobbyPlan = plan([filterHolder, noHobby, hasHobby].map((p) => ({ ...p, eligibleShiftIds: ['s1'] })), [shift('s1')]);
+  check('in a pool, the filter holder is paired with the partner who shares a hobby', pairsOf(hobbyPlan).join() === ['r-h1+r-h3'].join(), pairsOf(hobbyPlan));
+
+  // person.js carries the new fields from the rows.
+  const row = { id: 'u-x', cause_tags: '["Animal welfare"]', interest_tags: '["Hiking"]', preferred_org_id: 'orgZ' };
+  const built = toMatchPerson(row, { id: 'r-x', kind: 'standard', hobby_filter: '[" Board  Games ","chess"]' }, {}, cfg);
+  check('the hobby filter and preferred org reach the matching person, normalised',
+    built.hobbyFilter.join('|') === 'board games|chess' && built.preferredOrgId === 'orgZ' && built.interests[0] === 'hiking', built);
+  const bare = toMatchPerson({ id: 'u-y', cause_tags: '[]', interest_tags: '[]' }, { id: 'r-y', kind: 'standard' }, {}, cfg);
+  check('without them the person has no filter and no preferred org', bare.hobbyFilter.length === 0 && bare.preferredOrgId === null);
 }
 
 // ── Time budget ──// ── Time budget ──

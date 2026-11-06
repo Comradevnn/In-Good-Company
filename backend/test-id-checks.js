@@ -1,5 +1,5 @@
 // ID verification hardening over HTTP (own throwaway database, server on
-// :3050 — see test-helpers.js): the under-age refusal (false or any non-true value), stable error
+// :3050 — see test-helpers.js): the under-age refusal (false or any non-true value), the required adulthood answer, stable error
 // codes on the document-check/attest rejections, and the guarantee that a
 // rejected attempt leaves the account unverified and does not block a later
 // correct attempt by the same account.
@@ -37,8 +37,8 @@ async function main() {
     const minorMe = await api('/users/me', { token: minor.token });
     check('the profile reads as unverified after the underage rejection', !minorMe.body?.verified, minorMe.body?.verified);
 
-    // Anything present that isn't exactly true is refused; omitting it stays accepted.
-    for (const [label, value] of [['the string "false"', 'false'], ['0', 0], ['null', null], ['the string "true"', 'true']]) {
+    // Anything present that isn't exactly true is refused as underage.
+    for (const [label, value] of [['the string "false"', 'false'], ['0', 0], ['the string "true"', 'true']]) {
       const odd = await attest(minor, { ...GOOD, dob_is_adult: value });
       check(`dob_is_adult as ${label} is rejected with 400 underage_document`,
         odd.status === 400 && odd.body?.code === 'underage_document', odd.body);
@@ -46,9 +46,23 @@ async function main() {
     const afterOdd = stateOf(minor);
     check('the non-boolean rejections leave the account unverified with no badge', afterOdd.verified === 0 && afterOdd.badges === 0, afterOdd);
 
+    // The adulthood answer is required: a missing or null answer is refused with its own code.
+    const noAnswer = { ...GOOD };
+    delete noAnswer.dob_is_adult;
+    const missingAnswer = await attest(minor, noAnswer);
+    check('a missing adulthood answer is refused with 400 adult_answer_required',
+      missingAnswer.status === 400 && missingAnswer.body?.code === 'adult_answer_required', missingAnswer.body);
+    check('the missing-answer refusal keeps a readable error message',
+      typeof missingAnswer.body?.error === 'string' && missingAnswer.body.error.length > 0);
+    const nullAnswer = await attest(minor, { ...GOOD, dob_is_adult: null });
+    check('a null adulthood answer is refused with 400 adult_answer_required',
+      nullAnswer.status === 400 && nullAnswer.body?.code === 'adult_answer_required', nullAnswer.body);
+    const afterMissing = stateOf(minor);
+    check('the missing-answer refusals leave the account unverified with no badge', afterMissing.verified === 0 && afterMissing.badges === 0, afterMissing);
+
     // ── The same account can still complete a correct attempt afterwards ──
     const retry = await attest(minor, GOOD);
-    check('a correct attempt after the rejection verifies the same account',
+    check('an explicit true adulthood answer is accepted, so a correct attempt after the rejection verifies the same account',
       retry.status === 200 && retry.body?.verified, { status: retry.status, body: retry.body });
     const verifiedMinor = stateOf(minor);
     check('the correct attempt creates exactly one badge', verifiedMinor.verified === 1 && verifiedMinor.badges === 1, verifiedMinor);
@@ -116,6 +130,29 @@ async function main() {
     check('and the duplicate account cannot attest without a staged check',
       copycatAttest.status === 400 && copycatAttest.body?.code === 'no_recent_document_check', copycatAttest.body);
     check('the duplicate account stays unverified with no badge', stateOf(copycat).verified === 0 && stateOf(copycat).badges === 0, stateOf(copycat));
+
+    // ── Two optional profile fields saved through PATCH /users/me ──
+    const prof = await h.makeVolunteer({ prefix: 'prof', verify: false });
+    const patch = (body) => api('/users/me', { method: 'PATCH', token: prof.token, body });
+    const okDays = await patch({ availability_weekdays: [6, 0, 3] });
+    check('availability_weekdays accepts unique day numbers and is returned as JSON text',
+      okDays.status === 200 && JSON.parse(okDays.body.availability_weekdays).join() === '0,3,6', okDays.body);
+    check('GET /users/me returns the saved weekdays', JSON.parse((await api('/users/me', { token: prof.token })).body.availability_weekdays).join() === '0,3,6');
+    for (const [label, value] of [['a repeated day', [1, 1]], ['a day above 6', [7]], ['a negative day', [-1]], ['a non-integer day', [1.5]], ['a string day', ['1']], ['a non-list', 3]]) {
+      const res = await patch({ availability_weekdays: value });
+      check(`availability_weekdays with ${label} is 400 invalid_weekdays`, res.status === 400 && res.body?.code === 'invalid_weekdays', res.body);
+    }
+    check('a rejected weekdays value leaves the saved one untouched', JSON.parse((await api('/users/me', { token: prof.token })).body.availability_weekdays).join() === '0,3,6');
+    for (const [label, value] of [['an empty list', []], ['null', null]]) {
+      const res = await patch({ availability_weekdays: value });
+      check(`availability_weekdays as ${label} clears it to any day`, res.status === 200 && res.body.availability_weekdays === null, res.body);
+    }
+    for (const [value, stored] of [[true, 1], [false, 0], [null, null]]) {
+      const res = await patch({ prospective_org_ok_nearest: value });
+      check(`prospective_org_ok_nearest ${value} is stored as ${stored}`, res.status === 200 && res.body.prospective_org_ok_nearest === stored, res.body);
+    }
+    const badNearest = await patch({ prospective_org_ok_nearest: 'yes' });
+    check('prospective_org_ok_nearest rejects a non-boolean', badNearest.status === 400, badNearest.body);
   } finally {
     h.cleanup(server);
   }

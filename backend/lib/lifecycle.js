@@ -18,12 +18,13 @@ const chat = require('./chat');
 const { notify } = require('./notify');
 const { runResurfacing } = require('./resurface');
 const { getShift, releaseSpots, reserveSpots, visibleShifts } = require('./shifts');
-const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch } = require('./matchingRunner');
+const { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch, parseWeekdays, windowHasWeekday } = require('./matchingRunner');
 const { localDate, monthKey, endOfLocalDayMs, addDays, isRealDate, localMinutes } = require('./time');
 const { CAUSES } = require('./causes');
 const { haversineMiles, causeMatchLevels, causeGatePasses, safeParseArray, tagMatchLevel, hardFiltersPass } = require('../matching/engine');
 const { isBlockedPair } = require('./blocks');
 const { pressure } = require('../matching/assign');
+const { normaliseInterest } = require('../matching/person');
 
 class LifecycleError extends Error {
   constructor(code, message, status = 409, extra = {}) {
@@ -94,6 +95,35 @@ function validateWindow(windowStart, windowEnd, nowMs) {
   return deadlineMs;
 }
 
+// Days of the week the person is free: an array of unique integers 0 (Sunday)
+// to 6 (Saturday). [] means any day. Returns the sorted list.
+function parseWeekdayInput(value) {
+  const ok = Array.isArray(value) && value.length <= 7 && value.every((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+    && new Set(value).size === value.length;
+  if (!ok) throw new LifecycleError('invalid_weekdays', 'Pick the days of the week you are free.', 400);
+  return [...value].sort();
+}
+
+function requireWeekdayInWindow(windowStart, windowEnd, weekdays) {
+  if (!windowHasWeekday(windowStart, windowEnd, weekdays)) {
+    throw new LifecycleError('no_weekday_in_window', 'None of the days you picked fall between your start and end dates. Widen your dates or pick other days.', 400);
+  }
+}
+
+// Premium: up to three hobbies a partner must share one of. Absent, null or
+// [] means no filter. Returns the normalised list, or null.
+const HOBBY_FILTER_MAX = 3;
+const HOBBY_MAX_LENGTH = 40;
+function parseHobbyFilter(value) {
+  if (value == null || (Array.isArray(value) && value.length === 0)) return null;
+  const ok = Array.isArray(value) && value.length <= HOBBY_FILTER_MAX
+    && value.every((v) => typeof v === 'string' && v.trim().length > 0 && v.trim().length <= HOBBY_MAX_LENGTH);
+  if (!ok) {
+    throw new LifecycleError('invalid_hobby_filter', `Pick up to ${HOBBY_FILTER_MAX} hobbies, each up to ${HOBBY_MAX_LENGTH} characters.`, 400);
+  }
+  return [...new Set(value.map(normaliseInterest))];
+}
+
 function activeBuddyIds(userId) {
   return db.prepare(`
     SELECT CASE WHEN user_low_id = ? THEN user_high_id ELSE user_low_id END AS other
@@ -120,12 +150,14 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   const mine = safeParseArray(user.cause_tags);
   const nowMs = clock.nowMs();
   const others = db.prepare(`
-    SELECT u.*, r.age_min AS req_age_min, r.age_max AS req_age_max, r.travel_radius_miles AS req_radius
+    SELECT u.*, r.age_min AS req_age_min, r.age_max AS req_age_max, r.travel_radius_miles AS req_radius,
+      r.window_start AS req_start, r.window_end AS req_end, r.weekdays AS req_weekdays
     FROM availability_requests r JOIN users u ON u.id = r.user_id
     WHERE r.status = 'searching' AND r.kind = 'standard' AND r.user_id != ? AND r.buddy_user_id IS NULL
       AND r.window_start <= ? AND r.window_end >= ?
   `).all(user.id, windowEnd, windowStart);
   const inBand = (min, max, age) => (min == null || (age != null && age >= min)) && (max == null || (age != null && age <= max));
+  const myWeekdays = parseWeekdays(request ? request.weekdays : user.availability_weekdays);
   const myRadius = request?.travel_radius_miles ?? user.travel_radius_miles ?? null;
   const unfit = db.prepare(`
     SELECT 1 FROM pairings WHERE status IN ('proposed', 'confirmed')
@@ -137,6 +169,9 @@ function anyonePartnerLikely(user, windowStart, windowEnd, request = null) {
   return others.some((o) => {
     if (tagMatchLevel(mine, safeParseArray(o.cause_tags)) === 'none') return false;
     if (isBlockedPair(user.id, o.id)) return false;
+    // Cheap day check: some day in both windows is free for both people.
+    if (!windowHasWeekday(windowStart > o.req_start ? windowStart : o.req_start, windowEnd < o.req_end ? windowEnd : o.req_end,
+      myWeekdays, parseWeekdays(o.req_weekdays))) return false;
     if (!hardFiltersPass(user, o).pass) return false;
     if (!inBand(o.req_age_min, o.req_age_max, user.age) || !inBand(request?.age_min, request?.age_max, o.age)) return false;
     if (user.location_lat != null && user.location_lng != null && o.location_lat != null && o.location_lng != null) {
@@ -197,21 +232,33 @@ const createRequest = db.transaction((user, body) => {
     }
   }
 
+  const hobbyFilter = parseHobbyFilter(body.hobby_filter);
+  if (hobbyFilter && premium.state(user).tier !== 'premium') {
+    throw new LifecycleError('premium_required', 'Partner hobby filters are a Premium feature.', 403);
+  }
+
+  // No weekdays sent: fall back to the profile's last choice, like the dates.
+  const weekdays = body.weekdays != null ? parseWeekdayInput(body.weekdays) : parseWeekdays(user.availability_weekdays);
+  requireWeekdayInWindow(windowStart, windowEnd, weekdays);
+  const weekdaysJson = weekdays.length > 0 ? JSON.stringify(weekdays) : null;
+
   const preference = parsePreference(body.match_preference) ?? 'best';
 
   const requestId = id();
   db.prepare(`
     INSERT INTO availability_requests (id, user_id, kind, window_start, window_end, travel_radius_miles, buddy_user_id,
-      age_min, age_max, match_preference, status, search_deadline, created_at)
-    VALUES (?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?)
-  `).run(requestId, user.id, windowStart, windowEnd, radius, buddyId, ageMin, ageMax, preference, new Date(deadlineMs).toISOString(), nowIso());
+      age_min, age_max, match_preference, weekdays, hobby_filter, status, search_deadline, created_at)
+    VALUES (?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'searching', ?, ?)
+  `).run(requestId, user.id, windowStart, windowEnd, radius, buddyId, ageMin, ageMax, preference, weekdaysJson,
+    hobbyFilter ? JSON.stringify(hobbyFilter) : null, new Date(deadlineMs).toISOString(), nowIso());
   // Keep the profile's "latest availability" in step, so the availability
   // screen pre-fills with what the user last submitted.
   db.prepare(`
-    UPDATE users SET availability_window_start = ?, availability_window_end = ?, travel_radius_miles = ?, updated_at = datetime('now')
+    UPDATE users SET availability_window_start = ?, availability_window_end = ?, travel_radius_miles = ?,
+      availability_weekdays = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(windowStart, windowEnd, radius, user.id);
-  logMatch(`${user.display_name} started looking: ${windowStart} → ${windowEnd}, ${radius} mi${buddyId ? ' (with a buddy)' : ''}`);
+  `).run(windowStart, windowEnd, radius, weekdaysJson, user.id);
+  logMatch(`${user.display_name} started looking: ${windowStart} → ${windowEnd}${weekdays.length ? ` on weekdays ${weekdays.join(',')}` : ''}, ${radius} mi${buddyId ? ' (with a buddy)' : ''}`);
   return requestId;
 });
 
@@ -274,17 +321,27 @@ const adjustRequest = db.transaction((user, body) => {
       db.prepare('UPDATE users SET cause_tags = ? WHERE id = ?').run(JSON.stringify(causes), user.id);
     }
   }
+  if (body.weekdays != null) {
+    const weekdays = parseWeekdayInput(body.weekdays);
+    updates.weekdays = weekdays.length > 0 ? JSON.stringify(weekdays) : null;
+    db.prepare('UPDATE users SET availability_weekdays = ? WHERE id = ?').run(updates.weekdays, user.id);
+  }
   if (body.drop_buddy) updates.buddy_user_id = null;
   const preference = parsePreference(body.match_preference);
   if (preference) updates.match_preference = preference;
 
   const nowMs = clock.nowMs();
-  const deadlineMs = validateWindow(updates.window_start ?? request.window_start, updates.window_end ?? request.window_end, nowMs);
+  const newStart = updates.window_start ?? request.window_start;
+  const newEnd = updates.window_end ?? request.window_end;
+  const deadlineMs = validateWindow(newStart, newEnd, nowMs);
+  requireWeekdayInWindow(newStart, newEnd, parseWeekdays('weekdays' in updates ? updates.weekdays : request.weekdays));
   // Moving the deadline out must not push the match bar back up: remember how
   // much of its search time the request had used (never lowering an earlier floor).
   updates.pressure_floor = pressure({
     createdAtMs: Date.parse(request.created_at), deadlineMs: Date.parse(request.search_deadline), pressureFloor: request.pressure_floor,
   }, nowMs);
+  // A search revived after its time limit starts with no match bar.
+  if (request.status === 'no_match') updates.pressure_floor = 1;
   updates.search_deadline = new Date(deadlineMs).toISOString();
   updates.status = 'searching';
   updates.last_reason = null;
@@ -970,6 +1027,7 @@ function requestStatus(user) {
     window_start: request.window_start,
     window_end: request.window_end,
     travel_radius_miles: request.travel_radius_miles,
+    weekdays: parseWeekdays(request.weekdays).length ? parseWeekdays(request.weekdays) : null,
     buddy_name: request.buddy_user_id ? getUser(request.buddy_user_id)?.display_name : null,
     created_at: request.created_at,
     search_deadline: request.search_deadline,
@@ -1002,6 +1060,7 @@ function dismissNoMatch(user) {
 module.exports = {
   LifecycleError,
   anyonePartnerLikely,
+  endProposal,
   openRequest,
   submitRequest,
   cancelRequest,

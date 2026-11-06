@@ -58,6 +58,18 @@ function ageBandOk(person, other) {
   return true;
 }
 
+// One-sided, like the age band: only the person who set the filter is held to it.
+function hobbyFilterOk(person, other) {
+  if (!person.hobbyFilter || person.hobbyFilter.length === 0) return true;
+  const theirs = new Set(other.interests ?? []);
+  return person.hobbyFilter.some((hobby) => theirs.has(hobby));
+}
+
+// How many of the two people favour this shift's org (a tie-break only).
+function preferredOrgCount(a, b, shift) {
+  return [a, b].filter((p) => p.preferredOrgId && p.preferredOrgId === shift.org_id).length;
+}
+
 const hardRow = (p) => ({
   id: p.userId, age: p.age, verified: p.verified, gender: p.gender, gender_pref: p.genderPref,
   flagged_users: JSON.stringify(p.flaggedUsers ?? []),
@@ -69,6 +81,7 @@ function pairEligible(a, b, pairFacts) {
   const hard = hardFiltersPass(hardRow(a), hardRow(b));
   if (!hard.pass) return { ok: false, reason: hard.reasons[0] };
   if (!ageBandOk(a, b) || !ageBandOk(b, a)) return { ok: false, reason: 'age_band' };
+  if (!hobbyFilterOk(a, b) || !hobbyFilterOk(b, a)) return { ok: false, reason: 'hobby_filter' };
   const key = pairKey(a.userId, b.userId);
   if (pairFacts?.declined?.has(key)) return { ok: false, reason: 'declined_before' };
   if (pairFacts?.active?.has(key)) return { ok: false, reason: 'already_paired' };
@@ -85,7 +98,8 @@ const spotsNeeded = (a, b) => (a.anchorShiftId ? 0 : 1) + (b.anchorShiftId ? 0 :
 
 // Every eligible pair with at least one shared shift that has room, with
 // its shifts ranked: not demoted first (an org either person privately
-// rated a poor fit), then best fit for the pair, then earliest, then id.
+// rated a poor fit), then best fit for the pair, then an org either person
+// favours, then earliest ("soonest first"), then id.
 function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
   const room = capacity ?? new Map(shifts.map((s) => [s.id, s.capacity_remaining]));
@@ -120,7 +134,7 @@ function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
         if (!shift || (room.get(id) ?? 0) < need) continue;
         const score = scoreTriple(a, b, shift, facts, cfg);
         const bar = matchBar(a, b, shift, nowMs, cfg, mutualBuddy);
-        options.push({ shift, need, demoted: poor.has(shift.org_id), score, bar, passes: score.quality >= bar });
+        options.push({ shift, need, demoted: poor.has(shift.org_id), preferred: preferredOrgCount(a, b, shift), score, bar, passes: score.quality >= bar });
       }
       if (options.length === 0) {
         exclude(a, 'no_shared_shift_with_room');
@@ -140,6 +154,7 @@ function buildEdges({ persons, shifts, pairFacts, nowMs, cfg, capacity }) {
       options.splice(0, options.length, ...options.filter((o) => o.passes));
       options.sort((o1, o2) => (o1.demoted - o2.demoted)
         || (o2.score.pairShiftFit - o1.score.pairShiftFit)
+        || (o2.preferred - o1.preferred)
         || o1.shift.starts_at.localeCompare(o2.shift.starts_at)
         || (o1.shift.id < o2.shift.id ? -1 : o1.shift.id > o2.shift.id ? 1 : 0));
       edges.push(makeEdge(a, b, options, mutualBuddy, nowMs, cfg));

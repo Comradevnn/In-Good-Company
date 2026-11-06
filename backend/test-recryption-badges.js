@@ -211,7 +211,7 @@ async function part2() {
     const run = Date.now();
     const email = `mod3-${run}@example.com`;
     const docX = { document_type: 'passport', issuing_country: 'US', document_number: `MOD3X${run}` };
-    const attestBody = { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2031-01-01' };
+    const attestBody = { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2031-01-01' };
 
     const signup = await api('/auth/signup', { method: 'POST', body: { email, password: 'hunter2secure' } });
     const token = signup.body.session_token;

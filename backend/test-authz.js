@@ -90,7 +90,7 @@ async function main() {
       responses.push(await api('/users/me', { token: v.token }));
       responses.push(await api('/users/me', { method: 'PATCH', token: v.token, body: { location_city: 'San Jose, CA' } }));
       await api('/verification/document-check', { method: 'POST', token: v.token, body: { document_type: 'passport', issuing_country: 'US', document_number: doc } });
-      responses.push(await api('/verification/attest', { method: 'POST', token: v.token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2035-01-01' } }));
+      responses.push(await api('/verification/attest', { method: 'POST', token: v.token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2035-01-01' } }));
       responses.push(await api('/deeds/purchase', { method: 'POST', token: v.token, body: { deeds: 5 } }));
     }
     const badShape = responses.filter((r) => r.status >= 400 || Object.keys(r.body).some((k) => INTERNAL_USER_COLUMNS.includes(k)));

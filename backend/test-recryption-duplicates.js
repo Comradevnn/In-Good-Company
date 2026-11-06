@@ -135,7 +135,7 @@ async function part2() {
     const emailA = `mod2-a-${run}@example.com`;
     const emailB = `mod2-b-${run}@example.com`;
     const docX = { document_type: 'passport', issuing_country: 'US', document_number: `MOD2X${run}` };
-    const attestBody = { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2031-01-01' };
+    const attestBody = { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2031-01-01' };
 
     const tokenA = await makeAccount(emailA, 'Mod2A');
     const tokenB = await makeAccount(emailB, 'Mod2B');

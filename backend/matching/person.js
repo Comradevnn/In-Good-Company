@@ -40,6 +40,10 @@ function toMatchPerson(userRow, requestRow, stats, cfg) {
     radiusMiles: requestRow.travel_radius_miles ?? userRow.travel_radius_miles ?? null,
     ageMin: requestRow.age_min ?? null,
     ageMax: requestRow.age_max ?? null,
+    // Premium: hobbies a partner must share at least one of (this person's own search only).
+    hobbyFilter: [...new Set(safeParseArray(requestRow.hobby_filter).map(normaliseInterest).filter(Boolean))],
+    // An org this person chose to favour; only ever breaks ties between equal options.
+    preferredOrgId: userRow.preferred_org_id ?? null,
 
     standing: orgStanding(stats.orgRatings, cfg),
     attendedShifts: stats.attendedShifts ?? 0,

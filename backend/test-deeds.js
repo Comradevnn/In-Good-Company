@@ -4,10 +4,12 @@
 // attendance, the monthly cap (free and Premium), the signup trial boundary,
 // the weekly grant, Premium's penalty-free late cancel,
 // referral credits (rate limit + self-referral via a duplicate document),
-// platform repricing, the no-show escalation, and ledger/column consistency.
+// platform repricing, the no-show escalation, the duplicate-document account
+// (no trial grants, earlier unspent grants withdrawn), and ledger/column consistency.
 // Own server on :3050, own throwaway database.
 const crypto = require('node:crypto');
 const h = require('./test-helpers');
+const rules = require('./lib/rules');
 
 h.useTempDb('deeds');
 const { check, api } = h;
@@ -203,7 +205,7 @@ async function main() {
     const dup = await api('/auth/signup', { method: 'POST', body: { email: `dup-${Date.now()}@example.com`, password: 'testpassword1', referral_code: code } });
     await api('/users', { method: 'POST', token: dup.body.session_token, body: { first_name: 'Dup', age: 30, gender: 'Male' } });
     const dupCheck = await api('/verification/document-check', { method: 'POST', token: dup.body.session_token, body: { document_type: 'passport', issuing_country: 'US', document_number: friendDoc } });
-    const dupAttest = await api('/verification/attest', { method: 'POST', token: dup.body.session_token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2035-01-01' } });
+    const dupAttest = await api('/verification/attest', { method: 'POST', token: dup.body.session_token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2035-01-01' } });
     check('a second account with the same document cannot verify', dupCheck.body.duplicate === true && dupAttest.status !== 200, { dupCheck: dupCheck.body, attest: dupAttest.status });
     check('…so a self-referral earns nothing, even after the weekly limit resets', (await balances(referrer)).available === before + 1);
     await vol({ referral_code: code });
@@ -278,6 +280,37 @@ async function main() {
     // Month buckets use the platform's local calendar, not the UTC date.
     check('an event at 01:00 UTC on the 1st belongs to the previous local month',
       monthKey(new Date('2026-11-01T01:00:00Z')) === '2026-10' && monthKey(new Date('2026-11-01T09:00:00Z')) === '2026-11');
+
+    // ── A duplicate-document account gets no trial Deeds ──
+    const dupDoc = `DUPGRANT${Date.now()}`;
+    await vol({ doc: dupDoc });
+    const dupAcct = await vol({ verify: false, deeds: 5 });
+    const dupBefore = await balances(dupAcct);
+    check('before its document is checked, the trial grant is credited like any other account',
+      dupBefore.available_free === rules.PREMIUM_WEEKLY_GRANT && dupBefore.available_purchased === 5, dupBefore);
+    const dupHit = await api('/verification/document-check', { method: 'POST', token: dupAcct.token, body: { document_type: 'passport', issuing_country: 'US', document_number: dupDoc } });
+    check('the document check reports the duplicate', dupHit.status === 200 && dupHit.body.duplicate === true, dupHit.body);
+    const dupFlagged = await balances(dupAcct);
+    check('flagging withdraws the unspent grant Deeds and leaves purchased Deeds alone',
+      dupFlagged.available_free === 0 && dupFlagged.available_purchased === 5, dupFlagged);
+    const withdrawal = dupFlagged.history.filter((e) => e.entry_type === 'duplicate_document');
+    check('the withdrawal is one free-bucket debit entry with a clear reason',
+      withdrawal.length === 1 && withdrawal[0].bucket === 'free' && withdrawal[0].available_delta === -rules.PREMIUM_WEEKLY_GRANT && withdrawal[0].meta?.reason === 'duplicate_document', withdrawal);
+    await api('/verification/document-check', { method: 'POST', token: dupAcct.token, body: { document_type: 'passport', issuing_country: 'US', document_number: dupDoc } });
+    check('repeating the duplicate check does not withdraw anything twice',
+      db.prepare("SELECT COUNT(*) AS n FROM deeds_ledger WHERE user_id = ? AND entry_type = 'duplicate_document'").get(dupAcct.id).n === 1);
+    const normalAcct = await vol();
+    const normalBefore = (await balances(normalAcct)).available_free;
+    await h.advance({ days: 7 });
+    check('a week later the duplicate-document account gets no weekly grant', (await balances(dupAcct)).available_free === 0);
+    check('…and a normal account still gets its weekly grant', (await balances(normalAcct)).available_free === normalBefore + rules.PREMIUM_WEEKLY_GRANT);
+    check('the duplicate-document account keeps its purchased Deeds', (await balances(dupAcct)).available_purchased === 5);
+    check('the flag is internal and never appears in the profile', !('duplicate_document' in (await api('/users/me', { token: dupAcct.token })).body));
+    await api('/verification/document-check', { method: 'POST', token: dupAcct.token, body: { document_type: 'passport', issuing_country: 'US', document_number: `OWN${dupDoc}` } });
+    const ownAttest = await api('/verification/attest', { method: 'POST', token: dupAcct.token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2035-01-01' } });
+    check('the same account verifies later with its own document', ownAttest.status === 200, ownAttest.body);
+    check('verifying clears the flag', db.prepare('SELECT duplicate_document AS d FROM users WHERE id = ?').get(dupAcct.id).d === 0);
+    check('clearing the flag does not back-credit the skipped grants', (await balances(dupAcct)).available_free === 0);
 
     // ── Ledger consistency for every user touched ──
     const bad2 = allUsers.map((u) => ({ email: u.email, audit: deedsLib.auditUser(u.id) })).filter((r) => !r.audit.ok);

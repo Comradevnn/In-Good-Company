@@ -118,7 +118,7 @@ async function makeVolunteer(opts = {}) {
   });
   if (opts.verify !== false) {
     await api('/verification/document-check', { method: 'POST', token, body: { document_type: 'passport', issuing_country: 'US', document_number: opts.doc ?? `DOC${runId}${seq}` } });
-    const attest = await api('/verification/attest', { method: 'POST', token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, expiry_date: '2035-01-01' } });
+    const attest = await api('/verification/attest', { method: 'POST', token, body: { name_match: true, dob_match: true, doc_type_confirmed: true, dob_is_adult: true, expiry_date: '2035-01-01' } });
     if (attest.status !== 200) throw new Error(`attest failed: ${JSON.stringify(attest.body)}`);
   }
   if (opts.deeds) await api('/deeds/purchase', { method: 'POST', token, body: { deeds: opts.deeds } });

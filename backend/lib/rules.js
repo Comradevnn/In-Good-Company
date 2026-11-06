@@ -28,6 +28,16 @@ module.exports = {
   WAIT_SOFT_MS: 3 * DAY,
   WAIT_CAP_MS: 5 * DAY,
 
+  // Search calendar (colour dot under each day of the date picker) and the
+  // organization directory used while choosing where to volunteer.
+  // A shift with at most this many open spots (room for one more pair)
+  // counts as nearly full.
+  CALENDAR_NEARLY_FULL_SPOTS: 2,
+  CALENDAR_MAX_RANGE_DAYS: 62,
+  CALENDAR_DEFAULT_SPAN_DAYS: 41,
+  ORG_DIRECTORY_MAX_RESULTS: 20,
+  ORG_DIRECTORY_MAX_QUERY_CHARS: 100,
+
   // Tiers
   FREE_MONTHLY_CAP: 2,
   PREMIUM_MONTHLY_CAP: 15,

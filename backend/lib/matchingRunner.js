@@ -24,7 +24,7 @@ const { toMatchPerson } = require('../matching/person');
 const { orgQuality } = require('../matching/score');
 const { planAssignments, pairKey, roundBreakdown } = require('../matching/assign');
 const { visibleShifts, getShift, reserveSpots } = require('./shifts');
-const { localDate } = require('./time');
+const { localDate, addDays } = require('./time');
 
 function logMatch(line) {
   if (process.env.MATCHING_LOG !== 'off') console.log(`[matching] ${line}`);
@@ -64,6 +64,32 @@ function lowFitOrgIds(userId) {
     .all(userId).map((r) => r.org_id));
 }
 
+// Day of the week (0 = Sunday .. 6 = Saturday) of a calendar day, YYYY-MM-DD.
+function weekdayOf(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+// Parses a stored weekday list; [] means "any day".
+function parseWeekdays(value) {
+  const list = Array.isArray(value) ? value : safeParseArray(value);
+  return [...new Set(list.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort();
+}
+
+// Whether some calendar day from start to end (inclusive) is one of the
+// weekdays in every non-empty list given. Only the first seven days matter.
+function windowHasWeekday(start, end, ...weekdayLists) {
+  const lists = weekdayLists.filter((l) => l.length > 0);
+  if (lists.length === 0) return true;
+  let day = start;
+  for (let i = 0; i < 7 && day <= end; i++) {
+    const wd = weekdayOf(day);
+    if (lists.every((l) => l.includes(wd))) return true;
+    day = addDays(day, 1);
+  }
+  return false;
+}
+
 // Shifts this request could go to, ignoring capacity (that's checked live).
 function shiftsFor(ctx, nowMs, allShifts) {
   const { user, request } = ctx;
@@ -74,6 +100,8 @@ function shiftsFor(ctx, nowMs, allShifts) {
     return shift && shift.org.verified && shift.status === 'open' && nowMs < lastProposalMs ? [shift] : [];
   }
   const excluded = new Set(safeParseArray(request.excluded_shift_ids));
+  // Days of the week the person is free: judged on the shift's own local day.
+  const weekdays = parseWeekdays(request.weekdays);
   const mine = activeBookings(user.id);
   const lowFit = lowFitOrgIds(user.id);
   const gateUser = { ...user, travel_radius_miles: request.travel_radius_miles ?? user.travel_radius_miles };
@@ -83,6 +111,7 @@ function shiftsFor(ctx, nowMs, allShifts) {
       if (Date.parse(shift.starts_at) < nowMs + rules.MIN_LEAD_MS) return false;
       const day = localDate(new Date(shift.starts_at), shift.timezone);
       if (day < request.window_start || day > request.window_end) return false;
+      if (weekdays.length > 0 && !weekdays.includes(weekdayOf(day))) return false;
       if (overlaps(shift, mine)) return false;
       return passesShiftGate(gateUser, shift).pass;
     })
@@ -314,4 +343,4 @@ function runMatching(nowMs = clock.nowMs()) {
   return runTx.immediate(nowMs);
 }
 
-module.exports = { runMatching, eligibilityBlock, shiftsFor, activeBookings, overlaps, logMatch, buildSnapshot, previewMatching };
+module.exports = { runMatching, eligibilityBlock, shiftsFor, weekdayOf, parseWeekdays, windowHasWeekday, activeBookings, overlaps, logMatch, buildSnapshot, previewMatching };
